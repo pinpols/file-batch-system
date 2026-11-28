@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.domain.file.realtime;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.config.ConsolePipelineProgressDirtyProperties;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsolePipelineProgressDirtyEventResponse;
@@ -144,9 +143,9 @@ public class ConsolePipelineProgressDirtyPublisher {
         for (PipelineProgressDirtyView row : rows) {
             String key = row.tenantId() + "|" + row.pipelineInstanceId();
             Instant publishedUpdate = lastPublishedUpdateByPipeline.get(key);
-            if (EmptyChecks.isNull(publishedUpdate) || row.updatedAt().isAfter(publishedUpdate)) {
+            if (publishedUpdate == null || row.updatedAt().isAfter(publishedUpdate)) {
                 Instant lastEmittedAt = lastEmittedAtByPipeline.get(key);
-                if (EmptyChecks.isNotNull(lastEmittedAt)
+                if (lastEmittedAt != null
                         && Duration.between(lastEmittedAt, now).toMillis() < throttleMillis) {
                     pruneTrackedKeysIfNeeded();
                     return;

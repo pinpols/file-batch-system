@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.verifier;
 
 import io.github.pinpols.batch.common.enums.JobType;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.verifier.ContentVerifier;
 import io.github.pinpols.batch.common.verifier.VerifyContext;
 import io.github.pinpols.batch.common.verifier.VerifyResult;
@@ -38,7 +38,7 @@ public class DispatchReceiptPresentVerifier implements ContentVerifier {
     public VerifyResult verify(VerifyContext context) {
         String receiptCode = stringValue(context.property(DispatchRuntimeKeys.RECEIPT_CODE));
         String externalRequestId = stringValue(context.property(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID));
-        if (Texts.hasText(receiptCode) || Texts.hasText(externalRequestId)) {
+        if (EmptyValues.hasText(receiptCode) || EmptyValues.hasText(externalRequestId)) {
             return VerifyResult.pass();
         }
         Map<String, Object> evidence = new LinkedHashMap<>();

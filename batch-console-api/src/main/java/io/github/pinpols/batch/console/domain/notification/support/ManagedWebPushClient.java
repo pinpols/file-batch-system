@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.notification.support;
 import static org.asynchttpclient.Dsl.asyncHttpClient;
 import static org.asynchttpclient.Dsl.config;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -56,7 +55,7 @@ public class ManagedWebPushClient extends AbstractPushService<ManagedWebPushClie
         HttpRequest request = prepareRequest(originalOrigin, Encoding.AES128GCM);
         BoundRequestBuilder post = httpClient.preparePost(request.getUrl());
         request.getHeaders().forEach(post::addHeader);
-        if (EmptyChecks.isNotNull(request.getBody())) post.setBody(request.getBody());
+        if (request.getBody() != null) post.setBody(request.getBody());
         return post.execute().toCompletableFuture();
     }
 

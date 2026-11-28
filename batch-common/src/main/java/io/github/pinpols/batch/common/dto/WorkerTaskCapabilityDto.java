@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.dto;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
 
 /** Worker 注册时上报的执行器能力摘要，供 Console 运维展示；不参与调度决策。 */
@@ -20,13 +20,13 @@ public record WorkerTaskCapabilityDto(
     private static final int MAX_RESOURCE_KINDS = 16;
 
     public WorkerTaskCapabilityDto {
-        if (EmptyChecks.isBlank(taskType) || taskType.length() > TASK_TYPE_MAX_LENGTH) {
+        if (EmptyValues.isBlank(taskType) || taskType.length() > TASK_TYPE_MAX_LENGTH) {
             throw new IllegalArgumentException("taskType must contain 1 to 128 characters");
         }
-        if (EmptyChecks.isEmpty(resourceKinds) || resourceKinds.size() > MAX_RESOURCE_KINDS) {
+        if (EmptyValues.isEmpty(resourceKinds) || resourceKinds.size() > MAX_RESOURCE_KINDS) {
             throw new IllegalArgumentException("resourceKinds must contain 1 to 16 values");
         }
-        if (resourceKinds.stream().anyMatch(EmptyChecks::isBlank)) {
+        if (resourceKinds.stream().anyMatch(EmptyValues::isBlank)) {
             throw new IllegalArgumentException("resourceKinds must not contain blank values");
         }
         if (recommendedTimeoutMillis <= 0) {

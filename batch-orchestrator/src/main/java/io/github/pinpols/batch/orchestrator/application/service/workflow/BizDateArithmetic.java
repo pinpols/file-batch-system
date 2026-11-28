@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.Month;
@@ -54,7 +53,7 @@ public class BizDateArithmetic {
 
     /** 解析命名 offset tag。 */
     public LocalDate resolveNamedOffset(LocalDate bizDate, String namedOffset) {
-        if (bizDate == null || !Texts.hasText(namedOffset)) {
+        if (bizDate == null || !EmptyValues.hasText(namedOffset)) {
             return null;
         }
         String trimmedOffset = namedOffset.trim();
@@ -93,7 +92,7 @@ public class BizDateArithmetic {
      * 不识别的 tag 返回空列表。
      */
     public List<LocalDate> resolveRange(LocalDate bizDate, String rangeTag) {
-        if (bizDate == null || !Texts.hasText(rangeTag)) {
+        if (bizDate == null || !EmptyValues.hasText(rangeTag)) {
             return Collections.emptyList();
         }
         String trimmedRangeTag = rangeTag.trim();
@@ -173,7 +172,7 @@ public class BizDateArithmetic {
     }
 
     private List<LocalDate> inclusiveRange(LocalDate start, LocalDate end) {
-        boolean businessDateRangeIsInvalid = EmptyChecks.isNull(start) || EmptyChecks.isNull(end) || start.isAfter(end);
+        boolean businessDateRangeIsInvalid = start == null || end == null || start.isAfter(end);
         if (businessDateRangeIsInvalid) {
             return Collections.emptyList();
         }

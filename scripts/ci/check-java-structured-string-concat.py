@@ -124,7 +124,7 @@ def candidate_groups(source: str) -> list[tuple[int, int, str]]:
             offsets[index - 1] : offsets[index]
         ].rstrip().endswith("+")
         if (not active and has_string and (starts_with_plus or ends_with_plus)) or (
-            active and (starts_with_plus or ends_with_plus or (has_string and previous_continues))
+            active and (starts_with_plus or ends_with_plus or has_string or previous_continues)
         ):
             active.append(index)
             if code_line.rstrip().endswith(";"):
@@ -162,7 +162,7 @@ def scan_source(source: str) -> list[Finding]:
             if category in multiline_categories and "\n" not in logical_text:
                 continue
             if marker.search(logical_text):
-                findings.append(Finding(category, start_line, normalize(expression)))
+                findings.append(Finding(category, start_line, normalize(logical_text)))
                 break
     return findings
 

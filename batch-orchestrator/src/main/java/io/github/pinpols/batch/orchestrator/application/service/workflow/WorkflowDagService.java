@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import java.util.List;
@@ -34,7 +34,7 @@ public interface WorkflowDagService {
 
     default List<DagNodeResolution> resolveNextNodesForRun(
             WorkflowRunEntity run, String currentNodeCode, boolean success, String payloadJson) {
-        return EmptyChecks.isNull(run)
+        return run == null
                 ? List.of()
                 : resolveNextNodes(run.getWorkflowDefinitionId(), currentNodeCode, success, payloadJson);
     }
@@ -42,8 +42,7 @@ public interface WorkflowDagService {
     boolean isNodeReadyForDispatch(Long workflowRunId, Long workflowDefinitionId, String nodeCode, String payloadJson);
 
     default boolean isNodeReadyForRunDispatch(WorkflowRunEntity run, String nodeCode, String payloadJson) {
-        return EmptyChecks.isNotNull(run)
-                && isNodeReadyForDispatch(run.getId(), run.getWorkflowDefinitionId(), nodeCode, payloadJson);
+        return run != null && isNodeReadyForDispatch(run.getId(), run.getWorkflowDefinitionId(), nodeCode, payloadJson);
     }
 
     /**
@@ -66,19 +65,19 @@ public interface WorkflowDagService {
     /** 对来源载荷中的条件入边进行判定时，级联跳过后继节点。 */
     default List<String> cascadeSkipDownstreamForRun(
             WorkflowRunEntity run, String fromNodeCode, String sourcePayloadJson) {
-        return EmptyChecks.isNull(run)
+        return run == null
                 ? List.of()
                 : cascadeSkipDownstream(run.getId(), run.getWorkflowDefinitionId(), fromNodeCode);
     }
 
     default DagNodeResolution resolveInitialNode(Long workflowDefinitionId) {
         List<DagNodeResolution> nodes = resolveInitialNodes(workflowDefinitionId, null);
-        return nodes == null || nodes.isEmpty() ? null : nodes.get(0);
+        return EmptyValues.isEmpty(nodes) ? null : nodes.get(0);
     }
 
     default DagNodeResolution resolveNextNode(Long workflowDefinitionId, String currentNodeCode, boolean success) {
         List<DagNodeResolution> nodes = resolveNextNodes(workflowDefinitionId, currentNodeCode, success, null);
-        return nodes == null || nodes.isEmpty() ? null : nodes.get(0);
+        return EmptyValues.isEmpty(nodes) ? null : nodes.get(0);
     }
 
     record DagNodeResolution(String nodeCode, String nodeType) {}

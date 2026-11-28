@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.realtime;
 
 import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeInstanceIdProvider;
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeStreamEnvelope;
@@ -39,7 +38,7 @@ public class ConsoleRealtimeRedisPublisher implements RealtimeEventBus {
         String stream = event.stream();
         String eventType = event.eventType();
         String cursor = event.cursor();
-        String serializedData = EmptyChecks.isNull(event.data()) ? "" : JsonUtils.toJson(event.data());
+        String serializedData = event.data() == null ? "" : JsonUtils.toJson(event.data());
         Instant emittedAt = event.emittedAt();
         ConsoleRealtimeStreamEnvelope envelope = new ConsoleRealtimeStreamEnvelope(
                 sourceInstanceId, tenantId, stream, eventType, cursor, false, serializedData, emittedAt);

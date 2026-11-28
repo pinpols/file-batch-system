@@ -10,7 +10,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionDispatchService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -78,7 +78,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
         Instant olderThan = recoveryCheckTime.minusSeconds(minAgeSeconds);
         int limit = Math.max(properties.getBatchSize(), 1);
         List<JobInstanceEntity> candidates = jobInstanceMapper.selectStaleCreatedLaunchCandidates(olderThan, limit);
-        if (EmptyChecks.isEmpty(candidates)) {
+        if (EmptyValues.isEmpty(candidates)) {
             return;
         }
         int recovered = 0;
@@ -110,7 +110,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
     private boolean recoverOne(JobInstanceEntity jobInstance) {
         TriggerRequestEntity triggerRequest =
                 triggerRequestMapper.selectById(jobInstance.getTenantId(), jobInstance.getTriggerRequestId());
-        if (EmptyChecks.isNull(triggerRequest) || !isRecoverableRequestStatus(jobInstance, triggerRequest)) {
+        if (triggerRequest == null || !isRecoverableRequestStatus(jobInstance, triggerRequest)) {
             return false;
         }
 
@@ -134,7 +134,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
 
         LaunchValidationService.LaunchLoadResult validatedLaunch = launchValidationService.load(request);
         JobDefinitionView executionDefinition = validatedLaunch.jobDefinition();
-        boolean recoveredDefinitionIdentityDoesNotMatch = EmptyChecks.isNull(executionDefinition)
+        boolean recoveredDefinitionIdentityDoesNotMatch = executionDefinition == null
                 || !Objects.equals(jobInstance.getJobDefinitionId(), executionDefinition.id())
                 || !Objects.equals(jobInstance.getJobDefinitionVersion(), executionDefinition.version());
         if (recoveredDefinitionIdentityDoesNotMatch) {
@@ -150,7 +150,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
             partitionDispatchService.dispatch(dispatchContext);
         } catch (RuntimeException ex) {
             BizException invalidBundle = findPermanentBundleFailure(ex);
-            if (EmptyChecks.isNull(invalidBundle)) {
+            if (invalidBundle == null) {
                 throw ex;
             }
             launchService.finalizeDispatchFailure(request, jobInstance, invalidBundle);
@@ -185,7 +185,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
 
     private BizException findPermanentBundleFailure(RuntimeException exception) {
         Throwable current = exception;
-        while (EmptyChecks.isNotNull(current)) {
+        while (current != null) {
             if (current instanceof BizException bizException && isPermanentBundleFailure(bizException)) {
                 return bizException;
             }
@@ -196,7 +196,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
 
     private boolean isPermanentBundleFailure(BizException exception) {
         if (!"error.partition.dispatch_business_error".equals(exception.getMessageKey())
-                || !EmptyChecks.isNotEmpty(exception.getMessageArgs())) {
+                || !EmptyValues.isNotEmpty(exception.getMessageArgs())) {
             return false;
         }
         String failureReason = String.valueOf(exception.getMessageArgs()[0]);

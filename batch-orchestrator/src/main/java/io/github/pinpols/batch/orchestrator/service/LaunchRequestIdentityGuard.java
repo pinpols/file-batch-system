@@ -5,7 +5,6 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Objects;
 import java.util.Set;
 
@@ -20,8 +19,8 @@ public final class LaunchRequestIdentityGuard {
     private LaunchRequestIdentityGuard() {}
 
     public static boolean matches(LaunchRequest request, TriggerRequestEntity original) {
-        return EmptyChecks.isNotNull(request)
-                && EmptyChecks.isNotNull(original)
+        return request != null
+                && original != null
                 && Objects.equals(request.tenantId(), original.getTenantId())
                 && Objects.equals(request.requestId(), original.getRequestId())
                 && Objects.equals(request.jobCode(), original.getJobCode())

@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
 import java.util.Map;
 
@@ -25,7 +25,7 @@ final class ExportPageGenerationCoordinator {
             PageRowWriter rowWriter)
             throws Exception {
         Long batchIdLong;
-        if (EmptyChecks.isNull(ctx.batchId())) {
+        if (ctx.batchId() == null) {
             batchIdLong = null;
         } else {
             Object rawBatchId = ctx.batchId();
@@ -33,7 +33,7 @@ final class ExportPageGenerationCoordinator {
             batchIdLong = Long.valueOf(batchIdText);
         }
         GenerateCheckpoint checkpoint = ctx.checkpoint();
-        boolean resuming = EmptyChecks.isNotNull(checkpoint) && checkpoint.resuming();
+        boolean resuming = checkpoint != null && checkpoint.resuming();
         long recordCount = resuming ? checkpoint.resumeRecordCount() : 0L;
         if (ctx.maxRows() > 0 && recordCount > ctx.maxRows()) {
             throw new ExportRowLimitExceededException(recordCount, ctx.maxRows());
@@ -43,17 +43,17 @@ final class ExportPageGenerationCoordinator {
             page = ctx.dataPlugin()
                     .loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), checkpoint.resumeCursor());
         } else {
-            page = EmptyChecks.isNotNull(preFetchedFirstPage)
+            page = preFetchedFirstPage != null
                     ? preFetchedFirstPage
                     : ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
         }
         int pageNo = 0;
         while (true) {
-            if (EmptyChecks.isNull(page)) {
+            if (page == null) {
                 break;
             }
             List<Map<String, Object>> details = page.rows();
-            if (EmptyChecks.isEmpty(details)) {
+            if (EmptyValues.isEmpty(details)) {
                 break;
             }
             for (Map<String, Object> detail : details) {
@@ -68,14 +68,12 @@ final class ExportPageGenerationCoordinator {
             }
             Object cursor = page.nextCursor();
             // 终页不记 null cursor；下一次续跑必须从最后一个有效页边界开始，避免重复写整份文件。
-            boolean checkpointCanResumeWithFileCursor = EmptyChecks.isNotNull(checkpoint)
-                    && EmptyChecks.isNotNull(fileSync)
-                    && EmptyChecks.isNotNull(cursor);
+            boolean checkpointCanResumeWithFileCursor = checkpoint != null && fileSync != null && cursor != null;
             if (checkpointCanResumeWithFileCursor) {
                 long byteOffset = fileSync.flushAndSync();
                 checkpoint.advance(byteOffset, cursor, recordCount);
             }
-            if (EmptyChecks.isNull(cursor)) {
+            if (cursor == null) {
                 break;
             }
             if (++pageNo >= DEFAULT_MAX_PAGES) {
@@ -91,7 +89,7 @@ final class ExportPageGenerationCoordinator {
     }
 
     private static void publishProgress(ExportFormatContext ctx, long recordCount) {
-        if (EmptyChecks.isNotNull(ctx.progressRegistry())) {
+        if (ctx.progressRegistry() != null) {
             ctx.progressRegistry().publish(ctx.jobContext(), "GENERATE", recordCount, null);
         }
     }

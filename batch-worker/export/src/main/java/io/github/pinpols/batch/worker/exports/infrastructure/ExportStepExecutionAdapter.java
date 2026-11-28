@@ -3,7 +3,7 @@ package io.github.pinpols.batch.worker.exports.infrastructure;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.constants.NodeOutputKeys;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -85,9 +85,9 @@ public class ExportStepExecutionAdapter
         context.setBizDate(bizDate);
         context.setFileId(fileId == null ? "" : String.valueOf(fileId));
         Object exportPayload = contextMap.get(ExportRuntimeKeys.EXPORT_PAYLOAD);
-        boolean rawExportPayloadNeedsDecoding = EmptyChecks.isNull(exportPayload)
-                && EmptyChecks.isNotNull(context.getRawPayload())
-                && !EmptyChecks.isBlank(Objects.requireNonNull(context.getRawPayload()));
+        boolean rawExportPayloadNeedsDecoding = exportPayload == null
+                && context.getRawPayload() != null
+                && !EmptyValues.isBlank(Objects.requireNonNull(context.getRawPayload()));
         if (rawExportPayloadNeedsDecoding) {
             exportPayload = objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
             context.getAttributes().put(ExportRuntimeKeys.EXPORT_PAYLOAD, exportPayload);
@@ -97,12 +97,12 @@ public class ExportStepExecutionAdapter
 
     @Override
     public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
-        if (EmptyChecks.isNull(request) || !pipelineType().equalsIgnoreCase(request.stepCode())) {
+        if (request == null || !pipelineType().equalsIgnoreCase(request.stepCode())) {
             return ReplayCapabilityDeclaration.unknown(ExportWorkerType.EXPORT);
         }
         Map<String, Object> requestContext = request.context();
         Map<String, Object> attributes =
-                EmptyChecks.isNull(requestContext) ? new LinkedHashMap<>() : new LinkedHashMap<>(requestContext);
+                requestContext == null ? new LinkedHashMap<>() : new LinkedHashMap<>(requestContext);
         resolveSystemPipelineSteps(attributes);
         Long fileId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
         ExportJobContext context;
@@ -170,6 +170,6 @@ public class ExportStepExecutionAdapter
             attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
         }
         return new StepExecutionResponse(
-                true, "SUCCESS", EmptyChecks.isBlank(objectName) ? "export stage completed" : objectName);
+                true, "SUCCESS", EmptyValues.isBlank(objectName) ? "export stage completed" : objectName);
     }
 }

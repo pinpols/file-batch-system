@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.support.naming;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
 import java.util.Locale;
 import lombok.experimental.UtilityClass;
@@ -56,7 +57,7 @@ public class ReservedPrefixGuard {
      * @param productionMode true=生产环境(拒 test prefix);false=非 prod(必须 test prefix 或白名单)
      */
     public static void checkTenantId(String tenantId, boolean productionMode) {
-        if (tenantId == null || tenantId.isBlank()) return;
+        if (EmptyValues.isBlank(tenantId)) return;
         String lower = tenantId.toLowerCase(Locale.ROOT);
 
         // 永远拒:RESERVED_TENANT_IDS(system / default / admin)
@@ -89,7 +90,7 @@ public class ReservedPrefixGuard {
      * <p>仅 strict 模式生效。建议 production profile 开启,test/local 关。
      */
     public static void checkResourceCode(String code, boolean strict) {
-        if (!strict || code == null || code.isBlank()) return;
+        if (!strict || EmptyValues.isBlank(code)) return;
         String upper = code.toUpperCase(Locale.ROOT);
         for (String prefix : RESERVED_CODE_PREFIXES) {
             if (upper.startsWith(prefix)) {

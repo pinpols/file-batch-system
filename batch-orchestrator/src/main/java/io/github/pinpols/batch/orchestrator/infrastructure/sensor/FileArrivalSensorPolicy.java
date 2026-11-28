@@ -6,9 +6,8 @@ import io.github.pinpols.batch.common.enums.SensorType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipIdentity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.common.validation.FileArrivalChannelCode;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorContext;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorPolicy;
@@ -73,34 +72,34 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
         boolean requireCompleteGroup = Boolean.TRUE.equals(spec.get("requireCompleteGroup"));
         boolean bindWorkflowBizDate = Boolean.TRUE.equals(spec.get("bindWorkflowBizDate"));
         boolean fileArrivalFreshnessCheckIsUnavailable =
-                !Texts.hasText(pattern) || EmptyChecks.isNull(maxAgeSeconds) || maxAgeSeconds <= 0;
+                !EmptyValues.hasText(pattern) || maxAgeSeconds == null || maxAgeSeconds <= 0;
         if (fileArrivalFreshnessCheckIsUnavailable) {
             return specError("pattern/maxAgeSeconds required");
         }
 
         String configuredBizDate = SensorSpecs.string(spec, "bizDate");
-        if (bindWorkflowBizDate && Texts.hasText(configuredBizDate)) {
+        if (bindWorkflowBizDate && EmptyValues.hasText(configuredBizDate)) {
             return specError("configure either bizDate or bindWorkflowBizDate");
         }
         String workflowBizDate =
                 bindWorkflowBizDate ? Objects.toString(ctx.workflowRunVars().get("bizDate"), null) : null;
-        if (bindWorkflowBizDate && !Texts.hasText(workflowBizDate)) {
+        if (bindWorkflowBizDate && !EmptyValues.hasText(workflowBizDate)) {
             return specError("Workflow run bizDate is required");
         }
         LocalDate bizDate;
         try {
-            String effectiveBizDate = Texts.hasText(configuredBizDate) ? configuredBizDate : workflowBizDate;
-            bizDate = Texts.hasText(effectiveBizDate) ? LocalDate.parse(effectiveBizDate) : null;
+            String effectiveBizDate = EmptyValues.hasText(configuredBizDate) ? configuredBizDate : workflowBizDate;
+            bizDate = EmptyValues.hasText(effectiveBizDate) ? LocalDate.parse(effectiveBizDate) : null;
         } catch (DateTimeParseException invalidDate) {
             return specError("bizDate must be ISO-8601");
         }
-        if (requireCompleteGroup && !Texts.hasText(fileGroupCode)) {
+        if (requireCompleteGroup && !EmptyValues.hasText(fileGroupCode)) {
             return specError("fileGroupCode required when requireCompleteGroup=true");
         }
-        if (requireCompleteGroup && EmptyChecks.isNull(bizDate)) {
+        if (requireCompleteGroup && bizDate == null) {
             return specError("bizDate or bindWorkflowBizDate required when requireCompleteGroup=true");
         }
-        if (requireCompleteGroup && EmptyChecks.isNull(ctx.workflowDefinitionId())) {
+        if (requireCompleteGroup && ctx.workflowDefinitionId() == null) {
             return specError("Workflow definition is required for a complete file group");
         }
 
@@ -112,7 +111,7 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
             return specError("channelCode must be a string up to 128 characters");
         }
         String channelCode = (String) configuredChannelCode;
-        channelCode = Texts.hasText(channelCode) ? channelCode : null;
+        channelCode = EmptyValues.hasText(channelCode) ? channelCode : null;
         String sourceType = mapChannelToSourceType(channelCode);
         OffsetDateTime since =
                 BatchDateTimeSupport.utcNow().minusSeconds(maxAgeSeconds).atOffset(ZoneOffset.UTC);
@@ -141,7 +140,7 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
                 return SensorProbeResult.notYet();
             }
             Map<String, Object> output = hit.toProbeOutput();
-            if (EmptyChecks.isNotNull(resolved.channelCode()) && Boolean.TRUE.equals(hit.legacyChannelFallback())) {
+            if (resolved.channelCode() != null && Boolean.TRUE.equals(hit.legacyChannelFallback())) {
                 log.warn(
                         "FILE_ARRIVAL matched a legacy file without verified channel tenant={} fileId={}",
                         ctx.tenantId(),
@@ -178,7 +177,7 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
 
     /** 仅供迁移前历史文件沿用原来源类型回退语义。 */
     private static String mapChannelToSourceType(String channelCode) {
-        if (!Texts.hasText(channelCode)) {
+        if (!EmptyValues.hasText(channelCode)) {
             return null;
         }
         String lower = channelCode.toLowerCase(Locale.ROOT);

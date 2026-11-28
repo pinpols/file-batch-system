@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
@@ -182,7 +182,7 @@ public class AuditAspect {
                     .action(ann.action())
                     .operatorId(op.operatorId())
                     .operatorRole(op.operatorRole())
-                    .result(EmptyChecks.isNull(errorCode) ? "SUCCESS" : "FAILED")
+                    .result(errorCode == null ? "SUCCESS" : "FAILED")
                     .errorCode(errorCode)
                     .errorMessage(truncate(errorMsg, AUDIT_ERROR_MESSAGE_MAX_LENGTH))
                     .paramsJson(paramsJson)
@@ -238,7 +238,7 @@ public class AuditAspect {
     /** SpEL 求 aggregateId,失败回退「-」。 */
     private String resolveAggregateId(AuditAction ann, Method method, Object[] args) {
         String expr = ann.aggregateId();
-        if (expr == null || expr.isEmpty()) return "-";
+        if (EmptyValues.isEmpty(expr)) return "-";
         try {
             // P0 安全:SpEL 用 SimpleEvaluationContext + DataBindingPropertyAccessor 做最小权限上下文。
             // SimpleEvaluationContext 禁止 T(System).exit(0) 类型方法 / Type 引用 / bean 引用,
@@ -338,14 +338,14 @@ public class AuditAspect {
     }
 
     private static String resolveTenantFallback(String targetTenantId, String principalTenantId) {
-        if (targetTenantId != null && !targetTenantId.isBlank()) {
+        if (EmptyValues.isNotBlank(targetTenantId)) {
             return targetTenantId;
         }
-        if (principalTenantId != null && !principalTenantId.isBlank()) {
+        if (EmptyValues.isNotBlank(principalTenantId)) {
             return principalTenantId;
         }
         String mdcTenant = MDC.get("tenant");
-        if (mdcTenant != null && !mdcTenant.isBlank()) {
+        if (EmptyValues.isNotBlank(mdcTenant)) {
             return mdcTenant;
         }
         return "system";
@@ -364,7 +364,7 @@ public class AuditAspect {
      */
     private String resolveTargetTenant(AuditAction ann, Method method, Object[] args) {
         String expr = ann.targetTenantParam();
-        if (expr == null || expr.isEmpty()) return null;
+        if (EmptyValues.isEmpty(expr)) return null;
         try {
             String[] names = paramNameDiscoverer.getParameterNames(method);
             if (expr.startsWith("#")) {

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.plugin;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
 
 /** 由 Worker 按冻结插件配置解析、默认拒绝的重放合同。 */
@@ -17,25 +17,25 @@ public record ReplayCapabilityDeclaration(
     private static final String UNKNOWN = "UNKNOWN";
 
     public ReplayCapabilityDeclaration {
-        if (EmptyChecks.isBlank(pluginId)) {
+        if (EmptyValues.isBlank(pluginId)) {
             throw new IllegalArgumentException("pluginId must not be blank");
         }
-        if (EmptyChecks.isBlank(pluginVersion)) {
+        if (EmptyValues.isBlank(pluginVersion)) {
             throw new IllegalArgumentException("pluginVersion must not be blank");
         }
-        if (EmptyChecks.isEmpty(externalEffectCategories)) {
+        if (EmptyValues.isEmpty(externalEffectCategories)) {
             throw new IllegalArgumentException("externalEffectCategories must not be empty");
         }
-        if (externalEffectCategories.stream().anyMatch(EmptyChecks::isBlank)) {
+        if (externalEffectCategories.stream().anyMatch(EmptyValues::isBlank)) {
             throw new IllegalArgumentException("externalEffectCategories must not contain blanks");
         }
-        if (EmptyChecks.isNull(idempotencyCapability)) {
+        if (idempotencyCapability == null) {
             throw new IllegalArgumentException("idempotencyCapability must not be null");
         }
-        if (EmptyChecks.isBlank(idempotencyKeyScope)) {
+        if (EmptyValues.isBlank(idempotencyKeyScope)) {
             throw new IllegalArgumentException("idempotencyKeyScope must not be blank");
         }
-        if (EmptyChecks.isBlank(recoveryProtocolId)) {
+        if (EmptyValues.isBlank(recoveryProtocolId)) {
             throw new IllegalArgumentException("recoveryProtocolId must not be blank");
         }
         if (contractVersion != CURRENT_CONTRACT_VERSION) {
@@ -71,7 +71,7 @@ public record ReplayCapabilityDeclaration(
     public boolean covers(ReplayCapabilityDeclaration actual) {
         boolean capabilitiesAreDeclared = isFullyDeclared()
                 && idempotencyCapability != IdempotencyCapability.NONE
-                && EmptyChecks.isNotNull(actual)
+                && actual != null
                 && actual.isFullyDeclared()
                 && actual.idempotencyCapability() != IdempotencyCapability.NONE;
         if (!capabilitiesAreDeclared) {

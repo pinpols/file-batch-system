@@ -3,9 +3,8 @@ package io.github.pinpols.batch.console.infrastructure.config;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Nullables;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.workflow.application.command.WorkflowVersionSnapshotCommand;
@@ -56,13 +55,13 @@ final class TenantWorkflowDefinitionApplySupport {
     }
 
     WorkflowDefinitionEntity findWorkflowForImport(String tenantId, WorkflowDefinitionSpec spec) {
-        if (Texts.hasText(spec.getSingleJobCode())) {
+        if (EmptyValues.hasText(spec.getSingleJobCode())) {
             JobDefinitionView job = definitionMappers.jobDefinition.selectByUniqueKey(
                     tenantId, spec.getSingleJobCode().trim());
-            if (EmptyChecks.isNotNull(job)) {
+            if (job != null) {
                 WorkflowDefinitionEntity managed =
                         definitionMappers.workflowDefinition.selectBySingleJobDefinitionId(tenantId, job.getId());
-                if (EmptyChecks.isNotNull(managed)) {
+                if (managed != null) {
                     return managed;
                 }
             }
@@ -72,10 +71,10 @@ final class TenantWorkflowDefinitionApplySupport {
 
     void upsertWorkflowDefinition(String tenantId, Long existingId, WorkflowDefinitionSpec spec, String operator) {
         Long singleJobDefinitionId = null;
-        if (Texts.hasText(spec.getSingleJobCode())) {
+        if (EmptyValues.hasText(spec.getSingleJobCode())) {
             JobDefinitionView singleJob = definitionMappers.jobDefinition.selectByUniqueKey(
                     tenantId, spec.getSingleJobCode().trim());
-            if (EmptyChecks.isNull(singleJob)) {
+            if (singleJob == null) {
                 throw BizException.of(
                         ResultCode.NOT_FOUND,
                         ResultCode.NOT_FOUND.detailKey(),
@@ -88,17 +87,16 @@ final class TenantWorkflowDefinitionApplySupport {
         param.setWorkflowCode(spec.getWorkflowCode());
         param.setWorkflowName(spec.getWorkflowName());
         param.setWorkflowType(spec.getWorkflowType());
-        WorkflowDefinitionEntity current = EmptyChecks.isNull(existingId)
-                ? null
-                : definitionMappers.workflowDefinition.selectById(tenantId, existingId);
-        if (EmptyChecks.isNull(current) && EmptyChecks.isNotNull(singleJobDefinitionId)) {
+        WorkflowDefinitionEntity current =
+                existingId == null ? null : definitionMappers.workflowDefinition.selectById(tenantId, existingId);
+        if (current == null && singleJobDefinitionId != null) {
             current =
                     definitionMappers.workflowDefinition.selectBySingleJobDefinitionId(tenantId, singleJobDefinitionId);
         }
-        String workflowCode = EmptyChecks.isNull(current) ? spec.getWorkflowCode() : current.getWorkflowCode();
+        String workflowCode = current == null ? spec.getWorkflowCode() : current.getWorkflowCode();
         param.setWorkflowCode(workflowCode);
-        param.setVersion(EmptyChecks.isNull(current) ? 1 : current.getVersion());
-        param.setEnabled(EmptyChecks.isNotNull(spec.getEnabled()) && spec.getEnabled());
+        param.setVersion(current == null ? 1 : current.getVersion());
+        param.setEnabled(spec.getEnabled() != null && spec.getEnabled());
         param.setSingleJobDefinitionId(singleJobDefinitionId);
         param.setScheduleEnabled(scheduleEnabledForUpsert(spec, current));
         String scheduleType = Nullables.coalesce(spec.getScheduleType(), "MANUAL");
@@ -120,17 +118,17 @@ final class TenantWorkflowDefinitionApplySupport {
         param.setUpdatedBy(operator);
         definitionMappers.workflowDefinition.upsertWorkflowDefinition(param);
 
-        WorkflowDefinitionEntity saved = EmptyChecks.isNull(current)
+        WorkflowDefinitionEntity saved = current == null
                 ? definitionMappers.workflowDefinition.selectByUniqueKey(tenantId, workflowCode, param.getVersion())
                 : current;
-        if (EmptyChecks.isNull(saved)) {
+        if (saved == null) {
             return;
         }
         Long defId = saved.getId();
 
-        upsertWorkflowGraph(tenantId, defId, spec, EmptyChecks.isNotNull(existingId));
+        upsertWorkflowGraph(tenantId, defId, spec, existingId != null);
 
-        boolean effectiveEnabled = EmptyChecks.isNull(current)
+        boolean effectiveEnabled = current == null
                 ? Boolean.TRUE.equals(param.getEnabled())
                 : Boolean.TRUE.equals(Nullables.coalesce(spec.getEnabled(), current.getEnabled()));
         Boolean effectiveScheduleEnabled = resolveEffectiveScheduleEnabled(spec, current, param);
@@ -140,8 +138,8 @@ final class TenantWorkflowDefinitionApplySupport {
             workflowDagInspector.requireExecutableJobReferences(tenantId, workflowNodes);
         }
 
-        int nextVersion = EmptyChecks.isNull(current) ? 1 : current.getVersion() + 1;
-        if (EmptyChecks.isNotNull(current)) {
+        int nextVersion = current == null ? 1 : current.getVersion() + 1;
+        if (current != null) {
             WorkflowDefinitionVersionUpdateParam versionedUpdate = WorkflowDefinitionVersionUpdateParam.builder()
                     .tenantId(tenantId)
                     .id(defId)
@@ -182,7 +180,7 @@ final class TenantWorkflowDefinitionApplySupport {
 
     /** 新定义按显式值或默认关闭落库；已有定义只在配置包显式给出时写开关，避免 upsert 覆盖并发暂停。 */
     private static Boolean scheduleEnabledForUpsert(WorkflowDefinitionSpec spec, WorkflowDefinitionEntity current) {
-        if (EmptyChecks.isNull(current)) {
+        if (current == null) {
             return Boolean.TRUE.equals(spec.getScheduleEnabled());
         }
         return spec.getScheduleEnabled();
@@ -191,7 +189,7 @@ final class TenantWorkflowDefinitionApplySupport {
     /** 省略开关列时沿用当前值，供入图校验和版本快照使用。 */
     private static Boolean resolveEffectiveScheduleEnabled(
             WorkflowDefinitionSpec spec, WorkflowDefinitionEntity current, WorkflowDefinitionUpsertParam param) {
-        if (EmptyChecks.isNull(current)) {
+        if (current == null) {
             return param.getScheduleEnabled();
         }
         return Nullables.coalesce(spec.getScheduleEnabled(), current.getScheduleEnabled());
@@ -200,7 +198,7 @@ final class TenantWorkflowDefinitionApplySupport {
     /** 图的替换与节点/边写入保持在调用方同一事务中，随后仍由定义 CAS 决定整体提交。 */
     private void upsertWorkflowGraph(
             String tenantId, Long defId, WorkflowDefinitionSpec spec, boolean replaceExistingGraph) {
-        if (EmptyChecks.isNotNull(spec.getNodes())) {
+        if (spec.getNodes() != null) {
             // 旧图删除后无法再恢复掩码；先按目标租户和定义读取，不改写共享的多租户输入 spec。
             Map<String, String> existingNodeParams =
                     replaceExistingGraph ? workflowWriteSupport.readNodeParams(tenantId, defId) : Map.of();
@@ -233,7 +231,7 @@ final class TenantWorkflowDefinitionApplySupport {
                 nodeParam.setEnabled(Nullables.coalesce(nodeSpec.getEnabled(), true));
                 definitionMappers.workflowNode.upsertWorkflowNode(nodeParam);
             }
-            if (EmptyChecks.isNotNull(spec.getEdges())) {
+            if (spec.getEdges() != null) {
                 for (WorkflowDefinitionSpec.EdgeSpec edgeSpec : spec.getEdges()) {
                     WorkflowEdgeUpsertParam edgeParam = new WorkflowEdgeUpsertParam();
                     edgeParam.setTenantId(tenantId);

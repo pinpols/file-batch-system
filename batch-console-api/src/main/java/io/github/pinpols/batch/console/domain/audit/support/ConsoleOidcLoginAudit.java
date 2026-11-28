@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.audit.support;
 
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
@@ -30,7 +29,7 @@ public class ConsoleOidcLoginAudit {
 
     private void record(String tenantId, String operatorId, String result, String errorCode) {
         ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-        String errorDescription = EmptyChecks.isNull(errorCode) ? null : "OIDC authentication failed";
+        String errorDescription = errorCode == null ? null : "OIDC authentication failed";
         String traceId = metadata.traceId();
         String requestId = metadata.requestId();
         String clientIp = metadata.clientIp();

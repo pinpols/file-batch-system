@@ -1,8 +1,7 @@
 package io.github.pinpols.batch.trigger.infrastructure.readiness;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
@@ -41,7 +40,7 @@ public class ReadinessWaitHandoverClient {
             LocalDate bizDate,
             Instant deferredSince,
             Instant deadline) {
-        if (EmptyChecks.isNull(descriptor) || EmptyChecks.isNull(scheduledFireTime) || EmptyChecks.isNull(deadline)) {
+        if (descriptor == null || scheduledFireTime == null || deadline == null) {
             return;
         }
         Map<String, Object> body = new HashMap<>();
@@ -51,9 +50,9 @@ public class ReadinessWaitHandoverClient {
         body.put("calendarCode", descriptor.getCalendarCode());
         body.put("scheduleVersion", descriptor.getWorkflowVersion());
         body.put("dependsOnJobCodes", resolveDependsOnJobCodes(descriptor));
-        body.put("bizDate", EmptyChecks.isNull(bizDate) ? null : bizDate.toString());
+        body.put("bizDate", bizDate == null ? null : bizDate.toString());
         body.put("scheduledFireTime", scheduledFireTime.toString());
-        body.put("deferredSince", EmptyChecks.isNull(deferredSince) ? null : deferredSince.toString());
+        body.put("deferredSince", deferredSince == null ? null : deferredSince.toString());
         body.put("deadline", deadline.toString());
         try {
             orchestratorRestClient
@@ -76,7 +75,7 @@ public class ReadinessWaitHandoverClient {
 
     /** 正常 fire 成功后取消 Orchestrator 侧等待，避免重复恢复启动。 */
     public void close(String tenantId, Long workflowDefinitionId, Instant scheduledFireTime) {
-        if (EmptyChecks.isNull(workflowDefinitionId) || EmptyChecks.isNull(scheduledFireTime)) {
+        if (workflowDefinitionId == null || scheduledFireTime == null) {
             return;
         }
         try {
@@ -103,14 +102,14 @@ public class ReadinessWaitHandoverClient {
 
     /** 移交全部依赖：Orchestrator 接管后必须与 Trigger 主就绪闸口径一致。 */
     private List<String> resolveDependsOnJobCodes(TriggerDescriptor descriptor) {
-        if (EmptyChecks.isNotEmpty(descriptor.getDependsOnJobCodes())) {
+        if (EmptyValues.isNotEmpty(descriptor.getDependsOnJobCodes())) {
             return descriptor.getDependsOnJobCodes().stream()
-                    .filter(Texts::hasText)
+                    .filter(EmptyValues::hasText)
                     .map(String::trim)
                     .distinct()
                     .toList();
         }
-        if (EmptyChecks.isNull(descriptor.getDependsOnJobCode())) {
+        if (descriptor.getDependsOnJobCode() == null) {
             return List.of();
         }
         return List.of(descriptor.getDependsOnJobCode().trim());

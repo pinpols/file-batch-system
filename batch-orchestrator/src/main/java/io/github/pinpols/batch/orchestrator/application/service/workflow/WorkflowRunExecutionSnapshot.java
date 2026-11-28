@@ -12,7 +12,7 @@ import io.github.pinpols.batch.common.enums.SystemPipelineTaskKeys;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
@@ -50,18 +50,18 @@ public record WorkflowRunExecutionSnapshot(
     public record SystemPipelineIdentity(String code, Integer version) {}
 
     public static WorkflowRunExecutionSnapshot from(WorkflowRunEntity run) {
-        if (EmptyChecks.isNull(run)) {
+        if (run == null) {
             return null;
         }
         String executionSnapshot = run.getExecutionSnapshot();
-        if (EmptyChecks.isBlank(executionSnapshot)) {
+        if (EmptyValues.isBlank(executionSnapshot)) {
             return null;
         }
         Map<String, Object> raw = JsonUtils.fromJson(executionSnapshot, new TypeReference<Map<String, Object>>() {});
         Integer schemaVersion = number(raw.get("schemaVersion"));
         // Schema v1 只保存了启动标识，并未冻结图结构。旧运行仍走
         // 旧定义读取路径，不能把 v1 的空图当成权威快照。
-        if (EmptyChecks.isNull(schemaVersion)) {
+        if (schemaVersion == null) {
             throw invalidSnapshot();
         }
         if (schemaVersion < 2) {
@@ -88,20 +88,20 @@ public record WorkflowRunExecutionSnapshot(
                 if (key instanceof String nodeCode && value instanceof Map<?, ?> jobEntry) {
                     jobMetadata.put(nodeCode, jobEntry);
                     Object definition = jobEntry.get("executionDefinition");
-                    if (EmptyChecks.isNotNull(definition)) {
+                    if (definition != null) {
                         String serializedDefinition = JsonUtils.toJson(definition);
                         JobDefinitionView job = JsonUtils.fromJson(serializedDefinition, JobDefinitionView.class);
-                        if (EmptyChecks.isNotNull(job)) {
+                        if (job != null) {
                             jobs.put(nodeCode, job);
                         }
                     }
                     String pipelineCode = string(jobEntry.get("systemPipelineCode"));
                     Integer pipelineVersion = number(jobEntry.get("systemPipelineVersion"));
-                    if (EmptyChecks.isNotNull(pipelineCode) && EmptyChecks.isNotNull(pipelineVersion)) {
+                    if (pipelineCode != null && pipelineVersion != null) {
                         pipelines.put(nodeCode, new SystemPipelineIdentity(pipelineCode, pipelineVersion));
                     }
                     ReplayExecutionGuard replayGuard = readReplayExecutionGuard(jobEntry.get("replayExecutionGuard"));
-                    if (EmptyChecks.isNotNull(replayGuard)) {
+                    if (replayGuard != null) {
                         replayExecutionGuards.put(nodeCode, replayGuard);
                     }
                     if (jobEntry.containsKey("frozenFileTemplateSnapshots")) {
@@ -130,24 +130,24 @@ public record WorkflowRunExecutionSnapshot(
         String workflowCalendarCode = string(raw.get("workflowCalendarCode"));
         Long replaySessionId = longNumber(raw.get("replaySessionId"));
         Long replayOperationId = longNumber(raw.get("replayOperationId"));
-        if (EmptyChecks.isNotNull(replayOperationId) && replayOperationId <= 0) {
+        if (replayOperationId != null && replayOperationId <= 0) {
             throw invalidSnapshot();
         }
-        boolean workflowDefinitionIdentityIsInvalid = EmptyChecks.isNull(workflowDefinitionId)
+        boolean workflowDefinitionIdentityIsInvalid = workflowDefinitionId == null
                 || !workflowDefinitionId.equals(run.getWorkflowDefinitionId())
-                || EmptyChecks.isNull(workflowVersion)
+                || workflowVersion == null
                 || !Objects.equals(run.getWorkflowVersionSnapshot(), workflowVersion);
         if (workflowDefinitionIdentityIsInvalid) {
             throw invalidSnapshot();
         }
-        boolean runTenantIsInvalid = EmptyChecks.isBlank(run.getTenantId());
+        boolean runTenantIsInvalid = EmptyValues.isBlank(run.getTenantId());
         if (runTenantIsInvalid) {
             throw invalidSnapshot();
         }
-        if (EmptyChecks.isEmpty(nodes)) {
+        if (EmptyValues.isEmpty(nodes)) {
             throw invalidSnapshot();
         }
-        boolean nodeCodeIsMissing = nodes.stream().anyMatch(node -> EmptyChecks.isBlank(node.getNodeCode()));
+        boolean nodeCodeIsMissing = nodes.stream().anyMatch(node -> EmptyValues.isBlank(node.getNodeCode()));
         if (nodeCodeIsMissing) {
             throw invalidSnapshot();
         }
@@ -239,21 +239,21 @@ public record WorkflowRunExecutionSnapshot(
         Map<String, List<Long>> pinnedDependencyIds =
                 definitions.crossDayDependencyResultVersionIdsByNode().get(node.getNodeCode());
         Set<String> declaredDependencyAliases = crossDayDependencyAliases(node);
-        boolean declaresCrossDayDependencies = !EmptyChecks.isEmpty(Objects.requireNonNull(declaredDependencyAliases));
-        boolean replayRequiresPinnedDependencyIds = EmptyChecks.isNotNull(definitions.replayOperationId())
+        boolean declaresCrossDayDependencies = !EmptyValues.isEmpty(Objects.requireNonNull(declaredDependencyAliases));
+        boolean replayRequiresPinnedDependencyIds = definitions.replayOperationId() != null
                 && WorkflowNodeType.JOB.code().equals(node.getNodeType())
                 && !Boolean.FALSE.equals(node.getEnabled())
                 && declaresCrossDayDependencies
-                && EmptyChecks.isEmpty(pinnedDependencyIds);
+                && EmptyValues.isEmpty(pinnedDependencyIds);
         if (replayRequiresPinnedDependencyIds) {
             throw invalidSnapshot();
         }
-        if (EmptyChecks.isNotNull(pinnedDependencyIds)) {
-            boolean pinnedDependenciesAreInvalidForNode = EmptyChecks.isNull(definitions.replayOperationId())
+        if (pinnedDependencyIds != null) {
+            boolean pinnedDependenciesAreInvalidForNode = definitions.replayOperationId() == null
                     || !WorkflowNodeType.JOB.code().equals(node.getNodeType())
                     || Boolean.FALSE.equals(node.getEnabled())
                     || !declaresCrossDayDependencies
-                    || EmptyChecks.isEmpty(Objects.requireNonNull(pinnedDependencyIds));
+                    || EmptyValues.isEmpty(Objects.requireNonNull(pinnedDependencyIds));
             if (pinnedDependenciesAreInvalidForNode) {
                 throw invalidSnapshot();
             }
@@ -264,22 +264,20 @@ public record WorkflowRunExecutionSnapshot(
     private static void validateJobSnapshot(
             WorkflowRunEntity run, WorkflowNodeEntity node, FrozenDefinitions definitions) {
         ReplayExecutionGuard replayGuard = definitions.replayExecutionGuards().get(node.getNodeCode());
-        boolean enabledReplayNodeIsMissingMatchingGuard = EmptyChecks.isNotNull(definitions.replayOperationId())
+        boolean enabledReplayNodeIsMissingMatchingGuard = definitions.replayOperationId() != null
                 && !Boolean.FALSE.equals(node.getEnabled())
-                && (EmptyChecks.isNull(replayGuard)
-                        || !definitions.replayOperationId().equals(replayGuard.replayOperationId()));
+                && (replayGuard == null || !definitions.replayOperationId().equals(replayGuard.replayOperationId()));
         if (enabledReplayNodeIsMissingMatchingGuard) {
             throw invalidSnapshot();
         }
-        if (EmptyChecks.isNotNull(replayGuard)
-                && !Objects.equals(definitions.replayOperationId(), replayGuard.replayOperationId())) {
+        if (replayGuard != null && !Objects.equals(definitions.replayOperationId(), replayGuard.replayOperationId())) {
             throw invalidSnapshot();
         }
         JobDefinitionView job = definitions.jobs().get(node.getNodeCode());
         Map<?, ?> metadata = definitions.jobMetadata().get(node.getNodeCode());
-        boolean jobSnapshotIdentityIsInvalid = EmptyChecks.isNull(job)
-                || EmptyChecks.isNull(metadata)
-                || EmptyChecks.isNull(job.id())
+        boolean jobSnapshotIdentityIsInvalid = job == null
+                || metadata == null
+                || job.id() == null
                 || !Objects.equals(job.jobCode(), node.getRelatedJobCode())
                 || !Objects.equals(job.tenantId(), run.getTenantId());
         if (jobSnapshotIdentityIsInvalid) {
@@ -309,20 +307,20 @@ public record WorkflowRunExecutionSnapshot(
             JobDefinitionView job, WorkflowNodeEntity node, Map<?, ?> metadata, FrozenDefinitions definitions) {
         Optional<SystemPipelineDefinition> expectedPipeline = SystemPipelineCatalog.forJobType(job.jobType());
         SystemPipelineIdentity actualPipeline = definitions.pipelines().get(node.getNodeCode());
-        boolean hasPipelineCode = EmptyChecks.isNotNull(metadata.get("systemPipelineCode"));
-        boolean hasPipelineVersion = EmptyChecks.isNotNull(metadata.get("systemPipelineVersion"));
+        boolean hasPipelineCode = metadata.get("systemPipelineCode") != null;
+        boolean hasPipelineVersion = metadata.get("systemPipelineVersion") != null;
         if (hasPipelineCode != hasPipelineVersion) {
             throw invalidSnapshot();
         }
         if (expectedPipeline.isPresent()) {
             SystemPipelineDefinition expected = expectedPipeline.orElseThrow();
-            boolean pipelineSnapshotVersionDoesNotMatch = EmptyChecks.isNull(actualPipeline)
+            boolean pipelineSnapshotVersionDoesNotMatch = actualPipeline == null
                     || !expected.code().equals(actualPipeline.code())
                     || !Objects.equals(expected.semanticVersion(), actualPipeline.version());
             if (pipelineSnapshotVersionDoesNotMatch) {
                 throw invalidSnapshot();
             }
-        } else if (EmptyChecks.isNotNull(actualPipeline)) {
+        } else if (actualPipeline != null) {
             throw invalidSnapshot();
         }
     }
@@ -337,30 +335,30 @@ public record WorkflowRunExecutionSnapshot(
                 definitions.dispatchSecretBindings().get(node.getNodeCode());
         boolean fileTemplateJob = isFileTemplateJob(job.jobType());
         boolean dispatchJob = JobType.DISPATCH.code().equals(job.jobType());
-        boolean replayFileTemplateSnapshotIsMissing = EmptyChecks.isNotNull(definitions.replayOperationId())
+        boolean replayFileTemplateSnapshotIsMissing = definitions.replayOperationId() != null
                 && !Boolean.FALSE.equals(node.getEnabled())
                 && fileTemplateJob
-                && EmptyChecks.isEmpty(templateSnapshots);
+                && EmptyValues.isEmpty(templateSnapshots);
         if (replayFileTemplateSnapshotIsMissing) {
             throw invalidSnapshot();
         }
-        if (!fileTemplateJob && EmptyChecks.isNotEmpty(templateSnapshots)) {
+        if (!fileTemplateJob && EmptyValues.isNotEmpty(templateSnapshots)) {
             throw invalidSnapshot();
         }
-        boolean replayDispatchChannelSnapshotIsMissing = EmptyChecks.isNotNull(definitions.replayOperationId())
+        boolean replayDispatchChannelSnapshotIsMissing = definitions.replayOperationId() != null
                 && !Boolean.FALSE.equals(node.getEnabled())
                 && dispatchJob
-                && EmptyChecks.isEmpty(channelSnapshots);
+                && EmptyValues.isEmpty(channelSnapshots);
         if (replayDispatchChannelSnapshotIsMissing) {
             throw invalidSnapshot();
         }
         boolean nonDispatchJobHasChannelSnapshots =
-                !dispatchJob && (EmptyChecks.isNotEmpty(channelSnapshots) || EmptyChecks.isNotEmpty(secretBindings));
+                !dispatchJob && (EmptyValues.isNotEmpty(channelSnapshots) || EmptyValues.isNotEmpty(secretBindings));
         if (nonDispatchJobHasChannelSnapshots) {
             throw invalidSnapshot();
         }
-        boolean secretBindingsReferenceMissingChannels = EmptyChecks.isNotEmpty(secretBindings)
-                && (EmptyChecks.isEmpty(channelSnapshots)
+        boolean secretBindingsReferenceMissingChannels = EmptyValues.isNotEmpty(secretBindings)
+                && (EmptyValues.isEmpty(channelSnapshots)
                         || !channelSnapshots.keySet().containsAll(secretBindings.keySet()));
         if (secretBindingsReferenceMissingChannels) {
             throw invalidSnapshot();
@@ -371,27 +369,27 @@ public record WorkflowRunExecutionSnapshot(
             Map<String, WorkflowNodeEntity> nodesByCode, FrozenDefinitions definitions) {
         for (Map.Entry<String, JobDefinitionView> entry : definitions.jobs().entrySet()) {
             WorkflowNodeEntity node = nodesByCode.get(entry.getKey());
-            if (EmptyChecks.isNull(node) || !WorkflowNodeType.JOB.code().equals(node.getNodeType())) {
+            if (node == null || !WorkflowNodeType.JOB.code().equals(node.getNodeType())) {
                 throw invalidSnapshot();
             }
         }
         for (String nodeCode : definitions.jobMetadata().keySet()) {
             WorkflowNodeEntity node = nodesByCode.get(nodeCode);
-            if (EmptyChecks.isNull(node) || !WorkflowNodeType.JOB.code().equals(node.getNodeType())) {
+            if (node == null || !WorkflowNodeType.JOB.code().equals(node.getNodeType())) {
                 throw invalidSnapshot();
             }
         }
         for (String nodeCode : definitions.replayExecutionGuards().keySet()) {
             WorkflowNodeEntity node = nodesByCode.get(nodeCode);
-            if (EmptyChecks.isNull(node) || !WorkflowNodeType.JOB.code().equals(node.getNodeType())) {
+            if (node == null || !WorkflowNodeType.JOB.code().equals(node.getNodeType())) {
                 throw invalidSnapshot();
             }
         }
         for (String nodeCode : definitions.frozenFileTemplateSnapshots().keySet()) {
             WorkflowNodeEntity node = nodesByCode.get(nodeCode);
-            boolean nodeCannotProvideReplayJob = EmptyChecks.isNull(node)
+            boolean nodeCannotProvideReplayJob = node == null
                     || !WorkflowNodeType.JOB.code().equals(node.getNodeType())
-                    || EmptyChecks.isNull(definitions.replayOperationId());
+                    || definitions.replayOperationId() == null;
             if (nodeCannotProvideReplayJob) {
                 throw invalidSnapshot();
             }
@@ -399,10 +397,10 @@ public record WorkflowRunExecutionSnapshot(
         for (String nodeCode : definitions.frozenDispatchChannelSnapshots().keySet()) {
             WorkflowNodeEntity node = nodesByCode.get(nodeCode);
             JobDefinitionView job = definitions.jobs().get(nodeCode);
-            boolean dispatchReplayContextIsInvalid = EmptyChecks.isNull(node)
+            boolean dispatchReplayContextIsInvalid = node == null
                     || !WorkflowNodeType.JOB.code().equals(node.getNodeType())
-                    || EmptyChecks.isNull(definitions.replayOperationId())
-                    || EmptyChecks.isNull(job)
+                    || definitions.replayOperationId() == null
+                    || job == null
                     || !JobType.DISPATCH.code().equals(job.jobType());
             if (dispatchReplayContextIsInvalid) {
                 throw invalidSnapshot();
@@ -411,10 +409,10 @@ public record WorkflowRunExecutionSnapshot(
         for (String nodeCode : definitions.dispatchSecretBindings().keySet()) {
             WorkflowNodeEntity node = nodesByCode.get(nodeCode);
             JobDefinitionView job = definitions.jobs().get(nodeCode);
-            boolean dispatchReplayContextIsInvalid = EmptyChecks.isNull(node)
+            boolean dispatchReplayContextIsInvalid = node == null
                     || !WorkflowNodeType.JOB.code().equals(node.getNodeType())
-                    || EmptyChecks.isNull(definitions.replayOperationId())
-                    || EmptyChecks.isNull(job)
+                    || definitions.replayOperationId() == null
+                    || job == null
                     || !JobType.DISPATCH.code().equals(job.jobType());
             if (dispatchReplayContextIsInvalid) {
                 throw invalidSnapshot();
@@ -423,9 +421,9 @@ public record WorkflowRunExecutionSnapshot(
         for (String nodeCode :
                 definitions.crossDayDependencyResultVersionIdsByNode().keySet()) {
             WorkflowNodeEntity node = nodesByCode.get(nodeCode);
-            boolean nodeCannotProvideReplayJob = EmptyChecks.isNull(node)
+            boolean nodeCannotProvideReplayJob = node == null
                     || !WorkflowNodeType.JOB.code().equals(node.getNodeType())
-                    || EmptyChecks.isNull(definitions.replayOperationId());
+                    || definitions.replayOperationId() == null;
             if (nodeCannotProvideReplayJob) {
                 throw invalidSnapshot();
             }
@@ -443,8 +441,8 @@ public record WorkflowRunExecutionSnapshot(
             boolean enabledEdgeIdentityIsInvalid =
                     !run.getWorkflowDefinitionId().equals(edge.getWorkflowDefinitionId())
                             || !run.getTenantId().equals(edge.getTenantId())
-                            || EmptyChecks.isBlank(fromNodeCode)
-                            || EmptyChecks.isBlank(toNodeCode);
+                            || EmptyValues.isBlank(fromNodeCode)
+                            || EmptyValues.isBlank(toNodeCode);
             if (enabledEdgeIdentityIsInvalid) {
                 throw invalidSnapshot();
             }
@@ -464,19 +462,19 @@ public record WorkflowRunExecutionSnapshot(
 
     private static Set<String> crossDayDependencyAliases(WorkflowNodeEntity node) {
         String declarations = node.getCrossDayDependencies();
-        if (EmptyChecks.isBlank(declarations)) {
+        if (EmptyValues.isBlank(declarations)) {
             return Set.of();
         }
         try {
             List<CrossDayDependencySpec> specs =
                     JsonUtils.fromJson(declarations, new TypeReference<List<CrossDayDependencySpec>>() {});
-            if (EmptyChecks.isEmpty(specs)) {
+            if (EmptyValues.isEmpty(specs)) {
                 return Set.of();
             }
             Set<String> aliases = new LinkedHashSet<>();
             for (CrossDayDependencySpec spec : specs) {
-                boolean replaySnapshotSpecIsInvalid = EmptyChecks.isNull(spec)
-                        || EmptyChecks.isBlank(spec.jobCode())
+                boolean replaySnapshotSpecIsInvalid = spec == null
+                        || EmptyValues.isBlank(spec.jobCode())
                         || !spec.hasSupportedStrategy()
                         || !spec.hasValidVersionSelector();
                 if (replaySnapshotSpecIsInvalid) {
@@ -496,7 +494,7 @@ public record WorkflowRunExecutionSnapshot(
     }
 
     private static String resolvedAlias(CrossDayDependencySpec spec) {
-        if (EmptyChecks.isNotBlank(spec.alias())) {
+        if (EmptyValues.isNotBlank(spec.alias())) {
             return spec.alias();
         }
         if (spec.isOffsetMode()) {
@@ -504,7 +502,7 @@ public record WorkflowRunExecutionSnapshot(
             String sign = offset < 0 ? "minus_" : "plus_";
             return "t_" + sign + Math.abs(offset);
         }
-        if (EmptyChecks.isNotBlank(spec.bizDateRange())) {
+        if (EmptyValues.isNotBlank(spec.bizDateRange())) {
             return spec.bizDateRange().toLowerCase(Locale.ROOT);
         }
         return spec.jobCode().toLowerCase(Locale.ROOT);
@@ -515,10 +513,10 @@ public record WorkflowRunExecutionSnapshot(
             throw invalidSnapshot();
         }
         for (Map.Entry<String, List<Long>> entry : idsByAlias.entrySet()) {
-            if (EmptyChecks.isBlank(entry.getKey()) || EmptyChecks.isNull(entry.getValue())) {
+            if (EmptyValues.isBlank(entry.getKey()) || entry.getValue() == null) {
                 throw invalidSnapshot();
             }
-            if (entry.getValue().stream().anyMatch(id -> EmptyChecks.isNull(id) || id <= 0)
+            if (entry.getValue().stream().anyMatch(id -> id == null || id <= 0)
                     || entry.getValue().stream().distinct().count()
                             != entry.getValue().size()) {
                 throw invalidSnapshot();
@@ -531,7 +529,7 @@ public record WorkflowRunExecutionSnapshot(
     }
 
     public WorkflowNodeEntity node(String nodeCode) {
-        if (EmptyChecks.isNull(nodes) || EmptyChecks.isNull(nodeCode)) {
+        if (nodes == null || nodeCode == null) {
             return null;
         }
         return nodes.stream()
@@ -541,51 +539,49 @@ public record WorkflowRunExecutionSnapshot(
     }
 
     public JobDefinitionView jobDefinition(String nodeCode) {
-        return EmptyChecks.isNull(jobDefinitions) ? null : jobDefinitions.get(nodeCode);
+        return jobDefinitions == null ? null : jobDefinitions.get(nodeCode);
     }
 
     public ReplayExecutionGuard replayExecutionGuard(String nodeCode) {
-        return EmptyChecks.isNull(replayExecutionGuards) ? null : replayExecutionGuards.get(nodeCode);
+        return replayExecutionGuards == null ? null : replayExecutionGuards.get(nodeCode);
     }
 
     public Map<String, String> frozenFileTemplateSnapshots(String nodeCode) {
-        return EmptyChecks.isNull(frozenFileTemplateSnapshots)
+        return frozenFileTemplateSnapshots == null
                 ? Map.of()
                 : frozenFileTemplateSnapshots.getOrDefault(nodeCode, Map.of());
     }
 
     public Map<String, String> frozenDispatchChannelSnapshots(String nodeCode) {
-        return EmptyChecks.isNull(frozenDispatchChannelSnapshots)
+        return frozenDispatchChannelSnapshots == null
                 ? Map.of()
                 : frozenDispatchChannelSnapshots.getOrDefault(nodeCode, Map.of());
     }
 
     public Map<String, Object> dispatchSecretBindings(String nodeCode) {
-        return EmptyChecks.isNull(dispatchSecretBindings)
-                ? Map.of()
-                : dispatchSecretBindings.getOrDefault(nodeCode, Map.of());
+        return dispatchSecretBindings == null ? Map.of() : dispatchSecretBindings.getOrDefault(nodeCode, Map.of());
     }
 
     public Map<String, List<Long>> crossDayDependencyResultVersionIds(String nodeCode) {
-        return EmptyChecks.isNull(crossDayDependencyResultVersionIdsByNode)
+        return crossDayDependencyResultVersionIdsByNode == null
                 ? Map.of()
                 : crossDayDependencyResultVersionIdsByNode.getOrDefault(nodeCode, Map.of());
     }
 
     public void copySystemPipelineIdentity(String nodeCode, Map<String, Object> target) {
         SystemPipelineIdentity identity = systemPipeline(nodeCode);
-        if (EmptyChecks.isNotNull(identity) && EmptyChecks.isNotNull(target)) {
+        if (identity != null && target != null) {
             target.put(SystemPipelineTaskKeys.CODE, identity.code());
             target.put(SystemPipelineTaskKeys.VERSION, identity.version());
         }
     }
 
     public SystemPipelineIdentity systemPipeline(String nodeCode) {
-        return EmptyChecks.isNull(systemPipelines) ? null : systemPipelines.get(nodeCode);
+        return systemPipelines == null ? null : systemPipelines.get(nodeCode);
     }
 
     public List<WorkflowEdgeEntity> outgoing(String nodeCode) {
-        return EmptyChecks.isNull(edges)
+        return edges == null
                 ? List.of()
                 : edges.stream()
                         .filter(edge -> Boolean.TRUE.equals(edge.getEnabled()))
@@ -594,7 +590,7 @@ public record WorkflowRunExecutionSnapshot(
     }
 
     public List<WorkflowEdgeEntity> incoming(String nodeCode) {
-        return EmptyChecks.isNull(edges)
+        return edges == null
                 ? List.of()
                 : edges.stream()
                         .filter(edge -> Boolean.TRUE.equals(edge.getEnabled()))
@@ -603,7 +599,7 @@ public record WorkflowRunExecutionSnapshot(
     }
 
     private static <T> List<T> readList(Object value, Class<T> type) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return List.of();
         }
         ObjectMapper valueMapper = JsonUtils.newDefaultMapper();
@@ -613,7 +609,7 @@ public record WorkflowRunExecutionSnapshot(
     }
 
     private static ReplayExecutionGuard readReplayExecutionGuard(Object value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         try {
@@ -626,15 +622,15 @@ public record WorkflowRunExecutionSnapshot(
     }
 
     private static Map<String, String> readProtectedTemplateSnapshots(Object value) {
-        if (!(value instanceof Map<?, ?> entries) || EmptyChecks.isEmpty(entries)) {
+        if (!(value instanceof Map<?, ?> entries) || EmptyValues.isEmpty(entries)) {
             throw invalidSnapshot();
         }
         Map<String, String> snapshots = new LinkedHashMap<>();
         for (Map.Entry<?, ?> entry : entries.entrySet()) {
             if (!(entry.getKey() instanceof String templateCode)
-                    || EmptyChecks.isBlank(templateCode)
+                    || EmptyValues.isBlank(templateCode)
                     || !(entry.getValue() instanceof String protectedSnapshot)
-                    || EmptyChecks.isBlank(protectedSnapshot)) {
+                    || EmptyValues.isBlank(protectedSnapshot)) {
                 throw invalidSnapshot();
             }
             snapshots.put(templateCode, protectedSnapshot);
@@ -649,13 +645,13 @@ public record WorkflowRunExecutionSnapshot(
         Map<String, Object> bindings = new LinkedHashMap<>();
         for (Map.Entry<?, ?> entry : entries.entrySet()) {
             if (!(entry.getKey() instanceof String channelCode)
-                    || EmptyChecks.isBlank(channelCode)
+                    || EmptyValues.isBlank(channelCode)
                     || !(entry.getValue() instanceof Map<?, ?> binding)) {
                 throw invalidSnapshot();
             }
             Map<String, Object> namedBinding = new LinkedHashMap<>();
             for (Map.Entry<?, ?> bindingEntry : binding.entrySet()) {
-                if (!(bindingEntry.getKey() instanceof String key) || EmptyChecks.isBlank(key)) {
+                if (!(bindingEntry.getKey() instanceof String key) || EmptyValues.isBlank(key)) {
                     throw invalidSnapshot();
                 }
                 namedBinding.put(key, bindingEntry.getValue());
@@ -666,17 +662,16 @@ public record WorkflowRunExecutionSnapshot(
     }
 
     private static Map<String, Map<String, List<Long>>> readCrossDayDependencyResultVersionIds(Object value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return new LinkedHashMap<>();
         }
         try {
             String serializedIds = JsonUtils.toJson(value);
             Map<String, Map<String, List<Long>>> idsByNode =
                     JsonUtils.fromJson(serializedIds, new TypeReference<>() {});
-            if (EmptyChecks.isNull(idsByNode)
+            if (idsByNode == null
                     || idsByNode.entrySet().stream()
-                            .anyMatch(entry ->
-                                    EmptyChecks.isBlank(entry.getKey()) || EmptyChecks.isNull(entry.getValue()))) {
+                            .anyMatch(entry -> EmptyValues.isBlank(entry.getKey()) || entry.getValue() == null)) {
                 throw invalidSnapshot();
             }
             return new LinkedHashMap<>(idsByNode);
@@ -758,6 +753,6 @@ public record WorkflowRunExecutionSnapshot(
     }
 
     private static String string(Object value) {
-        return value instanceof String text && EmptyChecks.isNotBlank(text) ? text : null;
+        return value instanceof String text && EmptyValues.isNotBlank(text) ? text : null;
     }
 }

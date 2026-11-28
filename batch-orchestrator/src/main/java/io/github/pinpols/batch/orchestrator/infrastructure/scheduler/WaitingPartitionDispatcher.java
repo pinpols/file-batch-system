@@ -8,7 +8,6 @@ import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
@@ -60,11 +59,11 @@ class WaitingPartitionDispatcher {
         jobMappers.jobInstanceMapper.acquireInstanceAdvisoryLock(jobInstance.getTenantId(), jobInstance.getId());
         WorkflowRunEntity parentRun = workflowMappers.workflowRunMapper.selectByNodeJobInstanceId(
                 jobInstance.getTenantId(), jobInstance.getId());
-        if (EmptyChecks.isNotNull(parentRun)) {
+        if (parentRun != null) {
             // 与任务回报保持实例锁在前、Workflow 行锁在后的顺序，并与暂停提交串行化。
             WorkflowRunEntity lockedRun = workflowMappers.workflowRunMapper.selectByTenantAndIdForUpdate(
                     jobInstance.getTenantId(), parentRun.getId());
-            if (EmptyChecks.isNull(lockedRun)
+            if (lockedRun == null
                     || !(WorkflowRunStatus.CREATED.code().equals(lockedRun.getRunStatus())
                             || WorkflowRunStatus.RUNNING.code().equals(lockedRun.getRunStatus()))) {
                 return;
@@ -115,7 +114,7 @@ class WaitingPartitionDispatcher {
      * 这样既避免同一实例第二个分片继续按旧 WAITING 快照重复占全局槽位，也不会为已经取消的实例复活任务。
      */
     private boolean isDispatchableParent(JobInstanceEntity jobInstance) {
-        if (EmptyChecks.isNull(jobInstance)) {
+        if (jobInstance == null) {
             return false;
         }
         return JobInstanceStatus.WAITING.code().equals(jobInstance.getInstanceStatus())
@@ -137,7 +136,7 @@ class WaitingPartitionDispatcher {
         if (updated <= 0) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_launch_conflict");
         }
-        jobInstance.setVersion((EmptyChecks.isNull(jobInstance.getVersion()) ? 0L : jobInstance.getVersion()) + 1);
+        jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
     }
 
     private void advanceWorkflowRun(JobInstanceEntity jobInstance) {

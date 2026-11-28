@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.dto;
 
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
 
 /**
@@ -28,7 +29,7 @@ public final class SdkProtocolVersions {
      * "v1"};{@code "V2"} → {@code "v2"})。空 / 无前导数字一律返回 {@code null}(交由调用方判定 legacy / 非法)。
      */
     public static String normalizeMajor(String protocolVersion) {
-        if (protocolVersion == null || protocolVersion.isBlank()) {
+        if (EmptyValues.isBlank(protocolVersion)) {
             return null;
         }
         String trimmed = protocolVersion.strip();

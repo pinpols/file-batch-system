@@ -6,8 +6,7 @@ import io.github.pinpols.batch.common.tenant.routing.BusinessPlacementResolver;
 import io.github.pinpols.batch.common.tenant.routing.BusinessRoutingDataSourceFactory;
 import io.github.pinpols.batch.common.tenant.routing.HashAndSiloPlacementResolver;
 import io.github.pinpols.batch.common.tenant.routing.TenantPlacementRepository;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -43,7 +42,7 @@ public final class BusinessDataSourceBuilder {
             TenantPlacementRepository placementRepository,
             String appName) {
         if (routingProperties != null && routingProperties.isEnabled()) {
-            if (EmptyChecks.isEmpty(routingProperties.getShards())) {
+            if (EmptyValues.isEmpty(routingProperties.getShards())) {
                 throw new IllegalStateException(
                         "batch.datasource.business.routing.enabled=true requires at least one configured" + " shard");
             }
@@ -110,7 +109,7 @@ public final class BusinessDataSourceBuilder {
     private static void validateShardKeys(BusinessRoutingProperties routingProperties) {
         Set<String> keys = new HashSet<>();
         for (BusinessRoutingProperties.Shard shard : routingProperties.getShards()) {
-            if (EmptyChecks.isNull(shard) || !Texts.hasText(shard.getKey())) {
+            if (shard == null || !EmptyValues.hasText(shard.getKey())) {
                 throw new IllegalArgumentException("business routing shard key must not be blank");
             }
             if (!keys.add(shard.getKey())) {

@@ -7,7 +7,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.trigger.BatchTriggerApplication;
 import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
@@ -109,7 +109,7 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
 
     @AfterEach
     void dropIsolatedPlatformDatabase() throws Exception {
-        if (EmptyChecks.isBlank(isolatedDatabaseName)) {
+        if (EmptyValues.isBlank(isolatedDatabaseName)) {
             return;
         }
         try (var connection =

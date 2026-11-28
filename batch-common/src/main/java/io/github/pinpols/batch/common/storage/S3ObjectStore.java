@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.common.storage;
 
 import io.github.pinpols.batch.common.config.S3StorageProperties;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.S3BucketSupport;
 import java.io.InputStream;
 import java.net.URL;
@@ -114,11 +114,11 @@ public class S3ObjectStore implements BatchObjectStore {
     /** S3 服务端批删({@code DeleteObjects},每批 ≤1000)。不支持该 API 的 S3 兼容后端回退逐个删。 */
     @Override
     public void deleteMany(String bucket, Collection<String> keys) {
-        if (keys == null || keys.isEmpty()) {
+        if (EmptyValues.isEmpty(keys)) {
             return;
         }
         List<String> deduped =
-                keys.stream().filter(k -> k != null && !k.isBlank()).distinct().toList();
+                keys.stream().filter(k -> EmptyValues.isNotBlank(k)).distinct().toList();
         for (int i = 0; i < deduped.size(); i += MAX_BATCH_DELETE) {
             int batchEndExclusive = Math.min(i + MAX_BATCH_DELETE, deduped.size());
             List<String> chunk = deduped.subList(i, batchEndExclusive);
@@ -263,7 +263,7 @@ public class S3ObjectStore implements BatchObjectStore {
                     .signatureDuration(ttl)
                     .putObjectRequest(put -> {
                         put.bucket(bucket).key(key);
-                        if (EmptyChecks.isNotBlank(contentType)) {
+                        if (EmptyValues.isNotBlank(contentType)) {
                             put.contentType(contentType);
                         }
                     })

@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.common.i18n;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.io.IOException;
 import java.util.List;
 import org.springframework.context.i18n.LocaleContextHolder;
@@ -16,8 +15,8 @@ public class AcceptLanguageRequestInterceptor implements ClientHttpRequestInterc
     @Override
     public ClientHttpResponse intercept(HttpRequest request, byte[] body, ClientHttpRequestExecution execution)
             throws IOException {
-        if (EmptyChecks.isNull(request.getHeaders().getFirst(HttpHeaders.ACCEPT_LANGUAGE))
-                && EmptyChecks.isNotNull(LocaleContextHolder.getLocaleContext())) {
+        if (request.getHeaders().getFirst(HttpHeaders.ACCEPT_LANGUAGE) == null
+                && LocaleContextHolder.getLocaleContext() != null) {
             request.getHeaders().setAcceptLanguageAsLocales(List.of(LocaleContextHolder.getLocale()));
         }
         return execution.execute(request, body);

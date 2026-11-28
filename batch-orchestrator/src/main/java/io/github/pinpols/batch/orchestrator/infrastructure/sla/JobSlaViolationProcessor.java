@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sla;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
@@ -39,7 +39,7 @@ public class JobSlaViolationProcessor {
         }
         JobSlaCandidate claimedCandidate =
                 jobMonitoringMapper.selectSlaViolationCandidate(candidate.getTenantId(), candidate.getId());
-        if (EmptyChecks.isNull(claimedCandidate)) {
+        if (claimedCandidate == null) {
             throw new IllegalStateException("claimed SLA violation candidate is no longer available");
         }
         candidate = claimedCandidate;
@@ -105,7 +105,7 @@ public class JobSlaViolationProcessor {
     public boolean processEscalation(JobSlaCandidate observed, Instant now, long delaySeconds, String severity) {
         JobSlaCandidate candidate = jobMonitoringMapper.selectSlaEscalationCandidateForUpdate(
                 observed.getTenantId(), observed.getId(), now.minusSeconds(delaySeconds));
-        if (EmptyChecks.isNull(candidate)) {
+        if (candidate == null) {
             return false;
         }
         Map<String, Object> extra = buildEscalationExtra(candidate, now, delaySeconds);
@@ -130,7 +130,7 @@ public class JobSlaViolationProcessor {
         Map<String, Object> extra = new LinkedHashMap<>(baseExtra);
         extra.put("escalationDelaySeconds", delaySeconds);
         extra.put("slaAlertedAt", candidate.getSlaAlertedAt());
-        if (EmptyChecks.isNotNull(candidate.getSlaAlertedAt())) {
+        if (candidate.getSlaAlertedAt() != null) {
             Duration elapsedSinceAlert = Duration.between(candidate.getSlaAlertedAt(), now);
             long alertedElapsedSeconds = elapsedSinceAlert.getSeconds();
             extra.put("alertedElapsedSeconds", alertedElapsedSeconds);
@@ -143,13 +143,11 @@ public class JobSlaViolationProcessor {
         extra.put("jobInstanceId", String.valueOf(candidate.getId()));
         extra.put(
                 "bizDate",
-                EmptyChecks.isNull(candidate.getBizDate())
-                        ? null
-                        : candidate.getBizDate().toString());
-        if (EmptyChecks.isNotNull(candidate.getParentWorkflowRunId())) {
+                candidate.getBizDate() == null ? null : candidate.getBizDate().toString());
+        if (candidate.getParentWorkflowRunId() != null) {
             extra.put("workflowRunId", candidate.getParentWorkflowRunId().toString());
         }
-        if (!EmptyChecks.isBlank(candidate.getParentNodeCode())) {
+        if (!EmptyValues.isBlank(candidate.getParentNodeCode())) {
             extra.put("nodeCode", candidate.getParentNodeCode());
         }
         extra.put("instanceNo", candidate.getInstanceNo());
@@ -160,19 +158,18 @@ public class JobSlaViolationProcessor {
         extra.put("dispatchedAt", candidate.getStartedAt());
         extra.put("executionStartedAt", candidate.getExecutionStartedAt());
         Instant finishedAt = candidate.getFinishedAt();
-        Instant evaluatedAt = EmptyChecks.isNotNull(finishedAt) ? finishedAt : now;
+        Instant evaluatedAt = finishedAt != null ? finishedAt : now;
         extra.put("finishedAt", finishedAt);
         extra.put("violationDetectedAt", now);
         extra.put("violationEvaluatedAt", evaluatedAt);
-        if (EmptyChecks.isNotNull(candidate.getDeadlineAt())
-                && candidate.getDeadlineAt().isBefore(evaluatedAt)) {
+        if (candidate.getDeadlineAt() != null && candidate.getDeadlineAt().isBefore(evaluatedAt)) {
             extra.put(KEY_VIOLATION_REASON, "DEADLINE_EXCEEDED");
             Duration deadlineOverrun = Duration.between(candidate.getDeadlineAt(), evaluatedAt);
             long deadlineDelaySeconds = deadlineOverrun.getSeconds();
             extra.put("deadlineDelaySeconds", deadlineDelaySeconds);
-        } else if (EmptyChecks.isNotNull(candidate.getExpectedDurationSeconds())
+        } else if (candidate.getExpectedDurationSeconds() != null
                 && candidate.getExpectedDurationSeconds() > 0
-                && EmptyChecks.isNotNull(candidate.getExecutionStartedAt())) {
+                && candidate.getExecutionStartedAt() != null) {
             Instant startedAt = candidate.getExecutionStartedAt();
             long expectedDurationSeconds = candidate.getExpectedDurationSeconds();
             Instant expectedFinish = startedAt.plusSeconds(expectedDurationSeconds);

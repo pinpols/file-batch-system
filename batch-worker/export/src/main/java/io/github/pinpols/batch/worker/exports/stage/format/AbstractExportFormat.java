@@ -5,8 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.exports.config.ExportConfigValueSupport;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import java.io.BufferedWriter;
@@ -99,7 +98,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
     /** 行分隔符（GenerateStep 恒注入；防御 null 回退 LF）。 */
     protected String exportLineSeparator(ExportFormatContext ctx) {
-        // 不能用 Texts.hasText 判空：真实 "\r\n" 会被 hasText 判定为空白（trim 后为空），导致 CRLF 退化成 LF。
+        // 不能用 EmptyValues.hasText 判空：真实 "\r\n" 会被 hasText 判定为空白（trim 后为空），导致 CRLF 退化成 LF。
         return ctx == null || ctx.lineSeparator() == null ? "\n" : ctx.lineSeparator();
     }
 
@@ -118,7 +117,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     protected void writeText(
             BufferedWriter writer, String text, String rowLabel, String column, ExportFormatContext ctx)
             throws IOException {
-        if (EmptyChecks.isNotEmpty(text)) {
+        if (EmptyValues.isNotEmpty(text)) {
             CharsetEncoder encoder = strictEncoder(exportCharset(ctx));
             try {
                 encoder.encode(CharBuffer.wrap(text));
@@ -199,7 +198,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
     /** 本次 generate 是否为续跑(已有可用位点 + 残文件)。 */
     protected boolean isResuming(ExportFormatContext ctx) {
-        return EmptyChecks.isNotNull(ctx.checkpoint()) && ctx.checkpoint().resuming();
+        return ctx.checkpoint() != null && ctx.checkpoint().resuming();
     }
 
     /** 优先级：模板配置 &gt; 插件描述 &gt; 首页字段推断。 */
@@ -247,20 +246,20 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     private List<ColumnLayout> resolveColumns(
             ExportDataContext dataCtx, List<Map<String, Object>> firstPage, ColumnResolutionSpec spec) {
         int maxColumns = resolveMaxColumns(dataCtx.templateConfig());
-        if (EmptyChecks.isNotEmpty(spec.configured())) {
+        if (EmptyValues.isNotEmpty(spec.configured())) {
             return enforceMaxColumns(spec.configured(), maxColumns, spec.labelTag() + "-template");
         }
-        if (EmptyChecks.isNotEmpty(spec.pluginColumns())) {
+        if (EmptyValues.isNotEmpty(spec.pluginColumns())) {
             List<ColumnLayout> fromPlugin = spec.pluginColumns().stream()
                     .map(col -> new ColumnLayout(col.header(), col.source(), null, false, ' '))
                     .toList();
             return enforceMaxColumns(fromPlugin, maxColumns, spec.labelTag() + "-plugin");
         }
-        if (EmptyChecks.isEmpty(firstPage)) {
+        if (EmptyValues.isEmpty(firstPage)) {
             return List.of();
         }
         Map<String, Object> firstRow = firstPage.get(0);
-        if (EmptyChecks.isEmpty(firstRow)) {
+        if (EmptyValues.isEmpty(firstRow)) {
             return List.of();
         }
         List<ColumnLayout> inferred =
@@ -279,17 +278,17 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
      * {@code query_param_schema} 继承配置。
      */
     protected int resolveMaxColumns(Map<String, Object> templateConfig) {
-        if (EmptyChecks.isEmpty(templateConfig)) {
+        if (EmptyValues.isEmpty(templateConfig)) {
             return DEFAULT_MAX_COLUMNS;
         }
         Integer direct =
                 integerValue(firstNonNull(templateConfig.get("max_columns"), templateConfig.get("maxColumns")));
-        if (EmptyChecks.isNotNull(direct) && direct > 0) {
+        if (direct != null && direct > 0) {
             return direct;
         }
         Map<String, Object> schema = toMap(templateConfig.get(KEY_QUERY_PARAM_SCHEMA));
         Integer fromSchema = integerValue(firstNonNull(schema.get("maxColumns"), schema.get("max_columns")));
-        if (EmptyChecks.isNotNull(fromSchema) && fromSchema > 0) {
+        if (fromSchema != null && fromSchema > 0) {
             return fromSchema;
         }
         return DEFAULT_MAX_COLUMNS;
@@ -310,12 +309,12 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     }
 
     protected List<ColumnLayout> templateDelimitedColumns(Map<String, Object> templateConfig) {
-        if (EmptyChecks.isEmpty(templateConfig)) {
+        if (EmptyValues.isEmpty(templateConfig)) {
             return List.of();
         }
         Object direct = firstNonNull(templateConfig.get("csv_columns"), templateConfig.get("csvColumns"));
         List<ColumnLayout> parsed = parseDelimitedColumns(direct, false);
-        if (EmptyChecks.isNotEmpty(parsed)) {
+        if (EmptyValues.isNotEmpty(parsed)) {
             return parsed;
         }
         Object querySchema = templateConfig.get(KEY_QUERY_PARAM_SCHEMA);
@@ -325,13 +324,13 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     }
 
     protected List<ColumnLayout> templateFixedWidthColumns(Map<String, Object> templateConfig) {
-        if (EmptyChecks.isEmpty(templateConfig)) {
+        if (EmptyValues.isEmpty(templateConfig)) {
             return List.of();
         }
         Object direct =
                 firstNonNull(templateConfig.get("fixed_width_columns"), templateConfig.get("fixedWidthColumns"));
         List<ColumnLayout> parsed = parseDelimitedColumns(direct, true);
-        if (EmptyChecks.isNotEmpty(parsed)) {
+        if (EmptyValues.isNotEmpty(parsed)) {
             return parsed;
         }
         Object querySchema = templateConfig.get(KEY_QUERY_PARAM_SCHEMA);
@@ -347,16 +346,16 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         List<ColumnLayout> columns = new ArrayList<>();
         for (Object item : list) {
             Map<String, Object> map = toMap(item);
-            if (EmptyChecks.isEmpty(map)) {
+            if (EmptyValues.isEmpty(map)) {
                 continue;
             }
             String source = textValue(firstNonNull(map.get("source"), map.get("path"), map.get("field")));
-            if (!Texts.hasText(source)) {
+            if (!EmptyValues.hasText(source)) {
                 continue;
             }
             String normalizedSource = normalizeDelimitedSource(source);
             String header = textValue(firstNonNull(map.get("header"), map.get("name")));
-            if (!Texts.hasText(header)) {
+            if (!EmptyValues.hasText(header)) {
                 header = defaultDelimitedHeader(normalizedSource);
             }
             Integer width =
@@ -383,7 +382,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     }
 
     protected String normalizeDelimitedSource(String source) {
-        String value = EmptyChecks.isNull(source) ? "" : source.trim();
+        String value = source == null ? "" : source.trim();
         if (value.startsWith("batch.") || value.startsWith(KEY_DETAIL_PREFIX)) {
             return value;
         }
@@ -396,19 +395,19 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     }
 
     protected DelimitedFormatConfig resolveDelimitedFormatConfig(Map<String, Object> templateConfig) {
-        Map<String, Object> source = EmptyChecks.isNull(templateConfig) ? Map.of() : templateConfig;
+        Map<String, Object> source = templateConfig == null ? Map.of() : templateConfig;
         Object schema = source.get(KEY_QUERY_PARAM_SCHEMA);
         Map<String, Object> schemaMap = toMap(schema);
         Object delimiterRaw =
                 firstNonNull(source.get("delimiter"), source.get("quote_delimiter"), schemaMap.get("delimiter"));
-        String delimiter = EmptyChecks.isNull(delimiterRaw) ? null : String.valueOf(delimiterRaw);
-        if (EmptyChecks.isEmpty(delimiter)) {
+        String delimiter = delimiterRaw == null ? null : String.valueOf(delimiterRaw);
+        if (EmptyValues.isEmpty(delimiter)) {
             delimiter = ",";
         }
         Object quoteCharRaw =
                 firstNonNull(source.get("quote_char"), source.get("quoteChar"), schemaMap.get("quoteChar"));
-        String quoteChar = EmptyChecks.isNull(quoteCharRaw) ? null : String.valueOf(quoteCharRaw);
-        if (EmptyChecks.isEmpty(quoteChar)) {
+        String quoteChar = quoteCharRaw == null ? null : String.valueOf(quoteCharRaw);
+        if (EmptyValues.isEmpty(quoteChar)) {
             quoteChar = "\"";
         }
         QuotePolicy quotePolicy = QuotePolicy.from(
@@ -421,12 +420,12 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     }
 
     protected String resolveSheetName(Map<String, Object> templateConfig) {
-        if (EmptyChecks.isEmpty(templateConfig)) {
+        if (EmptyValues.isEmpty(templateConfig)) {
             return "Sheet1";
         }
         Object v = firstNonNull(templateConfig.get("sheet_name"), templateConfig.get("sheetName"));
         String text = textValue(v);
-        return Texts.hasText(text) ? sanitizeSheetName(text) : "Sheet1";
+        return EmptyValues.hasText(text) ? sanitizeSheetName(text) : "Sheet1";
     }
 
     protected String sanitizeSheetName(String value) {
@@ -435,7 +434,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     }
 
     protected Object resolveDelimitedValue(Map<String, Object> batch, Map<String, Object> detail, String source) {
-        if (!Texts.hasText(source)) {
+        if (!EmptyValues.hasText(source)) {
             return null;
         }
         if (source.startsWith("batch.")) {
@@ -447,7 +446,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
             return detail.get(detailField);
         }
         Object detailValue = detail.get(source);
-        return EmptyChecks.isNotNull(detailValue) ? detailValue : batch.get(source);
+        return detailValue != null ? detailValue : batch.get(source);
     }
 
     protected int resolveTemplateInt(ExportJobContext context, String key, int fallback) {
@@ -456,7 +455,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
     protected String csv(Object value, DelimitedFormatConfig formatConfig) {
         String text = textValue(value);
-        if (!Texts.hasText(text)) {
+        if (!EmptyValues.hasText(text)) {
             return "";
         }
         boolean needsQuote =
@@ -510,10 +509,10 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
     protected String fixedWidth(Object value, ColumnLayout column) {
         String text = textValue(value);
-        int width = EmptyChecks.isNull(column.width()) || column.width() <= 0
+        int width = column.width() == null || column.width() <= 0
                 ? Math.max(column.header().length(), 16)
                 : column.width();
-        if (EmptyChecks.isNull(text)) {
+        if (text == null) {
             text = "";
         }
         if (text.length() > width) {
@@ -528,7 +527,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     }
 
     protected String padRight(String text, int length) {
-        String value = EmptyChecks.isNull(text) ? "" : text;
+        String value = text == null ? "" : text;
         if (value.length() >= length) {
             return value.substring(0, length);
         }
@@ -537,7 +536,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
     protected Object firstNonNull(Object... values) {
         for (Object value : values) {
-            if (EmptyChecks.isNotNull(value)) {
+            if (value != null) {
                 return value;
             }
         }
@@ -545,11 +544,11 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     }
 
     protected String textValue(Object value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String text = String.valueOf(value);
-        return Texts.hasText(text) ? text.trim() : null;
+        return EmptyValues.hasText(text) ? text.trim() : null;
     }
 
     protected Map<String, Object> toMap(Object value) {
@@ -558,7 +557,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
             map.forEach((k, v) -> converted.put(String.valueOf(k), v));
             return converted;
         }
-        if (value instanceof String text && Texts.hasText(text)) {
+        if (value instanceof String text && EmptyValues.hasText(text)) {
             try {
                 return objectMapper.readValue(text, MAP_TYPE);
             } catch (Exception ignored) {
@@ -572,19 +571,19 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
     protected int resolveIntValue(Object value, int fallback) {
         Integer resolved = integerValue(value);
-        return EmptyChecks.isNull(resolved) ? fallback : Math.max(1, resolved);
+        return resolved == null ? fallback : Math.max(1, resolved);
     }
 
     protected Integer integerValue(Object value) {
         if (value instanceof Number number) {
             return number.intValue();
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String rawText = String.valueOf(value);
         String text = rawText.trim();
-        if (!Texts.hasText(text)) {
+        if (!EmptyValues.hasText(text)) {
             return null;
         }
         try {
@@ -597,7 +596,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     }
 
     protected char resolvePadChar(String padChar) {
-        if (!Texts.hasText(padChar)) {
+        if (!EmptyValues.hasText(padChar)) {
             return ' ';
         }
         return padChar.charAt(0);
@@ -612,12 +611,12 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
             String numericText = number.toString();
             return new BigDecimal(numericText);
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String rawText = String.valueOf(value);
         String text = rawText.trim();
-        if (!Texts.hasText(text)) {
+        if (!EmptyValues.hasText(text)) {
             return null;
         }
         try {
@@ -643,7 +642,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
             String dateFormat) {
 
         public ColumnLayout {
-            type = EmptyChecks.isNull(type) ? ColumnType.STRING : type;
+            type = type == null ? ColumnType.STRING : type;
         }
 
         /** 兼容旧 5 参签名:type 默认 STRING、无数字 / 日期格式串(delimited / fixed-width 走此入口)。 */
@@ -660,7 +659,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         BOOL;
 
         public static ColumnType from(Object value) {
-            if (EmptyChecks.isNull(value)) {
+            if (value == null) {
                 return STRING;
             }
             try {
@@ -684,7 +683,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         ALL;
 
         public static QuotePolicy from(Object value) {
-            if (EmptyChecks.isNull(value)) {
+            if (value == null) {
                 return REQUIRED;
             }
             try {
@@ -706,7 +705,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         NONE;
 
         public static EscapePolicy from(Object value) {
-            if (EmptyChecks.isNull(value)) {
+            if (value == null) {
                 return DOUBLE_QUOTE;
             }
             try {

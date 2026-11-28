@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ConfigVersionPolicy;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.contract.request.WorkflowNodeReplayPreviewRequest;
 import io.github.pinpols.batch.console.application.contract.request.WorkflowRunReplayRequest;
 import io.github.pinpols.batch.console.application.contract.response.ConsoleWorkflowNodeReplayPreviewResponse;
@@ -119,11 +119,11 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
         boolean workflowNodeReplay = "WORKFLOW_NODE".equalsIgnoreCase(request.getCompensationType());
         if (!ops.hasText(request.getApprovalId())) {
             if (workflowNodeReplay) {
-                boolean workflowNodeReplayRequestIsIncomplete = EmptyChecks.isNull(request.getSourceWorkflowRunId())
-                        || EmptyChecks.isNull(request.getSourceWorkflowNodeRunId())
+                boolean workflowNodeReplayRequestIsIncomplete = request.getSourceWorkflowRunId() == null
+                        || request.getSourceWorkflowNodeRunId() == null
                         || !ops.hasText(request.getOperationKey())
                         || !ops.hasText(request.getPreviewToken())
-                        || EmptyChecks.isNotNull(request.getReplayOperationId());
+                        || request.getReplayOperationId() != null;
                 if (workflowNodeReplayRequestIsIncomplete) {
                     throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.replay_preview_required");
                 }
@@ -145,7 +145,7 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
             ops.publishRefresh(tenantId);
             return result;
         }
-        if (workflowNodeReplay && EmptyChecks.isNull(request.getReplayOperationId())) {
+        if (workflowNodeReplay && request.getReplayOperationId() == null) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.replay_preview_required");
         }
         ops.requireApprovedApproval(tenantId, request.getApprovalId(), JOB_TYPE_COMPENSATION, request);
@@ -229,8 +229,8 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
         if (ops.hasText(request.getApprovalId())) {
             ops.requireApprovedApproval(tenantId, request.getApprovalId(), JOB_TYPE_COMPENSATION, request);
         }
-        String compensationType = EmptyChecks.isNull(request.getCompensationType())
-                        || EmptyChecks.isBlank(Objects.requireNonNull(request.getCompensationType()))
+        String compensationType = request.getCompensationType() == null
+                        || EmptyValues.isBlank(Objects.requireNonNull(request.getCompensationType()))
                 ? "JOB"
                 : request.getCompensationType();
         CompensationPayload.CompensationPayloadBuilder compensationPayloadBuilder = CompensationPayload.builder()

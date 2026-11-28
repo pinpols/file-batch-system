@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.WorkflowJoinThreshold;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest.EdgeItem;
@@ -181,7 +181,7 @@ public class WorkflowDagValidator {
     private void validateOptionalJoinMode(NodeItem node, int incoming) {
         Map<?, ?> params = parseNodeParams(node.getNodeParams());
         Object rawMode = params.get("joinMode");
-        if (EmptyChecks.isNull(rawMode)) return;
+        if (rawMode == null) return;
         String rawModeText = rawMode.toString();
         if (isBlank(rawModeText)) return;
         String joinMode = rawModeText.trim().toUpperCase(Locale.ROOT);
@@ -197,7 +197,7 @@ public class WorkflowDagValidator {
     private void validateJoinConfig(NodeItem node, int incoming) {
         Map<?, ?> params = parseNodeParams(node.getNodeParams());
         String joinMode = "";
-        if (!EmptyChecks.isNull(params.get("joinMode"))) {
+        if (params.get("joinMode") != null) {
             Object rawJoinMode = params.get("joinMode");
             String joinModeText = String.valueOf(rawJoinMode);
             String trimmedJoinMode = joinModeText.trim();
@@ -216,7 +216,7 @@ public class WorkflowDagValidator {
     private void validateJoinThreshold(NodeItem node, int incoming, Object rawThreshold, boolean requireNumber) {
         Integer parsedThreshold =
                 requireNumber && !(rawThreshold instanceof Number) ? null : WorkflowJoinThreshold.parse(rawThreshold);
-        int threshold = EmptyChecks.isNull(parsedThreshold) ? -1 : parsedThreshold;
+        int threshold = parsedThreshold == null ? -1 : parsedThreshold;
         if (threshold < 1 || threshold > incoming) {
             throw BizException.of(
                     ResultCode.VALIDATION_ERROR,
@@ -233,7 +233,7 @@ public class WorkflowDagValidator {
         }
         try {
             Map<?, ?> params = JsonUtils.fromJson(nodeParams, Map.class);
-            return EmptyChecks.isNull(params) ? Map.of() : params;
+            return params == null ? Map.of() : params;
         } catch (IllegalArgumentException ignored) {
             return Map.of();
         }
@@ -291,6 +291,6 @@ public class WorkflowDagValidator {
     }
 
     private static boolean isBlank(String s) {
-        return s == null || s.isBlank();
+        return EmptyValues.isBlank(s);
     }
 }

@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.SmartInitializingSingleton;
@@ -56,7 +55,7 @@ public class ReadReplicaCredentialGuard implements SmartInitializingSingleton {
 
     /** 非 prod：DB 密码仍为已知弱默认口令 → WARN（不阻断，property 不存在的模块跳过）。 */
     private void warnIfKnownWeakDbPassword(String key, String value) {
-        if (EmptyChecks.isNotNull(value) && KNOWN_WEAK_DB_PASSWORDS.contains(value.trim())) {
+        if (value != null && KNOWN_WEAK_DB_PASSWORDS.contains(value.trim())) {
             log.warn(
                     "Non-production profile: {} still uses the shipped weak password; inject real credentials before production"
                             + " (production-like profiles fail fast)",
@@ -66,7 +65,7 @@ public class ReadReplicaCredentialGuard implements SmartInitializingSingleton {
 
     /** 仅当 property 实际存在（非 null）且命中已知弱默认口令时 fail-fast；property 不存在的模块跳过。 */
     private void validateNotKnownWeakDbPassword(String key, String value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return;
         }
         if (KNOWN_WEAK_DB_PASSWORDS.contains(value.trim())) {

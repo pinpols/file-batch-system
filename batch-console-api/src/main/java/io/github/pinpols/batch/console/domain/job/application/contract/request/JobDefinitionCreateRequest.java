@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.domain.job.application.contract.request;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.TriggerMode;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
 import jakarta.validation.Valid;
@@ -136,7 +136,7 @@ public class JobDefinitionCreateRequest {
     /** scheduleType=CRON 时 scheduleExpr 必须是合法 cron(Spring 6 段;5 段前补秒位),防止非法表达式入库后在运行期失败。 */
     @AssertTrue(message = "scheduleExpr must be a valid cron expression when scheduleType=CRON")
     public boolean isScheduleExprValidForCron() {
-        boolean cronValidationIsNotApplicable = !"CRON".equals(scheduleType) || EmptyChecks.isBlank(scheduleExpr);
+        boolean cronValidationIsNotApplicable = !"CRON".equals(scheduleType) || EmptyValues.isBlank(scheduleExpr);
         if (cronValidationIsNotApplicable) {
             return true;
         }
@@ -152,33 +152,32 @@ public class JobDefinitionCreateRequest {
     /** executionMode=INCREMENTAL 时 watermarkField 必填,否则增量作业无水位跑不起来。 */
     @AssertTrue(message = "watermarkField is required when executionMode=INCREMENTAL")
     public boolean isWatermarkPresentForIncremental() {
-        return !"INCREMENTAL".equals(executionMode) || (watermarkField != null && !watermarkField.isBlank());
+        return !"INCREMENTAL".equals(executionMode) || (EmptyValues.isNotBlank(watermarkField));
     }
 
     /** jobType 必须与公共枚举及数据库 CHECK 使用同一词表。空值交由 {@link NotBlank} 报错。 */
     @AssertTrue(message = "jobType must be an executable JobType")
     public boolean isJobTypeSupported() {
-        return EmptyChecks.isBlank(jobType) || SUPPORTED_JOB_TYPES.contains(jobType);
+        return EmptyValues.isBlank(jobType) || SUPPORTED_JOB_TYPES.contains(jobType);
     }
 
     @AssertTrue(message = "triggerMode must be a supported TriggerMode")
     public boolean isTriggerModeSupported() {
-        return EmptyChecks.isNull(triggerMode) || SUPPORTED_TRIGGER_MODES.contains(triggerMode);
+        return triggerMode == null || SUPPORTED_TRIGGER_MODES.contains(triggerMode);
     }
 
     /** 策略可预先配置给 Workflow 子作业；是否具备执行资格由运行事实决定。 */
     @AssertTrue(message = "{error.job.monitoring_completion_modes_exclusive}")
     public boolean isScheduledMonitoringConfiguredCorrectly() {
         boolean localDeadlineEnabled = !Boolean.FALSE.equals(completionDeadlineEnabled)
-                && (Boolean.TRUE.equals(completionDeadlineEnabled)
-                        || EmptyChecks.isNotNull(completionDeadlineLocalTime));
+                && (Boolean.TRUE.equals(completionDeadlineEnabled) || completionDeadlineLocalTime != null);
         boolean dependencyWindowEnabled =
-                EmptyChecks.isNotNull(dependencyCompletionWindowSeconds) && dependencyCompletionWindowSeconds > 0;
+                dependencyCompletionWindowSeconds != null && dependencyCompletionWindowSeconds > 0;
         return !(localDeadlineEnabled && dependencyWindowEnabled);
     }
 
     @AssertTrue(message = "completionDeadlineLocalTime is required when completionDeadlineEnabled=true")
     public boolean isCompletionDeadlineTimePresentWhenEnabled() {
-        return !Boolean.TRUE.equals(completionDeadlineEnabled) || EmptyChecks.isNotNull(completionDeadlineLocalTime);
+        return !Boolean.TRUE.equals(completionDeadlineEnabled) || completionDeadlineLocalTime != null;
     }
 }

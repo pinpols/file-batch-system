@@ -9,7 +9,7 @@ import io.github.pinpols.batch.common.plugin.ImportLoadContext;
 import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.imports.config.JdbcMappedImportSecurityProperties;
 import io.github.pinpols.batch.worker.imports.jdbc.ImportLoadStrategy;
 import io.github.pinpols.batch.worker.imports.jdbc.JdbcMappedImportSpec;
@@ -90,7 +90,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     @Override
     @SuppressWarnings("java:S2077")
     public int loadChunk(ImportLoadContext context, List<Map<String, Object>> records) throws Exception {
-        if (records == null || records.isEmpty()) {
+        if (EmptyValues.isEmpty(records)) {
             return 0;
         }
         JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(context.templateConfig(), objectMapper);
@@ -149,7 +149,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
             JdbcMappedImportSpec spec,
             List<String> insertCols,
             List<Map<String, Object>> records) {
-        if (EmptyChecks.isEmpty(spec.conflictColumns()) || records.size() < 2) {
+        if (EmptyValues.isEmpty(spec.conflictColumns()) || records.size() < 2) {
             return records;
         }
         List<Integer> conflictIndexes =
@@ -293,19 +293,19 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     }
 
     private static Object coerceMappedValue(Object value, JdbcMappedImportSpec.ColumnMapping mapping) {
-        if (EmptyChecks.isNull(value) || EmptyChecks.isNull(mapping.type())) {
+        if (value == null || mapping.type() == null) {
             return value;
         }
         String normalizedType = mapping.type().trim();
         String type = normalizedType.toUpperCase(Locale.ROOT);
         boolean valueNeedsNoJdbcTypeConversion =
-                EmptyChecks.isEmpty(type) || value instanceof Number || value instanceof Boolean;
+                EmptyValues.isEmpty(type) || value instanceof Number || value instanceof Boolean;
         if (valueNeedsNoJdbcTypeConversion) {
             return value;
         }
         String rawText = String.valueOf(value);
         String text = rawText.trim();
-        if (EmptyChecks.isEmpty(text)) {
+        if (EmptyValues.isEmpty(text)) {
             return null;
         }
         try {
@@ -331,7 +331,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     }
 
     private static LocalDate parseLocalDate(String text, String format) {
-        if (EmptyChecks.isBlank(format) || "yyyy-MM-dd".equals(format)) {
+        if (EmptyValues.isBlank(format) || "yyyy-MM-dd".equals(format)) {
             return LocalDate.parse(text);
         }
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format);
@@ -383,9 +383,8 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
         String region =
                 context.region() != null && !context.region().isBlank() ? context.region() : spec.defaultRegion();
         List<String> allowed = spec.allowedRegions();
-        boolean regionViolatesAllowlist = EmptyChecks.isNotNull(allowed)
-                && !EmptyChecks.isEmpty(allowed)
-                && (EmptyChecks.isNull(region) || !allowed.contains(region));
+        boolean regionViolatesAllowlist =
+                allowed != null && !EmptyValues.isEmpty(allowed) && (region == null || !allowed.contains(region));
         if (regionViolatesAllowlist) {
             throw new WorkerConfigException(
                     "import region not in allowedRegions: region=" + region + ", allowed=" + allowed);
@@ -397,7 +396,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     }
 
     static String resolveBinding(String pattern, ImportLoadContext context) {
-        if (EmptyChecks.isNull(pattern)) {
+        if (pattern == null) {
             return null;
         }
         String resolvedPattern = pattern;
@@ -425,7 +424,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
 
     private static Object resolveSystemBinding(String pattern, ImportLoadContext context) {
         String value = resolveBinding(pattern, context);
-        if ("${bizDate}".equals(pattern) && EmptyChecks.isNotBlank(value)) {
+        if ("${bizDate}".equals(pattern) && EmptyValues.isNotBlank(value)) {
             return LocalDate.parse(value);
         }
         return value;
@@ -448,7 +447,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
         ph.setLength(ph.length() - 1);
         String insert = "INSERT INTO " + fq + " (" + colPart + ") VALUES (" + ph + ")";
         List<String> conflicts = spec.conflictColumns();
-        if (conflicts == null || conflicts.isEmpty()) {
+        if (EmptyValues.isEmpty(conflicts)) {
             return insert;
         }
         StringBuilder conflictPart = new StringBuilder();

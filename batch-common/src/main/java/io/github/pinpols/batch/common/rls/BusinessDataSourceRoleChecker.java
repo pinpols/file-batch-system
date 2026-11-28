@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.rls;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -49,7 +49,7 @@ public final class BusinessDataSourceRoleChecker {
             boolean superuser = resultSet.getBoolean(2);
             boolean bypassRls = resultSet.getBoolean(3);
             if (superuser || bypassRls) {
-                String prefix = EmptyChecks.isNull(shard) ? "" : shard + ":";
+                String prefix = shard == null ? "" : shard + ":";
                 unsafeRoles.add(prefix + role + "(superuser=" + superuser + ",bypassrls=" + bypassRls + ")");
             }
         }
@@ -61,7 +61,7 @@ public final class BusinessDataSourceRoleChecker {
                 .forEach((key, dataSource) ->
                         shards.merge(dataSource, String.valueOf(key), (left, right) -> left + "," + right));
         DataSource defaultDataSource = routing.getResolvedDefaultDataSource();
-        if (!EmptyChecks.isNull(defaultDataSource)) {
+        if (defaultDataSource != null) {
             shards.putIfAbsent(defaultDataSource, "default");
         }
         return shards;
@@ -69,7 +69,7 @@ public final class BusinessDataSourceRoleChecker {
 
     public record Result(List<String> unsafeRoles) {
         public boolean isClean() {
-            return EmptyChecks.isEmpty(unsafeRoles);
+            return EmptyValues.isEmpty(unsafeRoles);
         }
     }
 }

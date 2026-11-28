@@ -5,7 +5,7 @@ import static io.github.pinpols.batch.worker.core.support.AbstractStageExecutor.
 import io.github.pinpols.batch.common.enums.FileReceiptStatus;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.service.DryRunGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
@@ -41,12 +41,11 @@ public class AckDispatchStep implements DispatchStageStep {
     @Override
     public DispatchStageResult execute(DispatchJobContext context) {
         // ADR-026: 演练模式不更新 file_dispatch_record，跳过 ack。
-        Map<String, Object> dryRunAttributes = EmptyChecks.isNull(context) ? null : context.getAttributes();
+        Map<String, Object> dryRunAttributes = context == null ? null : context.getAttributes();
         if (DryRunGuard.fromAttributes(dryRunAttributes).isDryRun()) {
             return DispatchStageResult.success(stage());
         }
-        Object payload =
-                EmptyChecks.isNull(context) ? null : context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
+        Object payload = context == null ? null : context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
         if (!(payload instanceof DispatchPayload dispatchPayload)) {
             return DispatchStageResult.failure(
                     stage(),
@@ -61,17 +60,14 @@ public class AckDispatchStep implements DispatchStageStep {
         DispatchResult dispatchResult =
                 attrs.get(DispatchRuntimeKeys.DISPATCH_RESULT) instanceof DispatchResult result ? result : null;
         String receiptCode = dispatchPayload.receiptCode();
-        boolean dispatchResultCanSupplyReceiptCode =
-                (EmptyChecks.isBlank(receiptCode)) && EmptyChecks.isNotNull(dispatchResult);
+        boolean dispatchResultCanSupplyReceiptCode = (EmptyValues.isBlank(receiptCode)) && dispatchResult != null;
         if (dispatchResultCanSupplyReceiptCode) {
             receiptCode = dispatchResult.receiptCode();
         }
         boolean acknowledged = dispatchResult != null && dispatchResult.acknowledged();
         boolean pending = dispatchResult != null && dispatchResult.receiptPending();
         boolean hasAcknowledgementEvidence = acknowledged
-                || (!pending
-                        && EmptyChecks.isNotNull(receiptCode)
-                        && !EmptyChecks.isBlank(Objects.requireNonNull(receiptCode)));
+                || (!pending && receiptCode != null && !EmptyValues.isBlank(Objects.requireNonNull(receiptCode)));
         if (hasAcknowledgementEvidence) {
             int updated = fileDispatchRepository.markAcked(
                     context.getTenantId(),

@@ -17,8 +17,7 @@ import static io.github.pinpols.batch.worker.imports.infrastructure.quality.Vali
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.stringList;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.stringValue;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
@@ -39,7 +38,7 @@ public class RecordRuleEvaluator {
 
     public Map<Long, ValidationIssue> evaluate(
             ValidationSession session, List<Map<String, Object>> rows, long recordBase) {
-        if (rows == null || rows.isEmpty()) {
+        if (EmptyValues.isEmpty(rows)) {
             return Map.of();
         }
         Map<String, Object> nullCheck = configSupport.firstMap(session.ruleSet(), "nullCheck", "null_check");
@@ -85,7 +84,7 @@ public class RecordRuleEvaluator {
         for (String field : requiredFields) {
             Object rawValue = row.get(field);
             String value = stringValue(rawValue);
-            if (!Texts.hasText(value)) {
+            if (!EmptyValues.hasText(value)) {
                 return new ValidationIssue(recordNo, ERROR_CODE_NULL, field + " must not be null", row);
             }
         }
@@ -120,11 +119,11 @@ public class RecordRuleEvaluator {
         String explicitMessage = stringValue(rule.get("errorMessage"));
         Object requiredSetting = firstNonNull(rule.get(KEY_REQUIRED), rule.get("notNull"));
         boolean required = booleanValue(requiredSetting, false);
-        if (required && !Texts.hasText(value)) {
+        if (required && !EmptyValues.hasText(value)) {
             String message = defaultText(explicitMessage, field + " is required");
             return new ValidationIssue(recordNo, errorCode, message, row);
         }
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             return null;
         }
         Integer minLength = integerValue(rule.get("minLength"));
@@ -139,7 +138,7 @@ public class RecordRuleEvaluator {
         }
         Object patternSetting = firstNonNull(rule.get("regex"), rule.get("pattern"));
         String pattern = stringValue(patternSetting);
-        if (Texts.hasText(pattern) && !value.matches(pattern)) {
+        if (EmptyValues.hasText(pattern) && !value.matches(pattern)) {
             String message = defaultText(explicitMessage, field + " does not match pattern " + pattern);
             return new ValidationIssue(recordNo, errorCode, message, row);
         }
@@ -151,17 +150,13 @@ public class RecordRuleEvaluator {
         }
         BigDecimal numberValue = decimalValue(value);
         BigDecimal minValue = decimalValue(rule.get(KEY_MIN));
-        boolean numberIsBelowMinimum = EmptyChecks.isNotNull(minValue)
-                && EmptyChecks.isNotNull(numberValue)
-                && numberValue.compareTo(minValue) < 0;
+        boolean numberIsBelowMinimum = minValue != null && numberValue != null && numberValue.compareTo(minValue) < 0;
         if (numberIsBelowMinimum) {
             String message = defaultText(explicitMessage, field + " must be >= " + minValue);
             return new ValidationIssue(recordNo, errorCode, message, row);
         }
         BigDecimal maxValue = decimalValue(rule.get(KEY_MAX));
-        boolean numberExceedsMaximum = EmptyChecks.isNotNull(maxValue)
-                && EmptyChecks.isNotNull(numberValue)
-                && numberValue.compareTo(maxValue) > 0;
+        boolean numberExceedsMaximum = maxValue != null && numberValue != null && numberValue.compareTo(maxValue) > 0;
         if (numberExceedsMaximum) {
             String message = defaultText(explicitMessage, field + " must be <= " + maxValue);
             return new ValidationIssue(recordNo, errorCode, message, row);
@@ -174,7 +169,7 @@ public class RecordRuleEvaluator {
         for (String field : uniqueFields) {
             Object rawValue = row.get(field);
             String value = stringValue(rawValue);
-            if (!Texts.hasText(value)) {
+            if (!EmptyValues.hasText(value)) {
                 continue;
             }
             Set<String> seen = seenValues.computeIfAbsent(field, ignored -> new LinkedHashSet<>());

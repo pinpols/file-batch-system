@@ -7,9 +7,8 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayOperationAuditEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity;
@@ -66,11 +65,11 @@ public class BatchDayOperationService {
      */
     @Transactional
     public BatchDayOperationResult operate(BatchDayOperateCommand command) {
-        boolean operationCommandIsInvalid = EmptyChecks.isNull(command)
-                || !Texts.hasText(command.tenantId())
-                || !Texts.hasText(command.calendarCode())
+        boolean operationCommandIsInvalid = command == null
+                || !EmptyValues.hasText(command.tenantId())
+                || !EmptyValues.hasText(command.calendarCode())
                 || command.bizDate() == null
-                || EmptyChecks.isNull(command.action());
+                || command.action() == null;
         if (operationCommandIsInvalid) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day.operation.invalid");
         }
@@ -102,7 +101,7 @@ public class BatchDayOperationService {
                         current.tenantId(), current.calendarCode(), current.bizDate())
                 : List.of();
         Instant now = dateTimeSupport.nowInstant();
-        String operator = Texts.hasText(command.operatorId()) ? command.operatorId() : "UNKNOWN";
+        String operator = EmptyValues.hasText(command.operatorId()) ? command.operatorId() : "UNKNOWN";
         BatchDayInstanceEntity target = transition(current, command.action(), operator, command.reason(), now);
         int rows = batchDayInstanceMapper.updateWithCas(target);
         if (rows == 0) {
@@ -122,7 +121,7 @@ public class BatchDayOperationService {
         List<ExpectedWorkOccurrenceOverride> occurrences =
                 expectedWorkOccurrenceMapper.selectBlockingByCalendarBizDateForUpdate(
                         batchDay.tenantId(), batchDay.calendarCode(), batchDay.bizDate());
-        if (EmptyChecks.isEmpty(occurrences)) {
+        if (EmptyValues.isEmpty(occurrences)) {
             return List.of();
         }
         for (ExpectedWorkOccurrenceOverride occurrence : occurrences) {
@@ -155,12 +154,12 @@ public class BatchDayOperationService {
             throw BizException.of(
                     ResultCode.STATE_CONFLICT, "error.batch_day.empty_settle_state_invalid", current.dayStatus());
         }
-        if (!Texts.hasText(reason)) {
+        if (!EmptyValues.hasText(reason)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day.empty_settle_reason_required");
         }
         BatchDayInstanceMetrics metrics =
                 jobInstanceMapper.selectBatchDayMetrics(current.tenantId(), current.calendarCode(), current.bizDate());
-        boolean metricsMissing = EmptyChecks.isNull(metrics);
+        boolean metricsMissing = metrics == null;
         boolean hasJobs = !metricsMissing && value(metrics.getTotalCount()) != 0L;
         if (metricsMissing || hasJobs) {
             Object reportedTotalCount = metricsMissing ? "unknown" : value(metrics.getTotalCount());
@@ -169,7 +168,7 @@ public class BatchDayOperationService {
         }
         List<BatchDayWaitingLaunchEntity> waitingLaunches = waitingLaunchMapper.selectWaitingByCalendarBizDate(
                 current.tenantId(), current.calendarCode(), current.bizDate(), 1);
-        boolean hasCalendarWait = EmptyChecks.isNotEmpty(waitingLaunches);
+        boolean hasCalendarWait = EmptyValues.isNotEmpty(waitingLaunches);
         int dependencyWaitCount = jobDependencyWaitingLaunchMapper.countWaitingForCalendarBizDate(
                 current.tenantId(), current.calendarCode(), current.bizDate());
         int unlaunchedRequestCount = triggerRequestMapper.countUnlaunchedForCalendarBizDate(
@@ -196,7 +195,7 @@ public class BatchDayOperationService {
     }
 
     private void requireReasonForManualDisposition(BatchDayOperateCommand command) {
-        if (Texts.hasText(command.reason())) {
+        if (EmptyValues.hasText(command.reason())) {
             return;
         }
         if (command.action() == BatchDayOperation.SKIP) {
@@ -226,7 +225,7 @@ public class BatchDayOperationService {
     }
 
     private long value(Long value) {
-        return EmptyChecks.isNull(value) ? 0L : value;
+        return value == null ? 0L : value;
     }
 
     private record ExpectedWorkAuditChanges(
@@ -249,7 +248,7 @@ public class BatchDayOperationService {
         payload.put("action", command.action().name());
         payload.put("reason", command.reason());
         payload.put("operatorId", operator);
-        if (EmptyChecks.isNotEmpty(expectedWorkChanges.waivedExpectedWork())) {
+        if (EmptyValues.isNotEmpty(expectedWorkChanges.waivedExpectedWork())) {
             payload.put(
                     "waivedExpectedWork",
                     expectedWorkChanges.waivedExpectedWork().stream()
@@ -298,20 +297,13 @@ public class BatchDayOperationService {
         detail.put("sourceKey", occurrence.sourceKey());
         detail.put(
                 "bizDate",
-                EmptyChecks.isNull(occurrence.bizDate())
-                        ? null
-                        : occurrence.bizDate().toString());
+                occurrence.bizDate() == null ? null : occurrence.bizDate().toString());
         detail.put("previousStatus", occurrence.occurrenceStatus());
         detail.put(
                 "expectedAt",
-                EmptyChecks.isNull(occurrence.expectedAt())
-                        ? null
-                        : occurrence.expectedAt().toString());
+                occurrence.expectedAt() == null ? null : occurrence.expectedAt().toString());
         detail.put(
-                "dueAt",
-                EmptyChecks.isNull(occurrence.dueAt())
-                        ? null
-                        : occurrence.dueAt().toString());
+                "dueAt", occurrence.dueAt() == null ? null : occurrence.dueAt().toString());
         detail.put("triggerRequestId", occurrence.triggerRequestId());
         return detail;
     }
@@ -393,7 +385,7 @@ public class BatchDayOperationService {
         }
         List<BatchDayWaitingLaunchEntity> waiting = waitingLaunchMapper.selectWaitingByCalendarBizDate(
                 releasedDay.tenantId(), releasedDay.calendarCode(), waitingBizDate, RELEASE_WAITING_LIMIT);
-        if (EmptyChecks.isEmpty(waiting)) {
+        if (EmptyValues.isEmpty(waiting)) {
             return 0;
         }
         int released = 0;
@@ -411,7 +403,7 @@ public class BatchDayOperationService {
 
     @SuppressWarnings("unchecked")
     private LaunchRequest toLaunchRequest(BatchDayWaitingLaunchEntity entity) {
-        if (entity == null || !Texts.hasText(entity.launchPayload())) {
+        if (entity == null || !EmptyValues.hasText(entity.launchPayload())) {
             return null;
         }
         Map<String, Object> payload = JsonUtils.fromJson(entity.launchPayload(), Map.class);
@@ -465,7 +457,7 @@ public class BatchDayOperationService {
     }
 
     private String normalize(String value) {
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             return "";
         }
         String trimmedValue = value.trim();

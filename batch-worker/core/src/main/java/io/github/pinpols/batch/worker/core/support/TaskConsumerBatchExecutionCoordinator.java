@@ -3,7 +3,7 @@ package io.github.pinpols.batch.worker.core.support;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor.BatchItemExecution;
@@ -93,7 +93,7 @@ final class TaskConsumerBatchExecutionCoordinator {
                 }
                 if (TaskConsumerFailurePolicy.isTransientOrchestratorFailure(execution.error())) {
                     String workerType = workerTypeSupplier.get();
-                    Long taskId = EmptyChecks.isNull(execution.message())
+                    Long taskId = execution.message() == null
                             ? null
                             : execution.message().taskId();
                     String errorSummary = SwallowedExceptionLogger.summary(execution.error());
@@ -119,9 +119,8 @@ final class TaskConsumerBatchExecutionCoordinator {
                     continue;
                 }
                 String workerType = workerTypeSupplier.get();
-                Long taskId = EmptyChecks.isNull(execution.message())
-                        ? null
-                        : execution.message().taskId();
+                Long taskId =
+                        execution.message() == null ? null : execution.message().taskId();
                 String errorSummary = SwallowedExceptionLogger.summary(execution.error());
                 log.error(
                         "{} batch item execution failed — publishing only this payload to DLQ: taskId={},"
@@ -142,7 +141,7 @@ final class TaskConsumerBatchExecutionCoordinator {
 
     private List<BatchItemExecution> executeBatchForTenant(
             String tenantId, List<TaskDispatchMessage> messages, String workerId) {
-        if (EmptyChecks.isNotBlank(tenantId) && !"unknown".equals(tenantId)) {
+        if (EmptyValues.isNotBlank(tenantId) && !"unknown".equals(tenantId)) {
             return RlsTenantContextHolder.runWithTenant(
                     tenantId, () -> executorSupplier.get().executeBatchDetailed(messages, workerId));
         }

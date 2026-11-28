@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.ScheduledOccurrenceStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledOccurrenceCatchUpCommand;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceAcceptRejectedOccurrenceParam;
@@ -76,7 +76,7 @@ public class ScheduledOccurrenceRecorder {
         }
         boolean recorded =
                 recordObserved(descriptor, fireTime, bizDate, ScheduledOccurrenceStatus.WAITING_READINESS, null) == 1;
-        if (recorded && EmptyChecks.isNotNull(deferredSince) && EmptyChecks.isNotNull(readinessDeadline)) {
+        if (recorded && deferredSince != null && readinessDeadline != null) {
             mapper.updateReadinessWait(ScheduledOccurrenceReadinessWaitParam.builder()
                     .tenantId(descriptor.getTenantId())
                     .workflowDefinitionId(descriptor.getWorkflowDefinitionId())
@@ -89,7 +89,7 @@ public class ScheduledOccurrenceRecorder {
     }
 
     private int resolveWorkflowVersion(TriggerDescriptor descriptor) {
-        return EmptyChecks.isNull(descriptor.getWorkflowVersion()) ? 0 : descriptor.getWorkflowVersion();
+        return descriptor.getWorkflowVersion() == null ? 0 : descriptor.getWorkflowVersion();
     }
 
     public ReadinessWaitWindow readinessWaitWindow(TriggerDescriptor descriptor, Instant fireTime) {
@@ -129,15 +129,15 @@ public class ScheduledOccurrenceRecorder {
             LocalDate bizDate,
             ScheduledOccurrenceStatus status,
             String requestId) {
-        boolean occurrenceIdentityIsIncomplete = EmptyChecks.isNull(descriptor)
-                || EmptyChecks.isNull(descriptor.getWorkflowDefinitionId())
-                || EmptyChecks.isNull(descriptor.getWorkflowCode())
-                || EmptyChecks.isNull(scheduledFireTime)
-                || EmptyChecks.isNull(status);
+        boolean occurrenceIdentityIsIncomplete = descriptor == null
+                || descriptor.getWorkflowDefinitionId() == null
+                || descriptor.getWorkflowCode() == null
+                || scheduledFireTime == null
+                || status == null;
         if (occurrenceIdentityIsIncomplete) {
             return 0;
         }
-        int scheduleVersion = EmptyChecks.isNull(descriptor.getWorkflowVersion()) ? 0 : descriptor.getWorkflowVersion();
+        int scheduleVersion = descriptor.getWorkflowVersion() == null ? 0 : descriptor.getWorkflowVersion();
         String tenantId = descriptor.getTenantId();
         Long workflowDefinitionId = descriptor.getWorkflowDefinitionId();
         String workflowCode = descriptor.getWorkflowCode();
@@ -160,15 +160,15 @@ public class ScheduledOccurrenceRecorder {
 
     public int recordClosedBatchDayRejection(
             TriggerDescriptor descriptor, Instant scheduledFireTime, LocalDate bizDate, String reason) {
-        boolean rejectionIdentityIsIncomplete = EmptyChecks.isNull(descriptor)
-                || EmptyChecks.isNull(descriptor.getWorkflowDefinitionId())
-                || EmptyChecks.isNull(descriptor.getWorkflowCode())
-                || EmptyChecks.isNull(scheduledFireTime)
-                || EmptyChecks.isNull(bizDate);
+        boolean rejectionIdentityIsIncomplete = descriptor == null
+                || descriptor.getWorkflowDefinitionId() == null
+                || descriptor.getWorkflowCode() == null
+                || scheduledFireTime == null
+                || bizDate == null;
         if (rejectionIdentityIsIncomplete) {
             return 0;
         }
-        int scheduleVersion = EmptyChecks.isNull(descriptor.getWorkflowVersion()) ? 0 : descriptor.getWorkflowVersion();
+        int scheduleVersion = descriptor.getWorkflowVersion() == null ? 0 : descriptor.getWorkflowVersion();
         String tenantId = descriptor.getTenantId();
         Long workflowDefinitionId = descriptor.getWorkflowDefinitionId();
         String workflowCode = descriptor.getWorkflowCode();
@@ -291,10 +291,8 @@ public class ScheduledOccurrenceRecorder {
     @Transactional
     public int recoverUnobservedPlannedFires(
             String tenantId, Long workflowDefinitionId, int scheduleVersion, Instant beforeExclusive, int limit) {
-        boolean pendingMisfireQueryIsInvalid = EmptyChecks.isBlank(tenantId)
-                || EmptyChecks.isNull(workflowDefinitionId)
-                || EmptyChecks.isNull(beforeExclusive)
-                || limit <= 0;
+        boolean pendingMisfireQueryIsInvalid =
+                EmptyValues.isBlank(tenantId) || workflowDefinitionId == null || beforeExclusive == null || limit <= 0;
         if (pendingMisfireQueryIsInvalid) {
             return 0;
         }

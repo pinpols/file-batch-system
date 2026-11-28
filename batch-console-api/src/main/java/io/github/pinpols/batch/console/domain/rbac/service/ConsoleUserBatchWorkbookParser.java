@@ -4,7 +4,6 @@ import static io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBat
 import static io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.MAX_ROWS;
 import static io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.invalid;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.AccountRow;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -60,7 +59,7 @@ final class ConsoleUserBatchWorkbookParser {
 
     private static void validateHeader(Sheet sheet, DataFormatter formatter) {
         Row header = sheet.getRow(0);
-        if (EmptyChecks.isNull(header) || header.getLastCellNum() != HEADERS.size()) throw invalid("Invalid header");
+        if (header == null || header.getLastCellNum() != HEADERS.size()) throw invalid("Invalid header");
         for (int i = 0; i < HEADERS.size(); i++) {
             if (!HEADERS.get(i).equals(text(header.getCell(i), formatter))) throw invalid("Invalid header");
         }
@@ -70,9 +69,9 @@ final class ConsoleUserBatchWorkbookParser {
         List<AccountRow> rows = new ArrayList<>();
         for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
             Row row = sheet.getRow(rowIndex);
-            if (EmptyChecks.isNotNull(row)) {
+            if (row != null) {
                 AccountRow account = parseRow(row, rowIndex + 1, formatter);
-                if (EmptyChecks.isNotNull(account)) {
+                if (account != null) {
                     if (rows.size() == MAX_ROWS) throw invalid("Maximum 500 accounts per batch");
                     rows.add(account);
                 }
@@ -95,7 +94,7 @@ final class ConsoleUserBatchWorkbookParser {
     }
 
     private static String text(Cell cell, DataFormatter formatter) {
-        if (EmptyChecks.isNull(cell)) return "";
+        if (cell == null) return "";
         if (cell.getCellType() == CellType.FORMULA) throw invalid("Formula cells are not allowed");
         String value = formatter.formatCellValue(cell).trim();
         if (value.length() > CELL_VALUE_MAX_LENGTH) throw invalid("Cell value exceeds 256 characters");

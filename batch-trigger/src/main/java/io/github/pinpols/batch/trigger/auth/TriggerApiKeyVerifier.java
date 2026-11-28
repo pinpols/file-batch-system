@@ -3,7 +3,7 @@ package io.github.pinpols.batch.trigger.auth;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.pinpols.batch.common.security.ApiKeyHasher;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.mapper.auth.TriggerApiKeyAuthMapper;
 import java.time.Duration;
 import java.time.Instant;
@@ -58,13 +58,13 @@ public class TriggerApiKeyVerifier {
 
     public Optional<TriggerApiKeyPrincipal> authenticate(String rawKey, String tenantId) {
         boolean apiKeyCredentialsAreIncomplete =
-                EmptyChecks.isNull(rawKey) || rawKey.length() < KEY_PREFIX_LENGTH || EmptyChecks.isBlank(tenantId);
+                rawKey == null || rawKey.length() < KEY_PREFIX_LENGTH || EmptyValues.isBlank(tenantId);
         if (apiKeyCredentialsAreIncomplete) {
             return Optional.empty();
         }
         String cacheKey = ApiKeyHasher.legacySha256Hex(rawKey + "|" + tenantId);
         TriggerApiKeyPrincipal cached = verifiedKeys.getIfPresent(cacheKey);
-        boolean cachedPrincipalIsValid = EmptyChecks.isNotNull(cached) && !isExpired(cached.expiresAt());
+        boolean cachedPrincipalIsValid = cached != null && !isExpired(cached.expiresAt());
         if (cachedPrincipalIsValid) {
             touch(cached.id(), cached.tenantId());
             return Optional.of(cached);
@@ -73,7 +73,7 @@ public class TriggerApiKeyVerifier {
 
         String prefix = rawKey.substring(0, KEY_PREFIX_LENGTH);
         List<TriggerApiKeyCredential> candidates = mapper.findActiveCandidatesByPrefixAndTenant(prefix, tenantId);
-        if (EmptyChecks.isNull(candidates)) {
+        if (candidates == null) {
             return Optional.empty();
         }
         for (TriggerApiKeyCredential candidate : candidates) {
@@ -99,9 +99,9 @@ public class TriggerApiKeyVerifier {
 
     public boolean authorizesExternalEvent(
             TriggerApiKeyPrincipal principal, String tenantId, String externalEventSource) {
-        boolean principalCanAuthorizeExternalEvent = EmptyChecks.isNotNull(principal)
-                && EmptyChecks.isNotNull(tenantId)
-                && EmptyChecks.isNotNull(externalEventSource)
+        boolean principalCanAuthorizeExternalEvent = principal != null
+                && tenantId != null
+                && externalEventSource != null
                 && tenantId.equals(principal.tenantId())
                 && externalEventSource.equals(principal.keyName())
                 && !isExpired(principal.expiresAt());
@@ -110,16 +110,16 @@ public class TriggerApiKeyVerifier {
         }
         String serializedScopes = Objects.requireNonNullElse(principal.scopes(), "");
         String[] scopeTokens = serializedScopes.split("[,\\s]+");
-        Stream<String> nonBlankScopes = Arrays.stream(scopeTokens).filter(scope -> EmptyChecks.isNotBlank(scope));
+        Stream<String> nonBlankScopes = Arrays.stream(scopeTokens).filter(scope -> EmptyValues.isNotBlank(scope));
         return nonBlankScopes.anyMatch(EVENT_SCOPE::equals);
     }
 
     private boolean isExpired(Instant expiresAt) {
-        return EmptyChecks.isNotNull(expiresAt) && !instantSource.instant().isBefore(expiresAt);
+        return expiresAt != null && !instantSource.instant().isBefore(expiresAt);
     }
 
     private void touch(Long id, String tenantId) {
-        if (EmptyChecks.isNull(id) || EmptyChecks.isNull(tenantId)) {
+        if (id == null || tenantId == null) {
             return;
         }
         long now = System.nanoTime();

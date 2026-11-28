@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.common.validation;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -30,7 +29,7 @@ public final class WorkflowGraphs {
         Deque<String> pending = new ArrayDeque<>();
         for (String root : roots) {
             pending.push(root);
-            while (EmptyChecks.isNotEmpty(pending)) {
+            while (EmptyValues.isNotEmpty(pending)) {
                 String node = pending.pop();
                 if (!visited.add(node)) {
                     continue;
@@ -46,7 +45,7 @@ public final class WorkflowGraphs {
     /** 按出现顺序返回节点参数里引用的节点编码，保留重复；参数为空白时返回空列表。 */
     public static List<String> dslNodeReferences(String nodeParams) {
         List<String> references = new ArrayList<>();
-        if (!Texts.hasText(nodeParams)) {
+        if (!EmptyValues.hasText(nodeParams)) {
             return references;
         }
         Matcher matcher = DSL_NODE_REF.matcher(nodeParams);

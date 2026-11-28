@@ -3,8 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.governance;
 import io.github.pinpols.batch.common.enums.AlertStatus;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.utils.AlertFingerprints;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.infrastructure.governance.AlertmanagerEmitPublisher;
 import io.github.pinpols.batch.orchestrator.mapper.AlertEventMapper;
@@ -37,13 +36,13 @@ public class DefaultAlertEventService implements AlertEventService {
     @Override
     @Transactional
     public void emit(AlertEmitCommand request) {
-        if (request == null || !Texts.hasText(request.tenantId()) || !Texts.hasText(request.alertType())) {
+        if (request == null || !EmptyValues.hasText(request.tenantId()) || !EmptyValues.hasText(request.alertType())) {
             return;
         }
-        String serviceName = Texts.hasText(request.serviceName()) ? request.serviceName() : "batch-orchestrator";
-        String severity = Texts.hasText(request.severity()) ? request.severity() : "WARN";
-        String title = Texts.hasText(request.title()) ? request.title() : request.alertType();
-        String resourceKey = Texts.hasText(request.resourceKey()) ? request.resourceKey() : title;
+        String serviceName = EmptyValues.hasText(request.serviceName()) ? request.serviceName() : "batch-orchestrator";
+        String severity = EmptyValues.hasText(request.severity()) ? request.severity() : "WARN";
+        String title = EmptyValues.hasText(request.title()) ? request.title() : request.alertType();
+        String resourceKey = EmptyValues.hasText(request.resourceKey()) ? request.resourceKey() : title;
         String fingerprint = AlertFingerprints.build(request.tenantId(), request.alertType(), resourceKey);
 
         AlertEventEntity entity = new AlertEventEntity();
@@ -59,7 +58,7 @@ public class DefaultAlertEventService implements AlertEventService {
 
         alertEventMapper.insertOrMerge(entity);
         AlertEventEntity persisted = alertEventMapper.selectByFingerprint(request.tenantId(), fingerprint);
-        if (EmptyChecks.isNull(persisted)) {
+        if (persisted == null) {
             throw new IllegalStateException("告警持久化后未能读取原始身份");
         }
 

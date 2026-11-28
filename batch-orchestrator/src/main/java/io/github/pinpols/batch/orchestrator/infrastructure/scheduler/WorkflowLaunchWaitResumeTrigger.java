@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowLaunchWaitProperties;
 import io.github.pinpols.batch.orchestrator.config.OrchestratorAsyncConfiguration;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -47,7 +47,7 @@ public class WorkflowLaunchWaitResumeTrigger {
     }
 
     public void resumeAfterCommit(String tenantId) {
-        if (EmptyChecks.isBlank(tenantId)) {
+        if (EmptyValues.isBlank(tenantId)) {
             return;
         }
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -98,7 +98,7 @@ public class WorkflowLaunchWaitResumeTrigger {
         }
         round.whenComplete((ignored, failure) -> {
             resumingTenants.remove(tenantId);
-            if (EmptyChecks.isNotNull(failure)) {
+            if (failure != null) {
                 log.warn(
                         "workflow launch wait resume round failed: tenantId={}, error={}",
                         tenantId,

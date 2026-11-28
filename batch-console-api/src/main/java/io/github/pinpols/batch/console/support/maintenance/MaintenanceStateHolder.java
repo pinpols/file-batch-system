@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.support.maintenance;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
 import io.github.pinpols.batch.console.domain.ops.entity.MaintenanceStateEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
@@ -59,9 +59,8 @@ public class MaintenanceStateHolder {
 
     @PostConstruct
     void initFromProperties() {
-        List<String> affectedServices = EmptyChecks.isNull(properties.getAffectedServices())
-                ? List.of()
-                : List.copyOf(properties.getAffectedServices());
+        List<String> affectedServices =
+                properties.getAffectedServices() == null ? List.of() : List.copyOf(properties.getAffectedServices());
         MaintenanceState initialState = new MaintenanceState(
                 properties.isEnabled(),
                 properties.isReadOnly(),
@@ -122,7 +121,7 @@ public class MaintenanceStateHolder {
                 .etaAt(normalized.etaAt())
                 .startsAt(normalized.startsAt())
                 .affectedServicesJson(servicesJson)
-                .updatedBy(EmptyChecks.isBlank(operator) ? "console-admin" : operator)
+                .updatedBy(EmptyValues.isBlank(operator) ? "console-admin" : operator)
                 .expectedVersion(current.version())
                 .build();
         int updated = mapper.updateIfVersion(updateParam);
@@ -167,7 +166,7 @@ public class MaintenanceStateHolder {
     private void refreshFromStore() {
         try {
             MaintenanceStateEntity entity = mapper.selectSingleton();
-            if (EmptyChecks.isNull(entity)) {
+            if (entity == null) {
                 throw new IllegalStateException("maintenance state singleton is missing");
             }
             List<String> services =
@@ -192,7 +191,7 @@ public class MaintenanceStateHolder {
     }
 
     private List<String> normalizeServices(List<String> services) {
-        return List.copyOf(EmptyChecks.isNull(services) ? List.of() : services);
+        return List.copyOf(services == null ? List.of() : services);
     }
 
     private String writeServices(List<String> services) {
@@ -252,7 +251,7 @@ public class MaintenanceStateHolder {
         }
 
         public boolean active(Instant now) {
-            return enabled && (EmptyChecks.isNull(startsAt) || !startsAt.isAfter(now));
+            return enabled && (startsAt == null || !startsAt.isAfter(now));
         }
     }
 }

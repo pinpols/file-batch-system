@@ -8,8 +8,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.logging.ThrottledLogger;
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
@@ -244,9 +243,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
                     objectMapper);
         }
 
-        if (Texts.hasText(spec.watermarkColumn())) {
+        if (EmptyValues.hasText(spec.watermarkColumn())) {
             Object highWaterMarkOut = queryMaxWatermark(spec, context);
-            if (EmptyChecks.isNotNull(highWaterMarkOut)) {
+            if (highWaterMarkOut != null) {
                 String highWaterMarkText = String.valueOf(highWaterMarkOut);
                 attrs.put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, highWaterMarkText);
             }
@@ -322,7 +321,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
             Object pass = row.get("pass");
             if (!Boolean.TRUE.equals(pass)) {
                 Object message = row.get("message");
-                Object displayedMessage = EmptyChecks.isNull(message) ? "(no message)" : message;
+                Object displayedMessage = message == null ? "(no message)" : message;
                 metrics.incrementValidationFailed(context.getTenantId(), rule.name());
                 return ProcessStageResult.failure(
                         ProcessStage.VALIDATE,
@@ -489,10 +488,10 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
         // 配 {} 会"压住"PREPARE/VALIDATE 等同步 step 上配置的 validations / emptyResultPolicy,
         // 静默通过。原代码只 null check,空 map 命中后导致 spec.validations() 为空。
         boolean computeStepParamsNeedFallback =
-                EmptyChecks.isNull(value) || (value instanceof Map<?, ?> m && EmptyChecks.isEmpty(m));
+                value == null || (value instanceof Map<?, ?> m && EmptyValues.isEmpty(m));
         if (computeStepParamsNeedFallback) {
             Object current = context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_PARAMS);
-            if (EmptyChecks.isNotNull(current)) {
+            if (current != null) {
                 value = current;
             }
         }
@@ -501,7 +500,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
             map.forEach((key, item) -> out.put(String.valueOf(key), item));
             return out;
         }
-        if (value instanceof String text && Texts.hasText(text)) {
+        if (value instanceof String text && EmptyValues.hasText(text)) {
             try {
                 return objectMapper.readValue(text, Map.class);
             } catch (Exception e) {
@@ -524,7 +523,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
 
     private String requireBatchKey(ProcessJobContext context) {
         String batchKey = context.getBatchKey();
-        if (!Texts.hasText(batchKey)) {
+        if (!EmptyValues.hasText(batchKey)) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.process.batch_key_missing");
         }
         return batchKey;
@@ -532,7 +531,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
 
     private String requireStagingGenerationId(ProcessJobContext context) {
         String generationId = context.getStagingGenerationId();
-        if (!Texts.hasText(generationId)) {
+        if (!EmptyValues.hasText(generationId)) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.process.staging_generation_missing");
         }
         return generationId;
@@ -653,8 +652,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
                 context.getAttributes().get(PipelineRuntimeKeys.HIGH_WATER_MARK_IN));
         params.put(PARAM_BATCH_KEY, context.getBatchKey());
         String optionalStagingGenerationId = context.getStagingGenerationId();
-        UUID stagingGenerationUuid =
-                EmptyChecks.isNull(optionalStagingGenerationId) ? null : requireStagingGenerationUuid(context);
+        UUID stagingGenerationUuid = optionalStagingGenerationId == null ? null : requireStagingGenerationUuid(context);
         params.put(PARAM_STAGING_GENERATION_ID, stagingGenerationUuid);
         params.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
         params.put(PARAM_TARGET_TABLE, spec.targetTable());
@@ -666,18 +664,18 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
         Object rawProcessPayload = context.getAttributes().get(PipelineRuntimeKeys.PROCESS_PAYLOAD);
         if (rawProcessPayload instanceof ProcessPayload typedPayload) {
             String payloadBizDate = typedPayload.bizDate();
-            if (Texts.hasText(payloadBizDate)) {
+            if (EmptyValues.hasText(payloadBizDate)) {
                 params.put(PipelineRuntimeKeys.BIZ_DATE, payloadBizDate);
             }
             Map<String, Object> payloadMetadata = typedPayload.metadata();
-            if (EmptyChecks.isNotNull(payloadMetadata)) {
+            if (payloadMetadata != null) {
                 payloadMetadata.forEach((key, value) -> putMetadataParam(params, key, value));
             }
         } else {
             // 回退:某些路径(如插件单测)可能还没把 ProcessPayload 注入到 attributes,
             // 直接从顶层 attributes 读 bizDate 字符串保持兼容(只读 bizDate 一项,不再全量散开)。
             Object bizDate = context.getAttributes().get(PipelineRuntimeKeys.BIZ_DATE);
-            if (EmptyChecks.isNotNull(bizDate)) {
+            if (bizDate != null) {
                 params.put(PipelineRuntimeKeys.BIZ_DATE, bizDate);
             }
         }
@@ -687,10 +685,10 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     }
 
     private void putMetadataParam(Map<String, Object> params, String key, Object value) {
-        if (EmptyChecks.isBlank(key)) {
+        if (EmptyValues.isBlank(key)) {
             return;
         }
-        boolean metadataValueIsUnsupportedStructure = EmptyChecks.isNotNull(value)
+        boolean metadataValueIsUnsupportedStructure = value != null
                 && !(value instanceof String)
                 && !(value instanceof Number)
                 && !(value instanceof Boolean)
@@ -718,13 +716,13 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     private ProcessStageResult commitDirect(ProcessJobContext context, SqlTransformComputeSpec spec) {
         Map<String, Object> params = buildSqlParams(context, spec);
         int publishedRows;
-        if (Texts.hasText(spec.watermarkColumn())) {
+        if (EmptyValues.hasText(spec.watermarkColumn())) {
             String directPublishMetricsSql = SqlTransformComputeSqlBuilder.buildDirectPublishMetricsSql(spec);
             Map<String, Object> result = jdbc.queryForMap(directPublishMetricsSql, params);
             Object rawPublishedRows = result.get("published_rows");
             publishedRows = toIntegerOrZero(rawPublishedRows);
             Object highWaterMarkOut = result.get("high_water_mark");
-            if (EmptyChecks.isNotNull(highWaterMarkOut)) {
+            if (highWaterMarkOut != null) {
                 Map<String, Object> attrs = context.getAttributes();
                 String highWaterMarkText = String.valueOf(highWaterMarkOut);
                 attrs.put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, highWaterMarkText);

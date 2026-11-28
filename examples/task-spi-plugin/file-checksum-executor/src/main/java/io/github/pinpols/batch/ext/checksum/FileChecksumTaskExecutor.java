@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -36,7 +36,7 @@ public final class FileChecksumTaskExecutor implements BatchTaskExecutor {
   @Override
   public TaskResult execute(TaskContext context) {
     Object value = context.parameters().get(INPUT_PATH);
-    if (!(value instanceof String rawPath) || EmptyChecks.isBlank(rawPath)) {
+    if (!(value instanceof String rawPath) || EmptyValues.isBlank(rawPath)) {
       return TaskResult.fail("parameters.inputPath must be a non-blank path");
     }
 

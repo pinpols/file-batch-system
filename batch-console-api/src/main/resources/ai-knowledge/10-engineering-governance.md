@@ -36,7 +36,7 @@ Console AI 可以回答本仓库工程治理、发布门禁和本地排障入口
 ## Readiness、Trivy 与质量守护
 - readiness、`AssetPartition`、`ResultVersion` 或 trigger 调度主路径变更时，同一 PR 应同步设计文档、OpenAPI / 协议文档或 readiness 相关测试；`scripts/ci/check-readiness-doc-sync.py` 负责轻量守护。
 - `.trivyignore` 中每组 CVE 豁免必须包含 `owner`、`reason`、`expires: YYYY-MM-DD`，且未过期；`scripts/ci/check-trivy-ignore-expiry.py` 会阻断过期豁免。
-- 生产 Java 新增空值、空字符串、空集合判断时，优先使用 `batch-common` 的 `EmptyChecks`；`scripts/ci/check-empty-checks.py` 会检查本次 diff 新增判断。
+- 生产 Java 的对象判空使用原生 `x == null` / `x != null`；字符串空白与集合/Map/数组空判断使用 `batch-common` 的 `EmptyValues`。`scripts/ci/check-empty-checks.py` 会检查本次 diff 新增的零散 `.isEmpty()` / `.isBlank()` 判断。
 - API 路径与 OpenAPI 对齐由 `scripts/ci/check-console-openapi-paths.py` 检查。
 - Dispatch 渠道插件注册必须显式且唯一。`DispatchChannelGateway` 启动期构建 `channelType -> adapter` 注册表;新增 adapter 时不能依赖 Spring `@Order` 或 classpath 顺序抢占默认实现。
 - 大任务类型 SPI 由 `BatchTaskExecutorRegistry` 按 `taskType()` fail-fast 去重;插件只能实现明确扩展点,不能绕开 Worker 主链契约。

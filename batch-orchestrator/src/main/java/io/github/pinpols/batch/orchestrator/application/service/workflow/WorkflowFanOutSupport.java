@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
@@ -32,7 +32,7 @@ public final class WorkflowFanOutSupport {
      */
     @SuppressWarnings("unchecked")
     public static FanOutSpec parseSpec(WorkflowNodeEntity workflowNode) {
-        if (EmptyChecks.isNull(workflowNode) || EmptyChecks.isNull(workflowNode.getNodeParams())) {
+        if (workflowNode == null || workflowNode.getNodeParams() == null) {
             return null;
         }
         Map<String, Object> params = WorkflowNodePayloadBuilder.parsePayloadMap(workflowNode.getNodeParams());
@@ -42,11 +42,11 @@ public final class WorkflowFanOutSupport {
         }
         Map<String, Object> fan = (Map<String, Object>) fanOutMap;
         Object itemsExpr = fan.get("itemsExpr");
-        if (!(itemsExpr instanceof String expr) || EmptyChecks.isBlank(expr)) {
+        if (!(itemsExpr instanceof String expr) || EmptyValues.isBlank(expr)) {
             return null;
         }
         Object itemParamObj = fan.get("itemParam");
-        String itemParam = itemParamObj instanceof String s && EmptyChecks.isNotBlank(s) ? s : DEFAULT_ITEM_PARAM;
+        String itemParam = itemParamObj instanceof String s && EmptyValues.isNotBlank(s) ? s : DEFAULT_ITEM_PARAM;
         Object maxObj = fan.get("maxFanOut");
         int maxFanOut = maxObj instanceof Number n && n.intValue() > 0 ? n.intValue() : DEFAULT_MAX_FAN_OUT;
         String trimmedItemsExpression = expr.trim();
@@ -55,13 +55,13 @@ public final class WorkflowFanOutSupport {
 
     /** 把 plan 的分区列表替换为 N 份(以原首个分区为模板克隆 worker route / status)。 */
     public static List<SchedulePlan.PartitionPlan> expandPartitions(SchedulePlan plan, int count) {
-        SchedulePlan.PartitionPlan template = EmptyChecks.isEmpty(plan.getPartitions())
+        SchedulePlan.PartitionPlan template = EmptyValues.isEmpty(plan.getPartitions())
                 ? new SchedulePlan.PartitionPlan()
                 : plan.getPartitions().get(0);
         List<SchedulePlan.PartitionPlan> expanded = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             SchedulePlan.PartitionPlan p = new SchedulePlan.PartitionPlan();
-            p.setPartitionKey(EmptyChecks.isNull(template.getPartitionKey()) ? "fanout" : template.getPartitionKey());
+            p.setPartitionKey(template.getPartitionKey() == null ? "fanout" : template.getPartitionKey());
             p.setBusinessKey(template.getBusinessKey());
             p.setWorkerRoute(template.getWorkerRoute());
             p.setPartitionStatus(template.getPartitionStatus());
@@ -78,17 +78,17 @@ public final class WorkflowFanOutSupport {
      */
     public static void bindDispatchTargetRefs(
             SchedulePlan plan, List<Object> items, List<SchedulePlan.PartitionPlan> partitions) {
-        boolean dispatchPlanHasUnmatchedFanOutInputs = EmptyChecks.isNull(plan)
+        boolean dispatchPlanHasUnmatchedFanOutInputs = plan == null
                 || !"DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())
-                || EmptyChecks.isNull(items)
-                || EmptyChecks.isNull(partitions)
+                || items == null
+                || partitions == null
                 || items.size() != partitions.size();
         if (dispatchPlanHasUnmatchedFanOutInputs) {
             return;
         }
         for (int index = 0; index < items.size(); index++) {
             String channelCode = resolveDispatchChannel(items.get(index));
-            if (EmptyChecks.isNotNull(channelCode)) {
+            if (channelCode != null) {
                 partitions.get(index).setTargetRef(channelCode);
             }
         }
@@ -100,9 +100,9 @@ public final class WorkflowFanOutSupport {
         }
         for (String key : List.of("channelCode", "dispatchChannelCode", "targetChannelCode")) {
             Object value = itemMap.get(key);
-            if (EmptyChecks.isNotNull(value)) {
+            if (value != null) {
                 String checkedChannelCode = String.valueOf(value);
-                if (EmptyChecks.isNotBlank(checkedChannelCode)) {
+                if (EmptyValues.isNotBlank(checkedChannelCode)) {
                     String returnedChannelCode = String.valueOf(value);
                     return returnedChannelCode.trim();
                 }

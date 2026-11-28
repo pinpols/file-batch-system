@@ -4,8 +4,8 @@ import io.github.pinpols.batch.common.dto.ScheduledOccurrenceCatchUpResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
 import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowTriggerService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
@@ -37,10 +37,10 @@ public class DefaultConsoleWorkflowTriggerService implements ConsoleWorkflowTrig
     @Override
     public WorkflowTriggerStatusResponse triggerStatus(
             Long workflowDefinitionId, String requestedTenantId, String idempotencyKey) {
-        if (EmptyChecks.isNull(workflowDefinitionId) || workflowDefinitionId <= 0) {
+        if (workflowDefinitionId == null || workflowDefinitionId <= 0) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.request_body_required");
         }
-        if (EmptyChecks.isBlank(idempotencyKey)) {
+        if (EmptyValues.isBlank(idempotencyKey)) {
             throw BizException.of(
                     ResultCode.MISSING_IDEMPOTENCY_KEY,
                     ResultCode.MISSING_IDEMPOTENCY_KEY.detailKey(),
@@ -50,12 +50,12 @@ public class DefaultConsoleWorkflowTriggerService implements ConsoleWorkflowTrig
         // 定义停用后仍能核对先前请求；查不到也不能证明在途请求从未执行。
         WorkflowTriggerStatusResponse receipt =
                 triggerReceipts.selectByIdentity(tenantId, workflowDefinitionId, idempotencyKey);
-        return Guard.requireFound(receipt, "workflow trigger request");
+        return Preconditions.requireFound(receipt, "workflow trigger request");
     }
 
     @Override
     public String trigger(Long workflowDefinitionId, WorkflowTriggerRequest request, String idempotencyKey) {
-        if (EmptyChecks.isNull(workflowDefinitionId) || workflowDefinitionId <= 0 || EmptyChecks.isNull(request)) {
+        if (workflowDefinitionId == null || workflowDefinitionId <= 0 || request == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.request_body_required");
         }
         String tenantId = operations.resolveTenant(request.tenantId());
@@ -85,7 +85,7 @@ public class DefaultConsoleWorkflowTriggerService implements ConsoleWorkflowTrig
                     ScheduledOccurrenceCatchUpRequest request,
                     String requestedBy,
                     String idempotencyKey) {
-        if (EmptyChecks.isNull(workflowDefinitionId) || workflowDefinitionId <= 0 || EmptyChecks.isNull(request)) {
+        if (workflowDefinitionId == null || workflowDefinitionId <= 0 || request == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.request_body_required");
         }
         String tenantId = operations.resolveTenant(request.tenantId());
@@ -125,7 +125,7 @@ public class DefaultConsoleWorkflowTriggerService implements ConsoleWorkflowTrig
             ApprovalSubmitContext approval =
                     approvalBuilder.idempotencyKey(approvalKey).build();
             approvalId = operations.submitApproval(approval);
-            if (EmptyChecks.isBlank(approvalId)) {
+            if (EmptyValues.isBlank(approvalId)) {
                 throw BizException.of(ResultCode.SYSTEM_ERROR, "error.approval.submit_failed");
             }
         }

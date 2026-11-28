@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigSyncApplicationService;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
@@ -123,8 +123,8 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.bundle_required");
         }
         List<String> targetTenantIds = request.getTargetTenantIds();
-        boolean targetTenantSelectionIsInvalid = EmptyChecks.isEmpty(targetTenantIds)
-                || targetTenantIds.stream().anyMatch(EmptyChecks::isBlank)
+        boolean targetTenantSelectionIsInvalid = EmptyValues.isEmpty(targetTenantIds)
+                || targetTenantIds.stream().anyMatch(EmptyValues::isBlank)
                 || new HashSet<>(targetTenantIds).size() != targetTenantIds.size();
         if (targetTenantSelectionIsInvalid) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
@@ -132,7 +132,7 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
         TenantConfigBatchInitRequest initRequest = toInitRequest(request);
         ConsoleRequestMetadata metadata = metadataResolver.current();
         String operator = metadata.operatorId();
-        if (EmptyChecks.isBlank(operator)) {
+        if (EmptyValues.isBlank(operator)) {
             operator = "system";
         }
         UUID operationId = UUID.randomUUID();
@@ -143,11 +143,11 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
         try {
             logId = auditTransaction(tenantId, () -> createLog(identity, request));
         } catch (DuplicateKeyException duplicateRequest) {
-            Long existingLogId = EmptyChecks.isNull(requestKeyHash)
+            Long existingLogId = requestKeyHash == null
                     ? null
                     : auditTransaction(
                             tenantId, () -> configSyncLogMapper.selectIdByRequestKey(tenantId, requestKeyHash));
-            if (EmptyChecks.isNull(existingLogId)) {
+            if (existingLogId == null) {
                 throw BizException.of(ResultCode.SYSTEM_ERROR, SYSTEM_ERROR, duplicateRequest);
             }
             String conflict = "Config Sync request already exists; reconcile logId=" + existingLogId;
@@ -204,7 +204,7 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
     public ConfigSyncRequestStatusResponse requestStatus(String tenantId, String requestKey) {
         String resolvedTenant = tenantGuard.resolveTenant(tenantId);
         String keyHash = requestKeyHash(requestKey);
-        if (EmptyChecks.isNull(keyHash)) {
+        if (keyHash == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
         }
         // GET 只读路径直接使用当前独立事务，不经过 auditTransaction 的 Supplier 回调：该回调会让 CodeQL 的
@@ -212,7 +212,7 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
         configSyncLogMapper.setTenantContext(resolvedTenant);
         ConfigSyncLogRow row = configSyncLogMapper.selectByRequestKey(resolvedTenant, keyHash);
         ConfigSyncLogResponse audit = ConfigSyncLogResponse.from(row);
-        return new ConfigSyncRequestStatusResponse(EmptyChecks.isNotNull(row), audit);
+        return new ConfigSyncRequestStatusResponse(row != null, audit);
     }
 
     @Override
@@ -229,7 +229,7 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
 
     private ConfigSyncLogResponse reconcileLocked(String tenantId, Long logId, String operator) {
         ConfigSyncLogRow row = configSyncLogMapper.selectByIdForUpdate(tenantId, logId);
-        if (EmptyChecks.isNull(row)) {
+        if (row == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found");
         }
         ConfigSyncLogResponse current = ConfigSyncLogResponse.from(row);
@@ -237,13 +237,13 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
             return current;
         }
         Object storedDetail = current.detailJson();
-        if (EmptyChecks.isNull(storedDetail)) {
+        if (storedDetail == null) {
             return current;
         }
         AuditPlan plan = JsonUtils.fromJson(storedDetail.toString(), AuditPlan.class);
         List<String> targets = plan.targetTenantIds();
-        boolean syncPlanTargetsAreInvalid = EmptyChecks.isEmpty(targets)
-                || EmptyChecks.isNull(plan.summary())
+        boolean syncPlanTargetsAreInvalid = EmptyValues.isEmpty(targets)
+                || plan.summary() == null
                 || targets.size() != new HashSet<>(targets).size();
         if (syncPlanTargetsAreInvalid) {
             return current;
@@ -276,7 +276,7 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
             Long logId, String tenantId, int expectedTenantCount, int itemsPerTenant, String reconciledBy) {}
 
     private static String requestKeyHash(String requestKey) {
-        if (EmptyChecks.isBlank(requestKey)) {
+        if (EmptyValues.isBlank(requestKey)) {
             return null;
         }
         try {
@@ -374,7 +374,7 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
         summaryDetail.put("dryRun", request.isDryRun());
         summaryDetail.put("batchOperationId", identity.batchOperationId());
         summaryDetail.put("targetTenantIds", request.getTargetTenantIds());
-        if (EmptyChecks.isNotNull(identity.requestKeyHash())) {
+        if (identity.requestKeyHash() != null) {
             summaryDetail.put("requestKeyHash", identity.requestKeyHash());
         }
         String detailJson = JsonUtils.toJson(summaryDetail);
@@ -395,7 +395,7 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
         int inserted = configSyncLogMapper.insert(params);
         requireAuditRow(inserted);
         Long logId = params.getId();
-        if (EmptyChecks.isNull(logId)) {
+        if (logId == null) {
             throw new IllegalStateException("Config sync audit insert did not return an id");
         }
         return logId;
@@ -408,14 +408,14 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
         int failed = 0;
         int skipped = 0;
         List<TenantConfigBatchInitResponse.TenantInitResult> results =
-                EmptyChecks.isNull(response.results()) ? List.of() : response.results();
+                response.results() == null ? List.of() : response.results();
         for (TenantConfigBatchInitResponse.TenantInitResult result : results) {
             if (!result.success()) {
                 failed += itemsPerTenant;
                 continue;
             }
             for (TenantConfigBatchInitResponse.ItemStats stats : itemStats(result)) {
-                if (EmptyChecks.isNull(stats)) {
+                if (stats == null) {
                     continue;
                 }
                 success += stats.created() + stats.updated() + stats.migrated();
@@ -430,7 +430,7 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
         Map<String, Object> detail = JsonUtils.toMap(response);
         detail.put("outcomeKnown", true);
         detail.put("error", null);
-        if (EmptyChecks.isNotNull(audit.reconciledBy())) {
+        if (audit.reconciledBy() != null) {
             detail.put("reconciledBy", audit.reconciledBy());
         }
         String detailJson = JsonUtils.toJson(detail);

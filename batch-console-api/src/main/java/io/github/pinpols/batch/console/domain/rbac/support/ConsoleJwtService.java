@@ -10,10 +10,9 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Hashes;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
@@ -161,7 +160,7 @@ public class ConsoleJwtService {
     void validateSecuritySecrets() {
         if (isProductionProfile()) {
             String jwtSecret = properties.getJwtSecret();
-            if (!Texts.hasText(jwtSecret)) {
+            if (!EmptyValues.hasText(jwtSecret)) {
                 throw new IllegalStateException(
                         "FATAL: batch.console.security.jwt-secret is empty; production requires a real secret injected through an environment variable or secret manager");
             }
@@ -180,8 +179,8 @@ public class ConsoleJwtService {
             // 非 prod:不 fail-fast(本地/联调要能起),但默认/弱 jwt-secret 仍在用就显式 WARN——
             // 兜 prod fail-fast 的第二层,防"漏开 prod profile 就用默认密钥签发 token"(审计 #4)。
             String jwtSecret = properties.getJwtSecret();
-            String lower = EmptyChecks.isNull(jwtSecret) ? "" : jwtSecret.toLowerCase(Locale.ROOT);
-            boolean jwtSecretIsEmptyOrWeak = !Texts.hasText(jwtSecret)
+            String lower = jwtSecret == null ? "" : jwtSecret.toLowerCase(Locale.ROOT);
+            boolean jwtSecretIsEmptyOrWeak = !EmptyValues.hasText(jwtSecret)
                     || lower.contains("change-me")
                     || lower.contains("change_me")
                     || jwtSecret.length() < MIN_JWT_SECRET_LENGTH;
@@ -213,7 +212,7 @@ public class ConsoleJwtService {
 
     private Duration effectiveClockSkew() {
         Duration skew = properties.getJwtClockSkew();
-        return EmptyChecks.isNull(skew) || skew.isNegative() ? Duration.ofMinutes(1) : skew;
+        return skew == null || skew.isNegative() ? Duration.ofMinutes(1) : skew;
     }
 
     private boolean isProductionProfile() {
@@ -227,12 +226,12 @@ public class ConsoleJwtService {
     }
 
     /** 签发访问令牌及过期时间。 */
-    // S2259 无法识别 EmptyChecks.isNotNull(currentRequest) 对请求访问的保护。
+    // S2259 无法识别 currentRequest != null 对请求访问的保护。
     @SuppressWarnings({"java:S2259", "java:S2589"})
     public ConsoleAuthTokenResponse issueToken(
             String username, String tenantId, Set<String> authorities, long sessionVersion) {
-        Guard.requireText(username, "username is required");
-        if (!Texts.hasText(tenantId)) {
+        Preconditions.requireText(username, "username is required");
+        if (!EmptyValues.hasText(tenantId)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.tenant.required");
         }
         if (!ConsoleRoles.isFormalRoleSet(authorities)) {
@@ -254,15 +253,15 @@ public class ConsoleJwtService {
                 .claim(CLAIM_SESSION_VERSION, sessionVersion)
                 .claim(CLAIM_JTI, jti)
                 .claim(CLAIM_AUTHORITIES, List.copyOf(authorities));
-        if (EmptyChecks.isNotNull(currentRequest)) {
+        if (currentRequest != null) {
             String ipHash = hashClientIp(currentRequest);
             String uaHash = hashUserAgent(currentRequest);
             // 两个 hash 均来自 Hashes.sha256Short（声明 @Nullable）：User-Agent 头可缺失、RemoteAddr
             // 极端场景也可能缺失，null 时不写入 claim 是防御性必要检查，Sonar 的 servlet 模型误判恒非空。
-            if (EmptyChecks.isNotNull(ipHash)) {
+            if (ipHash != null) {
                 claimsBuilder.claim(CLAIM_IP_HASH, ipHash);
             }
-            if (EmptyChecks.isNotNull(uaHash)) {
+            if (uaHash != null) {
                 claimsBuilder.claim(CLAIM_UA_HASH, uaHash);
             }
         }
@@ -275,7 +274,7 @@ public class ConsoleJwtService {
                 token, "Bearer", issuedAt, expiresAt, username, tenantId, new LinkedHashSet<>(authorities), false);
     }
 
-    // S2259 无法识别下方 EmptyChecks 对 ObjectProvider 结果的空值保护。
+    // S2259 无法识别下方 EmptyValues 对 ObjectProvider 结果的空值保护。
     @SuppressWarnings("java:S2259")
     public ConsolePrincipal authenticate(String token) {
         Jwt jwt = decoder().decode(token);
@@ -291,16 +290,14 @@ public class ConsoleJwtService {
         String tenantId = jwt.getClaimAsString(CLAIM_TENANT_ID);
         Long sessionVersion = jwt.getClaim(CLAIM_SESSION_VERSION);
         boolean singleSessionIsNotCurrent = properties.isSingleSessionEnabled()
-                && (EmptyChecks.isNull(sessionVersion)
-                        || !sessionRegistry.isCurrentSession(username, tenantId, sessionVersion));
+                && (sessionVersion == null || !sessionRegistry.isCurrentSession(username, tenantId, sessionVersion));
         if (singleSessionIsNotCurrent) {
             throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
         }
         // P0-3:logout 后写入的 jti 黑名单,命中即拒绝(token TTL 内即时失效)。
         String jti = jwt.getClaimAsString(CLAIM_JTI);
         ConsoleTokenRevocationStore revocationStore = tokenRevocationStoreProvider.getIfAvailable();
-        boolean tokenIsRevoked =
-                EmptyChecks.isNotNull(jti) && EmptyChecks.isNotNull(revocationStore) && revocationStore.isRevoked(jti);
+        boolean tokenIsRevoked = jti != null && revocationStore != null && revocationStore.isRevoked(jti);
         if (tokenIsRevoked) {
             throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
         }
@@ -317,11 +314,11 @@ public class ConsoleJwtService {
     /**
      * 把当前令牌加入撤销名单，保留至令牌的有效期及时间容忍期结束。调用方为登出接口。
      */
-    // S2259 无法识别下方 EmptyChecks 对 ObjectProvider 和 JWT 过期时间的空值保护。
+    // S2259 无法识别下方 EmptyValues 对 ObjectProvider 和 JWT 过期时间的空值保护。
     @SuppressWarnings("java:S2259")
     public void revoke(String token) {
         ConsoleTokenRevocationStore revocationStore = tokenRevocationStoreProvider.getIfAvailable();
-        if (EmptyChecks.isNull(revocationStore)) {
+        if (revocationStore == null) {
             return;
         }
         Jwt jwt;
@@ -331,11 +328,11 @@ public class ConsoleJwtService {
             return; // 解析失败的 token 没必要再 revoke
         }
         String jti = jwt.getClaimAsString(CLAIM_JTI);
-        if (EmptyChecks.isNull(jti)) {
+        if (jti == null) {
             return; // 旧版 token 无 jti,跳过
         }
         Instant exp = jwt.getExpiresAt();
-        if (EmptyChecks.isNull(exp)) {
+        if (exp == null) {
             return;
         }
         Duration remaining =
@@ -350,22 +347,21 @@ public class ConsoleJwtService {
 
     private void auditClientBindingDrift(Jwt jwt, String username, String tenantId) {
         HttpServletRequest req = currentRequest();
-        if (EmptyChecks.isNull(req)) {
+        if (req == null) {
             return;
         }
         String storedIp = jwt.getClaimAsString(CLAIM_IP_HASH);
         String storedUa = jwt.getClaimAsString(CLAIM_UA_HASH);
-        if (EmptyChecks.isNull(storedIp) && EmptyChecks.isNull(storedUa)) {
+        if (storedIp == null && storedUa == null) {
             return;
         }
         String currentIp = hashClientIp(req);
         String currentUa = hashUserAgent(req);
-        boolean tokenIpHasChanged =
-                EmptyChecks.isNotNull(storedIp) && EmptyChecks.isNotNull(currentIp) && !storedIp.equals(currentIp);
+        boolean tokenIpHasChanged = storedIp != null && currentIp != null && !storedIp.equals(currentIp);
         if (tokenIpHasChanged) {
             // 同 (username,tenant,storedIp→currentIp) 组合 5 分钟内只记一次,避免 e2e/同浏览器多 tab 产生日志噪音
             String key = "ip|" + username + "|" + tenantId + "|" + storedIp + "→" + currentIp;
-            if (EmptyChecks.isNull(driftLogSuppressor.getIfPresent(key))) {
+            if (driftLogSuppressor.getIfPresent(key) == null) {
                 driftLogSuppressor.put(key, Boolean.TRUE);
                 log.warn(
                         "JWT IP binding drift: username={} tenantId={} (token issued from different network)",
@@ -373,11 +369,10 @@ public class ConsoleJwtService {
                         tenantId);
             }
         }
-        boolean tokenUserAgentHasChanged =
-                EmptyChecks.isNotNull(storedUa) && EmptyChecks.isNotNull(currentUa) && !storedUa.equals(currentUa);
+        boolean tokenUserAgentHasChanged = storedUa != null && currentUa != null && !storedUa.equals(currentUa);
         if (tokenUserAgentHasChanged) {
             String key = "ua|" + username + "|" + tenantId + "|" + storedUa + "→" + currentUa;
-            if (EmptyChecks.isNull(driftLogSuppressor.getIfPresent(key))) {
+            if (driftLogSuppressor.getIfPresent(key) == null) {
                 driftLogSuppressor.put(key, Boolean.TRUE);
                 log.warn(
                         "JWT UA binding drift: username={} tenantId={} (token issued from different browser)",

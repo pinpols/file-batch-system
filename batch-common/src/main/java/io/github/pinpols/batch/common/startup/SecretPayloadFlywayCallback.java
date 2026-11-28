@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.common.startup;
 
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -82,13 +82,13 @@ public class SecretPayloadFlywayCallback implements Callback {
         int migrated = 0;
         while (true) {
             List<LegacySecretPayload> candidates = selectCandidates(connection);
-            if (EmptyChecks.isEmpty(candidates)) {
+            if (EmptyValues.isEmpty(candidates)) {
                 return migrated;
             }
             int migratedInBatch = updateCandidates(connection, candidates);
             if (migratedInBatch == 0) {
                 List<LegacySecretPayload> remainingCandidates = selectCandidates(connection);
-                if (EmptyChecks.isEmpty(remainingCandidates)) {
+                if (EmptyValues.isEmpty(remainingCandidates)) {
                     return migrated;
                 }
                 throw new FlywayException("legacy secret payload encryption made no progress");
@@ -130,11 +130,11 @@ public class SecretPayloadFlywayCallback implements Callback {
     }
 
     private boolean isTargetMigration(MigrationInfo migrationInfo) {
-        if (EmptyChecks.isNull(migrationInfo)) {
+        if (migrationInfo == null) {
             return false;
         }
         MigrationVersion migrationVersion = migrationInfo.getVersion();
-        return !EmptyChecks.isNull(migrationVersion) && TARGET_VERSIONS.contains(migrationVersion.toString());
+        return migrationVersion != null && TARGET_VERSIONS.contains(migrationVersion.toString());
     }
 
     private record LegacySecretPayload(long id, String tenantId, String payload) {}

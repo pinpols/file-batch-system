@@ -74,7 +74,7 @@ public final class FileStateMachine {
 
     private static FileStatus parse(@Nullable String statusCode) {
         FileStatus status = FileStatus.fromCode(statusCode);
-        Guard.require(status != null, "file status is required");
+        Preconditions.require(status != null, "file status is required");
         return status;
     }
 }

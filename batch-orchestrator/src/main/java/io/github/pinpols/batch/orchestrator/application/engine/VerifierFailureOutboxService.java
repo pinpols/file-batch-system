@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.engine;
 import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.command.VerifierFailure;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -62,16 +62,16 @@ public class VerifierFailureOutboxService {
 
     // 事务由唯一的公开入口通过代理强制要求；这里仅承载事件发布逻辑。
     private int publishFailures(TaskOutcomeCommand command, JobTaskEntity task, List<VerifierFailure> failures) {
-        if (EmptyChecks.isNull(command) || EmptyChecks.isNull(task)) {
+        if (command == null || task == null) {
             return 0;
         }
-        if (EmptyChecks.isEmpty(failures)) {
+        if (EmptyValues.isEmpty(failures)) {
             return 0;
         }
         int written = 0;
         int index = 0;
         for (VerifierFailure failure : failures) {
-            if (EmptyChecks.isNull(failure)) {
+            if (failure == null) {
                 index++;
                 continue;
             }
@@ -115,7 +115,7 @@ public class VerifierFailureOutboxService {
                 + ":verifier:"
                 + command.taskId()
                 + ":"
-                + (EmptyChecks.isNull(reason) ? "UNKNOWN" : reason)
+                + (reason == null ? "UNKNOWN" : reason)
                 + ":"
                 + index;
         return DomainEvent.builder(command.tenantId())

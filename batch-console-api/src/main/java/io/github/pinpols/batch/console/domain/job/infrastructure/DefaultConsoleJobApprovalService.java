@@ -10,9 +10,8 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
 import io.github.pinpols.batch.console.application.workflow.ManagedJobWorkflowReferencePort;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApprovalService;
@@ -166,7 +165,7 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     public ConsoleBatchDayCatchUpResponse catchUpBatchDay(
             String bizDate, BatchDayCatchUpRequest request, String idempotencyKey) {
         String tenantId = ops.resolveTenant(request.getTenantId());
-        if (!Texts.hasText(idempotencyKey)) {
+        if (!EmptyValues.hasText(idempotencyKey)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
         }
         String calendarCode = ConsoleTextSanitizer.safeInput(request.getCalendarCode(), CALENDAR_CODE_MAX_LENGTH);
@@ -175,11 +174,11 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
         List<String> requested = sanitizedRequestedJobCodes(request.getJobCodes());
         String requestJson = JsonUtils.toJson(new BatchRequestIdentity(bizDate, calendarCode, requested, safeReason));
         BatchDayCatchUpOperation existing = operationStore.find(tenantId, idempotencyKey, requestJson);
-        if (EmptyChecks.isNotNull(existing)) {
+        if (existing != null) {
             return completedResponse(existing);
         }
         ActiveCalendarRow calendar = businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode);
-        if (EmptyChecks.isNull(calendar)) {
+        if (calendar == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.business_calendar.not_found");
         }
         String catchUpPolicy = calendar.catchUpPolicy();
@@ -187,9 +186,8 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
         if (policyType == CatchUpPolicyType.NONE) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day.catch_up_disabled");
         }
-        List<String> jobCodes = EmptyChecks.isNull(requested)
-                ? resolveJobCodes(tenantId, calendarCode, parsedBizDate, null)
-                : requested;
+        List<String> jobCodes =
+                requested == null ? resolveJobCodes(tenantId, calendarCode, parsedBizDate, null) : requested;
         Map<String, Long> workflowTargets = new LinkedHashMap<>();
         for (String jobCode : jobCodes) {
             workflowTargets.put(jobCode, resolveManagedWorkflowId(tenantId, jobCode));
@@ -262,7 +260,7 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     }
 
     private List<String> sanitizedRequestedJobCodes(List<String> jobCodes) {
-        if (EmptyChecks.isEmpty(jobCodes)) {
+        if (EmptyValues.isEmpty(jobCodes)) {
             return null;
         }
         return jobCodes.stream()
@@ -277,7 +275,7 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     public ConsoleBatchDayCatchUpResponse continueBatchDay(String tenantId, String requestKey) {
         String resolvedTenant = ops.resolveTenant(tenantId);
         BatchDayCatchUpOperation operation = operationStore.findByRequestKey(resolvedTenant, requestKey);
-        if (EmptyChecks.isNull(operation)) {
+        if (operation == null) {
             throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
         }
         if ("COMPLETE".equals(operation.operationStatus())) {
@@ -294,9 +292,9 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
         }
         FrozenBatch batch = JsonUtils.fromJsonStrict(operation.snapshotJson(), FrozenBatch.class);
         BatchRequestIdentity identity = JsonUtils.fromJsonStrict(operation.requestJson(), BatchRequestIdentity.class);
-        boolean invalidSnapshotIdentity = EmptyChecks.isNull(batch)
-                || EmptyChecks.isNull(identity)
-                || EmptyChecks.isNull(batch.targets())
+        boolean invalidSnapshotIdentity = batch == null
+                || identity == null
+                || batch.targets() == null
                 || !Objects.equals(batch.bizDate(), identity.bizDate())
                 || !Objects.equals(batch.calendarCode(), identity.calendarCode());
         if (invalidSnapshotIdentity
@@ -338,7 +336,7 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
             BatchDayCatchUpProgress.Item item = items.get(index);
             if (item.status() != BatchDayCatchUpProgress.ItemStatus.PENDING) continue;
             FrozenTarget target = batch.targets().get(index);
-            if (EmptyChecks.isNull(target.workflowDefinitionId()) || target.workflowDefinitionId() <= 0) {
+            if (target.workflowDefinitionId() == null || target.workflowDefinitionId() <= 0) {
                 throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
             }
             if (CatchUpPolicyType.MANUAL_APPROVAL.code().equals(batch.catchUpPolicy())) {
@@ -401,7 +399,7 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     public BatchDayCatchUpRequestStatusResponse batchDayCatchUpStatus(String tenantId, String requestKey) {
         String resolvedTenant = ops.resolveTenant(tenantId);
         BatchDayCatchUpOperation operation = operationStore.findByRequestKey(resolvedTenant, requestKey);
-        if (EmptyChecks.isNull(operation)) {
+        if (operation == null) {
             return new BatchDayCatchUpRequestStatusResponse(false, resolvedTenant, null, null, null, null, List.of());
         }
         FrozenBatch batch = JsonUtils.fromJsonStrict(operation.snapshotJson(), FrozenBatch.class);
@@ -464,7 +462,7 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
 
     private List<String> resolveJobCodes(
             String tenantId, String calendarCode, LocalDate bizDate, List<String> requestedJobCodes) {
-        if (requestedJobCodes != null && !requestedJobCodes.isEmpty()) {
+        if (EmptyValues.isNotEmpty(requestedJobCodes)) {
             return requestedJobCodes.stream()
                     .filter(ops::hasText)
                     .map(code -> ConsoleTextSanitizer.safeInput(code, JOB_CODE_MAX_LENGTH))
@@ -476,7 +474,7 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
 
     private Long resolveManagedWorkflowId(String tenantId, String jobCode) {
         JobDefinitionView job = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
-        if (EmptyChecks.isNull(job)) {
+        if (job == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
         }
         if (Boolean.FALSE.equals(job.getEnabled())) {

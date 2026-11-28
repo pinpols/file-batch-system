@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.storage;
 
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.InputStream;
 import java.time.Duration;
 import java.util.Collection;
@@ -39,7 +40,7 @@ public interface BatchObjectStore {
             return;
         }
         for (String key : keys) {
-            if (key != null && !key.isBlank()) {
+            if (EmptyValues.isNotBlank(key)) {
                 delete(bucket, key);
             }
         }

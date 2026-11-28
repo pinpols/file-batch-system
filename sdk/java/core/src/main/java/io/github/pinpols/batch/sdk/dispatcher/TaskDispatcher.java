@@ -7,10 +7,10 @@ import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.idempotent.Idempotent;
 import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyStore;
 import io.github.pinpols.batch.sdk.idempotent.SdkIdempotentHandler;
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
 import io.github.pinpols.batch.sdk.internal.ThrottledLogger;
 import io.github.pinpols.batch.sdk.retry.RetryOn;
@@ -238,7 +238,7 @@ public class TaskDispatcher {
         public SdkTaskResult execute(SdkTaskContext ctx) {
             if (!isSafeToReplay(ctx)) {
                 Object rawInvocation = ctx.runtimeAttributes().get(KEY_PARTITION_INVOCATION_ID);
-                if (!(rawInvocation instanceof String invocationId) || EmptyChecks.isBlank(invocationId)) {
+                if (!(rawInvocation instanceof String invocationId) || SdkEmptyValues.isBlank(invocationId)) {
                     throw new ExecutionStartNotConfirmedException(
                             "claimed non-idempotent execution has no current invocation", null);
                 }
@@ -441,7 +441,7 @@ public class TaskDispatcher {
         claimBody.put(MDC_TENANT_ID, msg.tenantId());
         claimBody.put(KEY_WORKER_ID, config.getWorkerCode()); // ADR-035 §9:workerId==workerCode(P4 后 server 分配)
         String dispatchedInvocationId = extractPartitionInvocation(msg);
-        if (EmptyChecks.isNotNull(dispatchedInvocationId)) {
+        if (dispatchedInvocationId != null) {
             claimBody.put(KEY_PARTITION_INVOCATION_ID, dispatchedInvocationId);
         }
         TaskDispatcherRetryCoordinator.ClaimResult claimResult =
@@ -458,14 +458,14 @@ public class TaskDispatcher {
         }
         claimDecision.complete(DispatchDecision.SUBMITTED);
         String partitionInvocationId = claimResult.response().partitionInvocationId();
-        if (EmptyChecks.isBlank(partitionInvocationId)) {
+        if (SdkEmptyValues.isBlank(partitionInvocationId)) {
             // 普通任务必须持有本次 CLAIM 的分区身份；安全动作也不能用消息中的旧身份执行。
             log.warn("claim returned no current invocation, execution stopped for taskId={}", msg.taskId());
             return;
         }
         partitionInvocations.put(msg.taskId(), partitionInvocationId);
         inFlight.add(msg.taskId());
-        if (EmptyChecks.isNull(handler)) {
+        if (handler == null) {
             log.error(
                     "no SdkTaskHandler for taskType={} (registered: {}); reporting failure",
                     msg.taskType(),
@@ -507,11 +507,11 @@ public class TaskDispatcher {
             String claimPayload = payloadResponse.payload();
             Map<String, Object> effectiveConfig = parseClaimPayload(claimPayload);
             Map<String, Object> runtimeAttributes =
-                    new HashMap<>(EmptyChecks.isNull(msg.runtimeAttributes()) ? Map.of() : msg.runtimeAttributes());
+                    new HashMap<>(msg.runtimeAttributes() == null ? Map.of() : msg.runtimeAttributes());
             // Kafka 中的旧身份只能用于认领请求；执行、开始确认、续租和回报均使用 CLAIM 当前身份。
             runtimeAttributes.remove(KEY_PARTITION_INVOCATION_ID);
             String invocationId = partitionInvocations.get(taskId);
-            if (!EmptyChecks.isBlank(invocationId)) {
+            if (!SdkEmptyValues.isBlank(invocationId)) {
                 runtimeAttributes.put(KEY_PARTITION_INVOCATION_ID, invocationId);
             }
             SdkSchedulingContext schedulingContext = msg.schedulingContext();
@@ -596,11 +596,11 @@ public class TaskDispatcher {
 
     /** 解析数据库中的 CLAIM 载荷；非空载荷格式错误时，任务必须安全失败。 */
     private Map<String, Object> parseClaimPayload(String payload) throws IOException {
-        if (EmptyChecks.isBlank(payload)) {
+        if (SdkEmptyValues.isBlank(payload)) {
             return Map.of();
         }
         Map<String, Object> parsed = CLAIM_PAYLOAD_MAPPER.readValue(payload, CLAIM_PAYLOAD_TYPE);
-        if (EmptyChecks.isNull(parsed)) {
+        if (parsed == null) {
             throw new IllegalArgumentException("claimed task payload must be a JSON object");
         }
         return parsed;
@@ -725,9 +725,7 @@ public class TaskDispatcher {
      */
     private static String resolveErrorCode(SdkTaskResult result) {
         Map<String, Object> output = result.output();
-        if (EmptyChecks.isNotNull(output)
-                && output.get(KEY_ERROR_CODE) instanceof String s
-                && !EmptyChecks.isBlank(s)) {
+        if (output != null && output.get(KEY_ERROR_CODE) instanceof String s && !SdkEmptyValues.isBlank(s)) {
             return s;
         }
         if (result.success()) {
@@ -749,7 +747,7 @@ public class TaskDispatcher {
         if (base.contains(cls)) {
             return base;
         }
-        if (EmptyChecks.isEmpty(base)) {
+        if (SdkEmptyValues.isEmpty(base)) {
             return cls;
         }
         return base + " (" + cls + ")";
@@ -767,7 +765,7 @@ public class TaskDispatcher {
         try {
             Map<String, Object> summary = new HashMap<>();
             summary.put("code", code == null ? "UNKNOWN" : code);
-            summary.put(KEY_MESSAGE, EmptyChecks.isNull(message) ? "" : message);
+            summary.put(KEY_MESSAGE, message == null ? "" : message);
             return RESULT_SUMMARY_MAPPER.writeValueAsString(summary);
         } catch (Exception e) {
             return "{\"code\":\"UNKNOWN\",\"message\":\"\"}";
@@ -824,7 +822,7 @@ public class TaskDispatcher {
     }
 
     private static void restoreMdc(Map<String, String> previousContext) {
-        if (EmptyChecks.isEmpty(previousContext)) {
+        if (SdkEmptyValues.isEmpty(previousContext)) {
             MDC.clear();
             return;
         }

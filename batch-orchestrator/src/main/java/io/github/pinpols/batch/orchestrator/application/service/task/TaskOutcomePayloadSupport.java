@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -26,7 +26,7 @@ final class TaskOutcomePayloadSupport {
     private TaskOutcomePayloadSupport() {}
 
     static String payloadStringValue(String payloadJson, String fieldName) {
-        if (EmptyChecks.isBlank(payloadJson) || EmptyChecks.isBlank(fieldName)) {
+        if (EmptyValues.isBlank(payloadJson) || EmptyValues.isBlank(fieldName)) {
             return null;
         }
         try {
@@ -34,7 +34,7 @@ final class TaskOutcomePayloadSupport {
             if (payloadObject instanceof Map<?, ?> payloadMap) {
                 @SuppressWarnings("unchecked")
                 Object value = ((Map<String, Object>) payloadMap).get(fieldName);
-                return EmptyChecks.isNull(value) ? null : String.valueOf(value);
+                return value == null ? null : String.valueOf(value);
             }
         } catch (IllegalArgumentException exception) {
             SwallowedExceptionLogger.info(TaskOutcomePayloadSupport.class, "catch:IllegalArgumentException", exception);
@@ -45,7 +45,7 @@ final class TaskOutcomePayloadSupport {
     }
 
     static Long payloadLongValue(String payloadJson, String fieldName) {
-        if (EmptyChecks.isBlank(payloadJson) || EmptyChecks.isBlank(fieldName)) {
+        if (EmptyValues.isBlank(payloadJson) || EmptyValues.isBlank(fieldName)) {
             return null;
         }
         try {
@@ -64,12 +64,12 @@ final class TaskOutcomePayloadSupport {
     }
 
     static Long toPositiveLong(Object candidate) {
-        if (EmptyChecks.isNull(candidate)) {
+        if (candidate == null) {
             return null;
         }
         String rawText = String.valueOf(candidate);
         String text = rawText.trim();
-        if (EmptyChecks.isEmpty(text)) {
+        if (EmptyValues.isEmpty(text)) {
             return null;
         }
         try {
@@ -84,7 +84,7 @@ final class TaskOutcomePayloadSupport {
 
     static Long firstPositiveLong(Long... candidates) {
         for (Long candidate : candidates) {
-            if (EmptyChecks.isNotNull(candidate) && candidate > 0) {
+            if (candidate != null && candidate > 0) {
                 return candidate;
             }
         }
@@ -94,26 +94,25 @@ final class TaskOutcomePayloadSupport {
     /** task.payload + command.resultSummary 三源 fallback 找文件 id;给 success outcome 用。 */
     static Long resolveRelatedFileId(JobTaskEntity task, TaskOutcomeCommand command) {
         Long taskFileId = resolveRelatedFileId(task);
-        Long resultRelatedFileId =
-                payloadLongValue(EmptyChecks.isNull(command) ? null : command.resultSummary(), "relatedFileId");
-        Long resultFileId = payloadLongValue(EmptyChecks.isNull(command) ? null : command.resultSummary(), "fileId");
+        Long resultRelatedFileId = payloadLongValue(command == null ? null : command.resultSummary(), "relatedFileId");
+        Long resultFileId = payloadLongValue(command == null ? null : command.resultSummary(), "fileId");
         return firstPositiveLong(taskFileId, resultRelatedFileId, resultFileId);
     }
 
     /** 按任务类型解析 payload 中的文件关联，供 partition/job 推进使用。 */
     static Long resolveRelatedFileId(JobTaskEntity task) {
-        if (EmptyChecks.isNotNull(task) && "DISPATCH".equalsIgnoreCase(task.getTaskType())) {
+        if (task != null && "DISPATCH".equalsIgnoreCase(task.getTaskType())) {
             String payload = task.getTaskPayload();
-            if (EmptyChecks.isNotNull(payloadStringValue(payload, "bundleSourceFileId"))) {
+            if (payloadStringValue(payload, "bundleSourceFileId") != null) {
                 return payloadLongValue(payload, "bundleSourceFileId");
             }
-            if (EmptyChecks.isNotNull(payloadStringValue(payload, "fileId"))) {
+            if (payloadStringValue(payload, "fileId") != null) {
                 return payloadLongValue(payload, "fileId");
             }
         }
-        Long relatedFileId = payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "relatedFileId");
-        Long fileId = payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "fileId");
-        Long sourceFileId = payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "sourceFileId");
+        Long relatedFileId = payloadLongValue(task == null ? null : task.getTaskPayload(), "relatedFileId");
+        Long fileId = payloadLongValue(task == null ? null : task.getTaskPayload(), "fileId");
+        Long sourceFileId = payloadLongValue(task == null ? null : task.getTaskPayload(), "sourceFileId");
         return firstPositiveLong(relatedFileId, fileId, sourceFileId);
     }
 }

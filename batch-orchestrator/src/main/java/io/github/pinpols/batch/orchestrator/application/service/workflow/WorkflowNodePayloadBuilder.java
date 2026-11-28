@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.enums.SystemPipelineTaskKeys;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.workflow.WorkflowParamResolver;
@@ -73,7 +73,7 @@ public class WorkflowNodePayloadBuilder {
             JobInstanceEntity jobInstance,
             WorkflowRunEntity workflowRun) {
         Map<String, Object> payload = new LinkedHashMap<>();
-        if (EmptyChecks.isNotBlank(sourcePayload)) {
+        if (EmptyValues.isNotBlank(sourcePayload)) {
             try {
                 Object payloadObject = JsonUtils.fromJson(sourcePayload, Object.class);
                 if (payloadObject instanceof Map<?, ?> payloadMap) {
@@ -100,7 +100,7 @@ public class WorkflowNodePayloadBuilder {
     String pinSystemPipelineIdentity(String taskPayload, String workerType) {
         SystemPipelineDefinition definition =
                 SystemPipelineCatalog.forJobType(workerType).orElse(null);
-        if (EmptyChecks.isNull(definition)) {
+        if (definition == null) {
             return taskPayload;
         }
         Map<String, Object> parsedPayload = parsePayloadMap(taskPayload);
@@ -122,13 +122,13 @@ public class WorkflowNodePayloadBuilder {
             List.of("fileId", "fileCode", "batchNo", "recordCount", "bizDate");
 
     private void mergeUpstreamPartitionOutputs(Map<String, Object> payload, JobInstanceEntity jobInstance) {
-        if (EmptyChecks.isNull(jobInstance) || EmptyChecks.isNull(jobInstance.getId())) {
+        if (jobInstance == null || jobInstance.getId() == null) {
             return;
         }
         JobPartitionQuery siblingPartitionQuery =
                 JobPartitionQuery.ofJobInstance(jobInstance.getTenantId(), jobInstance.getId());
         List<JobPartitionEntity> siblings = jobMappers.jobPartitionMapper.selectByQuery(siblingPartitionQuery);
-        if (EmptyChecks.isEmpty(siblings)) {
+        if (EmptyValues.isEmpty(siblings)) {
             return;
         }
         JobPartitionEntity latestSuccess = findLatestSuccessPartition(siblings);
@@ -139,7 +139,7 @@ public class WorkflowNodePayloadBuilder {
     private static JobPartitionEntity findLatestSuccessPartition(List<JobPartitionEntity> siblings) {
         JobPartitionEntity latest = null;
         for (JobPartitionEntity p : siblings) {
-            if (EmptyChecks.isNull(p)) {
+            if (p == null) {
                 continue;
             }
             if (!PartitionStatus.SUCCESS.code().equals(p.getPartitionStatus())) {
@@ -174,7 +174,7 @@ public class WorkflowNodePayloadBuilder {
             // 保守白名单：只把已知的跨节点常用字段挑出来
             for (String key : UPSTREAM_OUTPUT_WHITELIST) {
                 Object v = out.get(key);
-                if (EmptyChecks.isNotNull(v) && !payload.containsKey(key)) {
+                if (v != null && !payload.containsKey(key)) {
                     payload.put(key, v);
                 }
             }
@@ -191,20 +191,20 @@ public class WorkflowNodePayloadBuilder {
     //   (b) source_ref = batchNo - 文件按 batchNo 幂等复用时，trace_id 不更新但 source_ref 一致
     //       （settlement-2026-04-22 这种业务上每日唯一的文件就是这种场景）
     private void fallbackFileIdLookup(Map<String, Object> payload, JobInstanceEntity jobInstance) {
-        if (payload.containsKey("fileId") || EmptyChecks.isNull(jobInstance.getTenantId())) {
+        if (payload.containsKey("fileId") || jobInstance.getTenantId() == null) {
             return;
         }
         Long fileId = null;
-        if (EmptyChecks.isNotBlank(jobInstance.getTraceId())) {
+        if (EmptyValues.isNotBlank(jobInstance.getTraceId())) {
             fileId = safeFileIdLookup(
                     fileRecordLookupMapper::selectIdByTenantAndTraceId,
                     jobInstance.getTenantId(),
                     jobInstance.getTraceId(),
                     "traceId");
         }
-        if (EmptyChecks.isNull(fileId)) {
+        if (fileId == null) {
             Object batchNo = payload.get("batchNo");
-            if (EmptyChecks.isNotBlank(String.valueOf(batchNo))) {
+            if (EmptyValues.isNotBlank(String.valueOf(batchNo))) {
                 fileId = safeFileIdLookup(
                         fileRecordLookupMapper::selectIdByTenantAndSourceRef,
                         jobInstance.getTenantId(),
@@ -212,7 +212,7 @@ public class WorkflowNodePayloadBuilder {
                         "sourceRef");
             }
         }
-        if (EmptyChecks.isNotNull(fileId)) {
+        if (fileId != null) {
             payload.put("fileId", String.valueOf(fileId));
         }
     }
@@ -244,11 +244,11 @@ public class WorkflowNodePayloadBuilder {
     @SuppressWarnings("unchecked")
     public void mergeNodeParams(
             Map<String, Object> payload, WorkflowNodeEntity workflowNode, WorkflowRunEntity workflowRun) {
-        if (EmptyChecks.isNull(workflowNode) || EmptyChecks.isNull(workflowNode.getNodeParams())) {
+        if (workflowNode == null || workflowNode.getNodeParams() == null) {
             return;
         }
         String raw = workflowNode.getNodeParams();
-        if (EmptyChecks.isBlank(raw)) {
+        if (EmptyValues.isBlank(raw)) {
             return;
         }
         try {
@@ -279,7 +279,7 @@ public class WorkflowNodePayloadBuilder {
      * 但实际只有 workflow 派发路径会调到 mergeNodeParams,所以这里 null-safe 仅作防御)。
      */
     private WorkflowRunContext loadWorkflowRunContext(WorkflowRunEntity workflowRun) {
-        if (EmptyChecks.isNull(workflowRun)) {
+        if (workflowRun == null) {
             return new WorkflowRunContext() {
                 @Override
                 public boolean hasNode(String nodeCode) {
@@ -308,10 +308,10 @@ public class WorkflowNodePayloadBuilder {
             nodeOutputs.put(code, parsedOutput);
         }
         Map<String, Object> workflowRunFields = new LinkedHashMap<>();
-        if (EmptyChecks.isNotNull(workflowRun.getBizDate())) {
+        if (workflowRun.getBizDate() != null) {
             workflowRunFields.put("bizDate", workflowRun.getBizDate().toString());
         }
-        if (EmptyChecks.isNotNull(workflowRun.getTraceId())) {
+        if (workflowRun.getTraceId() != null) {
             workflowRunFields.put("traceId", workflowRun.getTraceId());
         }
         return new WorkflowRunContext() {
@@ -350,7 +350,7 @@ public class WorkflowNodePayloadBuilder {
 
     @SuppressWarnings("unchecked")
     public static Map<String, Object> parsePayloadMap(String payloadJson) {
-        if (EmptyChecks.isBlank(payloadJson)) {
+        if (EmptyValues.isBlank(payloadJson)) {
             return Map.of();
         }
         try {
@@ -369,7 +369,7 @@ public class WorkflowNodePayloadBuilder {
 
     @SuppressWarnings("unchecked")
     private static Map<String, Object> parseOutputJson(String outputJson) {
-        if (EmptyChecks.isBlank(outputJson)) {
+        if (EmptyValues.isBlank(outputJson)) {
             return null;
         }
         try {

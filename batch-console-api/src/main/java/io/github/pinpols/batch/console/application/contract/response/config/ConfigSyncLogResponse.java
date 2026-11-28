@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.application.contract.response.config;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.config.view.ConfigSyncLogRow;
 import java.time.Instant;
 import lombok.Builder;
@@ -24,7 +23,7 @@ public record ConfigSyncLogResponse(
         Instant createdAt) {
 
     public static ConfigSyncLogResponse from(ConfigSyncLogRow row) {
-        if (EmptyChecks.isNull(row)) {
+        if (row == null) {
             return null;
         }
         return ConfigSyncLogResponse.builder()

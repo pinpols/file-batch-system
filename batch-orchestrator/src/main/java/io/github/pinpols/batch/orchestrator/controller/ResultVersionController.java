@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionPromoteService;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
 import io.github.pinpols.batch.orchestrator.controller.response.ResultVersionResponse;
@@ -54,7 +53,7 @@ public class ResultVersionController {
             @RequestParam("tenantId") String tenantId, @RequestParam("businessKey") String businessKey) {
         ResultVersionEntity entity =
                 queryService.findEffective(tenantId, businessKey).orElse(null);
-        ResultVersionResponse response = EmptyChecks.isNull(entity) ? null : ResultVersionResponse.from(entity);
+        ResultVersionResponse response = entity == null ? null : ResultVersionResponse.from(entity);
         return CommonResponse.success(response);
     }
 

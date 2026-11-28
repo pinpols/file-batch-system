@@ -11,12 +11,11 @@ import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.service.DryRunGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressRegistry;
@@ -104,7 +103,7 @@ public class GenerateStep implements ExportStageStep {
 
     ReplayCapabilityDeclaration replayCapability(Map<String, Object> frozenTemplateConfig) {
         String exportDataRef = resolveExportDataRef(frozenTemplateConfig);
-        if (!Texts.hasText(exportDataRef)) {
+        if (!EmptyValues.hasText(exportDataRef)) {
             return ReplayCapabilityDeclaration.unknown(ExportWorkerType.EXPORT);
         }
         return exportDataPluginRegistry.replayCapability(exportDataRef, frozenTemplateConfig);
@@ -112,9 +111,8 @@ public class GenerateStep implements ExportStageStep {
 
     @Override
     public ExportStageResult execute(ExportJobContext context) {
-        Object payload =
-                EmptyChecks.isNull(context) ? null : context.getAttributes().get(ExportRuntimeKeys.EXPORT_PAYLOAD);
-        if (!(payload instanceof ExportPayload exportPayload) || !Texts.hasText(exportPayload.batchNo())) {
+        Object payload = context == null ? null : context.getAttributes().get(ExportRuntimeKeys.EXPORT_PAYLOAD);
+        if (!(payload instanceof ExportPayload exportPayload) || !EmptyValues.hasText(exportPayload.batchNo())) {
             return ExportStageResult.failure(
                     stage(),
                     "EXPORT_GENERATE_NO_PAYLOAD",
@@ -149,7 +147,7 @@ public class GenerateStep implements ExportStageStep {
         ExportDataContext dataCtx = buildExportDataContext(context, exportPayload);
         ExportDataPlugin dataPlugin = exportDataPluginRegistry.require(exportDataRef);
         Map<String, Object> batch = dataPlugin.loadBatch(dataCtx);
-        if (EmptyChecks.isEmpty(batch)) {
+        if (EmptyValues.isEmpty(batch)) {
             return ExportStageResult.failure(
                     stage(),
                     "EXPORT_BATCH_NOT_FOUND",
@@ -160,7 +158,7 @@ public class GenerateStep implements ExportStageStep {
         }
         Object batchId = batch.get("id");
         ExportStageResult rowLimitFailure = validateExportRowLimit(batch);
-        if (EmptyChecks.isNotNull(rowLimitFailure)) {
+        if (rowLimitFailure != null) {
             return rowLimitFailure;
         }
         int pageSize = resolvePageSize(context);
@@ -177,7 +175,7 @@ public class GenerateStep implements ExportStageStep {
         // ADR-038 P3:续跑开关 + pipelineInstanceId + 非 Excel 才启用续跑。启用时生成文件路径必须确定化
         // (随机 temp 跨崩溃重派会丢残文件);开关关时保持随机 temp,行为与今天完全一致。
         Long checkpointInstanceId = resolveCheckpointInstanceId(context, fileFormatType);
-        boolean checkpointEnabled = EmptyChecks.isNotNull(checkpointInstanceId);
+        boolean checkpointEnabled = checkpointInstanceId != null;
         attempt.generatedFile = checkpointEnabled
                 ? deterministicGeneratedFile(checkpointInstanceId, fileFormatType)
                 : createGeneratedFile(context, exportPayload, fileFormatType);
@@ -235,7 +233,7 @@ public class GenerateStep implements ExportStageStep {
                 .build();
         long recordCount = strategy.generate(formatCtx);
 
-        if (EmptyChecks.isNotNull(checkpoint)) {
+        if (checkpoint != null) {
             // 整体完成 → 补记终页行数 + 文件字节数指纹 + 标记 completed;此后该实例重派会走上面的幂等跳过(校验指纹)分支。
             checkpoint.complete(recordCount, Files.size(attempt.generatedFile));
         }
@@ -255,8 +253,7 @@ public class GenerateStep implements ExportStageStep {
         long maxRows = effectiveMaxRows();
         Object totalCountObj = batch.get("total_count");
         Number totalCount = totalCountObj instanceof Number number ? number : null;
-        boolean totalCountExceedsMaxRows =
-                EmptyChecks.isNotNull(totalCount) && maxRows > 0 && totalCount.longValue() > maxRows;
+        boolean totalCountExceedsMaxRows = totalCount != null && maxRows > 0 && totalCount.longValue() > maxRows;
         if (totalCountExceedsMaxRows) {
             return ExportStageResult.failure(
                     stage(),
@@ -392,9 +389,9 @@ public class GenerateStep implements ExportStageStep {
 
     private String resolveExportDataRef(Map<String, Object> tc) {
         Object v = tc.get("export_data_ref");
-        if (EmptyChecks.isNotNull(v)) {
+        if (v != null) {
             String presenceText = String.valueOf(v);
-            if (Texts.hasText(presenceText)) {
+            if (EmptyValues.hasText(presenceText)) {
                 String rawExportDataRef = String.valueOf(v);
                 return rawExportDataRef.trim();
             }
@@ -405,9 +402,9 @@ public class GenerateStep implements ExportStageStep {
         Object qps = tc.get("query_param_schema");
         Map<String, Object> qpsMap = toStringKeyMap(qps);
         Object nested = qpsMap.get("export_data_ref");
-        if (EmptyChecks.isNotNull(nested)) {
+        if (nested != null) {
             String nestedPresenceText = String.valueOf(nested);
-            if (Texts.hasText(nestedPresenceText)) {
+            if (EmptyValues.hasText(nestedPresenceText)) {
                 String rawNestedExportDataRef = String.valueOf(nested);
                 return rawNestedExportDataRef.trim();
             }
@@ -423,7 +420,7 @@ public class GenerateStep implements ExportStageStep {
             return out;
         }
         String text = raw instanceof String s ? s : PostgresqlJsonbTexts.tryExtract(raw);
-        if (Texts.hasText(text)) {
+        if (EmptyValues.hasText(text)) {
             try {
                 return objectMapper.readValue(text, Map.class);
             } catch (Exception ignored) {
@@ -463,12 +460,12 @@ public class GenerateStep implements ExportStageStep {
         Map<String, Object> tc = templateConfigMap(context);
         Object targetRaw = firstConfigured(tc.get("target_charset"), tc.get("charset"));
         String target = "";
-        if (EmptyChecks.isNotNull(targetRaw)) {
+        if (targetRaw != null) {
             String rawTarget = String.valueOf(targetRaw);
             target = rawTarget.trim();
         }
         Charset charset = StandardCharsets.UTF_8;
-        if (Texts.hasText(target)) {
+        if (EmptyValues.hasText(target)) {
             try {
                 charset = EncodingUtils.resolve(target);
             } catch (IllegalArgumentException ex) {
@@ -485,18 +482,18 @@ public class GenerateStep implements ExportStageStep {
     }
 
     private static Object firstConfigured(Object first, Object second) {
-        if (EmptyChecks.isNull(first)) {
+        if (first == null) {
             return second;
         }
         String firstText = String.valueOf(first);
-        return Texts.hasText(firstText) ? first : second;
+        return EmptyValues.hasText(firstText) ? first : second;
     }
 
     private static boolean asBoolean(Object value) {
         if (value instanceof Boolean b) {
             return b;
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return false;
         }
         String textValue = String.valueOf(value);

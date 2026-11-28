@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.orchestrator.config.FileGovernanceProperties;
@@ -181,7 +181,7 @@ public class FileGovernanceScheduler {
                 fileGovernanceRepository.selectArrivalGovernanceCandidates(
                         properties.getArrival().getBatchSize());
         Map<ArrivalGroupKey, List<FileGovernanceArrivalViews.ArrivalCandidateView>> grouped = new HashMap<>();
-        if (EmptyChecks.isEmpty(candidates)) {
+        if (EmptyValues.isEmpty(candidates)) {
             arrivalGroupTriggeredCount.set(0L);
             arrivalGroupTimeoutCount.set(0L);
             refreshArrivalGroupBacklogMetrics();
@@ -189,7 +189,7 @@ public class FileGovernanceScheduler {
         }
         for (FileGovernanceArrivalViews.ArrivalCandidateView candidate : candidates) {
             ArrivalGroupKey key = ArrivalGroupKey.from(candidate);
-            if (EmptyChecks.isNull(key)) {
+            if (key == null) {
                 continue;
             }
             grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(candidate);
@@ -202,7 +202,7 @@ public class FileGovernanceScheduler {
             ArrivalGroupKey key = entry.getKey();
             ArrivalGroupDecision decision = RlsTenantContextHolder.runWithTenant(
                     key.tenantId(), () -> evaluateArrivalGroup(key, entry.getValue(), now));
-            if (EmptyChecks.isNull(decision) || EmptyChecks.isNull(decision.state())) {
+            if (decision == null || decision.state() == null) {
                 continue;
             }
             switch (decision.state()) {
@@ -232,7 +232,7 @@ public class FileGovernanceScheduler {
     }
 
     private long valueOrZero(Long value) {
-        return EmptyChecks.isNull(value) ? 0L : value;
+        return value == null ? 0L : value;
     }
 
     public void cleanupArchivedFiles() {
@@ -254,7 +254,7 @@ public class FileGovernanceScheduler {
 
     private ArrivalGroupDecision evaluateArrivalGroup(
             ArrivalGroupKey key, List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles, Instant now) {
-        if (EmptyChecks.isEmpty(groupFiles)) {
+        if (EmptyValues.isEmpty(groupFiles)) {
             return new ArrivalGroupDecision(null);
         }
         FileGovernanceArrivalViews.ArrivalCandidateView firstFile = groupFiles.get(0);
@@ -262,7 +262,7 @@ public class FileGovernanceScheduler {
         Set<String> arrivedFiles = new HashSet<>();
         for (FileGovernanceArrivalViews.ArrivalCandidateView file : groupFiles) {
             String fileName = file.fileName();
-            if (EmptyChecks.isNotNull(fileName)) {
+            if (fileName != null) {
                 arrivedFiles.add(fileName);
             }
         }
@@ -277,7 +277,7 @@ public class FileGovernanceScheduler {
                 firstFile.triggerOnComplete(), properties.getArrival().isTriggerOnComplete());
         String timeoutAction = defaultText(
                 firstFile.arrivalTimeoutAction(), properties.getArrival().getDefaultTimeoutAction());
-        boolean timedOut = EmptyChecks.isNotNull(latestTolerableTime) && now.isAfter(latestTolerableTime);
+        boolean timedOut = latestTolerableTime != null && now.isAfter(latestTolerableTime);
         if (timedOut) {
             if ("MANUAL_CONFIRM".equalsIgnoreCase(timeoutAction)) {
                 ArrivalGroupUpdateState updateState = new ArrivalGroupUpdateState(
@@ -300,7 +300,7 @@ public class FileGovernanceScheduler {
             return triggerArrivalGroup(
                     key, groupFiles, requiredFiles, missingFiles, "TIMEOUT_OVERRIDE_" + timeoutAction, now);
         }
-        boolean allRequiredFilesArrived = EmptyChecks.isNotEmpty(requiredFiles) && EmptyChecks.isEmpty(missingFiles);
+        boolean allRequiredFilesArrived = EmptyValues.isNotEmpty(requiredFiles) && EmptyValues.isEmpty(missingFiles);
         if (allRequiredFilesArrived) {
             if (properties.getArrival().isRequireVerified() && !allMembersVerified(groupFiles)) {
                 // 文件名虽齐，但有成员缺少实际字节校验形成的 VERIFIED 证据：保持等待，超时仍走 timeoutAction。
@@ -326,7 +326,7 @@ public class FileGovernanceScheduler {
         // 此时若仍写 WAITING_ARRIVAL,scheduler 会在每个 30s tick 重复评估同一行,造成日志 +
         // updated_at 抖动(2026-05-01 5207.fw 类噪声根因)。改为静默跳过,等业务方补全 metadata 或
         // 数据治理手工置终态。
-        if (EmptyChecks.isEmpty(requiredFiles)) {
+        if (EmptyValues.isEmpty(requiredFiles)) {
             log.warn(
                     "skip arrival group with empty requiredFileSet: tenantId={}, fileGroupCode={},"
                             + " arrivedCount={} - metadata is incomplete, so the trigger condition cannot be determined; add requiredFileSet or set a terminal state",
@@ -425,7 +425,7 @@ public class FileGovernanceScheduler {
                 context.files().groupFiles()) {
             Long fileId = file.fileId();
             String tenantId = file.tenantId();
-            if (EmptyChecks.isNull(fileId) || EmptyChecks.isNull(tenantId)) {
+            if (fileId == null || tenantId == null) {
                 continue;
             }
             int updated = fileGovernanceRepository.updateArrivalGroupMetadataIfNonTerminal(tenantId, fileId, metadata);
@@ -459,7 +459,7 @@ public class FileGovernanceScheduler {
     }
 
     private Instant parseInstant(String value) {
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             return null;
         }
         try {
@@ -486,13 +486,12 @@ public class FileGovernanceScheduler {
             return FileIntegrityState.VERIFIED.code().equals(metadata.get("integrityState"));
         }
         String json = metadataJson instanceof String text ? text : PostgresqlJsonbTexts.tryExtract(metadataJson);
-        if (EmptyChecks.isBlank(json)) {
+        if (EmptyValues.isBlank(json)) {
             return false;
         }
         try {
             Map<String, Object> metadata = JsonUtils.fromJson(json, new TypeReference<Map<String, Object>>() {});
-            return EmptyChecks.isNotNull(metadata)
-                    && FileIntegrityState.VERIFIED.code().equals(metadata.get("integrityState"));
+            return metadata != null && FileIntegrityState.VERIFIED.code().equals(metadata.get("integrityState"));
         } catch (RuntimeException exception) {
             return false;
         }
@@ -500,12 +499,12 @@ public class FileGovernanceScheduler {
 
     private Set<String> parseRequiredFileSet(String value) {
         Set<String> files = new HashSet<>();
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             return files;
         }
         for (String item : value.split(",")) {
             String trimmed = item.trim();
-            if (EmptyChecks.isNotBlank(trimmed)) {
+            if (EmptyValues.isNotBlank(trimmed)) {
                 files.add(trimmed);
             }
         }
@@ -513,14 +512,14 @@ public class FileGovernanceScheduler {
     }
 
     private boolean parseBoolean(String value, boolean fallback) {
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             return fallback;
         }
         return Boolean.parseBoolean(value);
     }
 
     private String defaultText(String value, String fallback) {
-        return EmptyChecks.isBlank(value) ? fallback : value;
+        return EmptyValues.isBlank(value) ? fallback : value;
     }
 
     private record ArrivalGroupKey(
@@ -534,12 +533,12 @@ public class FileGovernanceScheduler {
         private static final String MISSING_BIZ_DATE = "__MISSING_BIZ_DATE__";
 
         static ArrivalGroupKey from(FileGovernanceArrivalViews.ArrivalCandidateView candidate) {
-            if (EmptyChecks.isNull(candidate)) {
+            if (candidate == null) {
                 return null;
             }
             String tenantId = candidate.tenantId();
             String fileGroupCode = candidate.fileGroupCode();
-            if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isBlank(fileGroupCode)) {
+            if (EmptyValues.isBlank(tenantId) || EmptyValues.isBlank(fileGroupCode)) {
                 return null;
             }
             String bizDate = defaultString(candidate.bizDate(), MISSING_BIZ_DATE);
@@ -551,7 +550,7 @@ public class FileGovernanceScheduler {
         }
 
         private static String defaultString(String value, String fallback) {
-            return EmptyChecks.isBlank(value) ? fallback : value;
+            return EmptyValues.isBlank(value) ? fallback : value;
         }
 
         // 显式覆写与 record 默认生成逻辑一致，仅为绕过 Alibaba 插件对 record 的识别盲区。

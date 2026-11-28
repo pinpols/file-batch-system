@@ -2,8 +2,8 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.Guard;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -14,12 +14,12 @@ public class ConsolePasswordHasher {
     private static final Argon2PasswordEncoder ARGON2 = Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8();
 
     public String encode(String rawPassword) {
-        Guard.requireText(rawPassword, "raw password is required");
+        Preconditions.requireText(rawPassword, "raw password is required");
         return ARGON2.encode(rawPassword);
     }
 
     public boolean matches(String rawPassword, String encodedPassword) {
-        if (!Texts.hasText(rawPassword) || !Texts.hasText(encodedPassword)) {
+        if (!EmptyValues.hasText(rawPassword) || !EmptyValues.hasText(encodedPassword)) {
             return false;
         }
         if (!encodedPassword.startsWith("$argon2")) {

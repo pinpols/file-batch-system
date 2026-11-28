@@ -3,8 +3,7 @@ package io.github.pinpols.batch.console.infrastructure.workflow;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.ActiveCalendarRow;
@@ -36,7 +35,7 @@ public class DefaultSingleJobWorkflowProvisioner {
     public void provision(JobDefinitionEntity job) {
         WorkflowDefinitionEntity existing =
                 workflowDefinitionMapper.selectBySingleJobDefinitionId(job.getTenantId(), job.getId());
-        if (EmptyChecks.isNotNull(existing)) {
+        if (existing != null) {
             return;
         }
         WorkflowDefinitionEntity workflow = new WorkflowDefinitionEntity();
@@ -55,12 +54,12 @@ public class DefaultSingleJobWorkflowProvisioner {
         // 作业上的触发模式可能与调度类型不兼容（如 CRON + MANUAL），照抄会让工作流显示为定时却永不触发
         workflow.setTriggerMode(ScheduleTriggerModes.resolve(job.getScheduleType(), job.getTriggerMode()));
         String calendarCode = CodeNormalizer.toConfigFormOrNull(job.getCalendarCode());
-        if (!Texts.hasText(calendarCode)) {
+        if (!EmptyValues.hasText(calendarCode)) {
             calendarCode = DEFAULT_CALENDAR_CODE;
         }
         ActiveCalendarRow activeBusinessCalendar =
                 businessCalendarMapper.selectActiveByTenantAndCalendarCode(job.getTenantId(), calendarCode);
-        if (EmptyChecks.isNull(activeBusinessCalendar)) {
+        if (activeBusinessCalendar == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.calendar_not_found", calendarCode);
         }
         workflow.setCalendarCode(calendarCode);

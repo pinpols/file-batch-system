@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.support.ScheduledFireTimeSource;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -25,7 +24,7 @@ public class QuartzScheduledFireEnumerator {
         Objects.requireNonNull(trigger, "trigger");
         return afterExclusive -> {
             Date next = trigger.getFireTimeAfter(Date.from(afterExclusive));
-            return EmptyChecks.isNull(next) ? null : next.toInstant();
+            return next == null ? null : next.toInstant();
         };
     }
 
@@ -44,7 +43,7 @@ public class QuartzScheduledFireEnumerator {
         List<Instant> fireTimes = new ArrayList<>();
         Instant cursor = afterExclusive;
         Instant nextFireTime = source.nextAfter(cursor);
-        while (EmptyChecks.isNotNull(nextFireTime) && !nextFireTime.isAfter(throughInclusive)) {
+        while (nextFireTime != null && !nextFireTime.isAfter(throughInclusive)) {
             if (fireTimes.size() == occurrenceLimit) {
                 throw new OccurrenceLimitExceededException(occurrenceLimit);
             }

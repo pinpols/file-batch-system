@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.shared.client;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.i18n.AcceptLanguageRequestInterceptor;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleTriggerClientProperties;
 import java.time.Duration;
 import java.util.function.Supplier;
@@ -70,7 +70,7 @@ public class TriggerInternalRestClient {
                 .baseUrl(baseUrl)
                 .requestInterceptor(new AcceptLanguageRequestInterceptor())
                 .requestFactory(requestFactory);
-        if (Texts.hasText(secret)) {
+        if (EmptyValues.hasText(secret)) {
             builder = builder.defaultHeader(X_INTERNAL_SECRET_HEADER, secret);
         }
         return builder.build();

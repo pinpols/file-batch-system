@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.WebhookRelayProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
@@ -143,7 +143,7 @@ public class TerminalNotificationDeliveryService {
             return;
         }
         Destination destination = inTenant(row.tenantId(), () -> destination(row));
-        if (row.attempt() > 0 && EmptyChecks.isNotNull(destination.message())) {
+        if (row.attempt() > 0 && destination.message() != null) {
             inTenant(row.tenantId(), () -> {
                 WorkflowTerminalNotificationFinishParam workflowTerminalNotificationFinishParam2 =
                         WorkflowTerminalNotificationFinishParam.builder()
@@ -161,7 +161,7 @@ public class TerminalNotificationDeliveryService {
         boolean success = result.success();
         // Webhook 协议携带稳定的 Idempotency-Key。其他服务方未声明
         // 幂等能力，因此结果不确定的失败必须保留并供人工协调。
-        boolean retry = !success && EmptyChecks.isNotNull(destination.webhook()) && row.attempt() + 1 < maxAttempts;
+        boolean retry = !success && destination.webhook() != null && row.attempt() + 1 < maxAttempts;
         Instant nextRetry = null;
         if (retry) {
             Instant retryScheduledAt = BatchDateTimeSupport.utcNow();
@@ -203,14 +203,14 @@ public class TerminalNotificationDeliveryService {
     private WebhookDeliveryResult deliverToDestination(Destination destination, TerminalNotificationDelivery row) {
         WebhookDeliveryResult result;
         try {
-            if (EmptyChecks.isNotNull(destination.problem())) {
+            if (destination.problem() != null) {
                 result = WebhookDeliveryResult.failure(null, destination.problem());
-            } else if (EmptyChecks.isNotNull(destination.webhook())) {
+            } else if (destination.webhook() != null) {
                 result = webhooks.attemptDelivery(destination.webhook(), destination.payload(), row.payloadJson());
             } else {
                 NotificationSender sender =
                         senders.resolve(destination.message().channelType());
-                result = EmptyChecks.isNull(sender)
+                result = sender == null
                         ? WebhookDeliveryResult.failure(null, "notification sender unavailable")
                         : sender.send(destination.message());
             }
@@ -221,7 +221,7 @@ public class TerminalNotificationDeliveryService {
     }
 
     private static String safeDeliveryError(String error) {
-        if (EmptyChecks.isNull(error)) {
+        if (error == null) {
             return null;
         }
         String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(error));
@@ -240,10 +240,10 @@ public class TerminalNotificationDeliveryService {
         }
         SubscriptionRuleRow rule = rules.selectById(row.tenantId(), row.recipientId());
         NotificationChannelRow channel = channels.selectByCode(row.tenantId(), row.channelCode());
-        boolean ruleOrChannelIsUnavailableForDelivery = EmptyChecks.isNull(rule)
+        boolean ruleOrChannelIsUnavailableForDelivery = rule == null
                 || !Boolean.TRUE.equals(rule.enabled())
                 || !row.channelCode().equals(rule.channelCode())
-                || EmptyChecks.isNull(channel)
+                || channel == null
                 || !Boolean.TRUE.equals(channel.enabled());
         if (ruleOrChannelIsUnavailableForDelivery) {
             return Destination.unavailable(payload, "selected rule or channel disabled, deleted or reassigned");
@@ -252,14 +252,14 @@ public class TerminalNotificationDeliveryService {
         String configJson = channel.configJson();
         if ("WEBHOOK".equals(type)) {
             Map<?, ?> config = JsonUtils.fromJson(configJson, Map.class);
-            if (EmptyChecks.isNull(config) || !(config.get("url") instanceof String url) || EmptyChecks.isBlank(url)) {
+            if (config == null || !(config.get("url") instanceof String url) || EmptyValues.isBlank(url)) {
                 return Destination.unavailable(payload, "webhook channel URL missing");
             }
             WebhookSubscriptionEntity subscription = new WebhookSubscriptionEntity();
             subscription.setTenantId(row.tenantId());
             subscription.setCallbackUrl(url);
             Object configuredSecret = config.get("secret");
-            String webhookSecret = EmptyChecks.isNull(configuredSecret) ? null : String.valueOf(configuredSecret);
+            String webhookSecret = configuredSecret == null ? null : String.valueOf(configuredSecret);
             subscription.setSecret(webhookSecret);
             subscription.setEnabled(true);
             return Destination.webhook(subscription, payload);

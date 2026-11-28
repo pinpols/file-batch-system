@@ -14,9 +14,8 @@ import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.DeadLetterTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
@@ -139,7 +138,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         }
         String tenantId = task.getTenantId();
         String traceId = jobInstance.getTraceId();
-        boolean injectMdc = traceId != null && !traceId.isBlank();
+        boolean injectMdc = EmptyValues.isNotBlank(traceId);
         if (injectMdc) {
             BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
             BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
@@ -391,7 +390,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
             throw new IllegalStateException(
                     "reclaim only allowed from RUNNING or terminal state, current status: " + status);
         }
-        if (TaskStatus.RUNNING.code().equals(status) && EmptyChecks.isNotNull(task.getNonIdempotentStartedAt())) {
+        if (TaskStatus.RUNNING.code().equals(status) && task.getNonIdempotentStartedAt() != null) {
             // 与自动租约回收同一裁定：外部动作已开始且没有回报，重新入队会让新 Worker 再次执行外部动作。
             if (!unknownExternalOutcomeCloser.close(task)) {
                 throw new IllegalStateException("non-idempotent task outcome was not recorded: taskId=" + taskId);
@@ -430,9 +429,9 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         boolean externalActionVerifiedNotExecuted = input.externalActionVerifiedNotExecuted();
         String externalOutcomeEvidenceReference = input.externalOutcomeEvidenceReference();
 
-        boolean hasEvidence = Texts.hasText(externalOutcomeEvidenceReference);
+        boolean hasEvidence = EmptyValues.hasText(externalOutcomeEvidenceReference);
         boolean externalOutcomeEvidenceIncomplete = externalActionVerifiedNotExecuted
-                && (!Texts.hasText(operatorId) || !Texts.hasText(reason) || !hasEvidence);
+                && (!EmptyValues.hasText(operatorId) || !EmptyValues.hasText(reason) || !hasEvidence);
         if (externalOutcomeEvidenceIncomplete) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.dead_letter.external_outcome_evidence_required");
         }
@@ -453,8 +452,9 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     @Override
     public void auditVerifiedExternalOutcomeResolution(
             String tenantId, Long deadLetterTaskId, String operatorId, String reason, String evidenceReference) {
-        boolean manualRecoveryEvidenceIsIncomplete =
-                !Texts.hasText(operatorId) || !Texts.hasText(reason) || !Texts.hasText(evidenceReference);
+        boolean manualRecoveryEvidenceIsIncomplete = !EmptyValues.hasText(operatorId)
+                || !EmptyValues.hasText(reason)
+                || !EmptyValues.hasText(evidenceReference);
         if (manualRecoveryEvidenceIsIncomplete) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.dead_letter.external_outcome_evidence_required");
         }
@@ -492,10 +492,10 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         audit.setDetailRef(AuditLogConstants.DETAIL_REF_DEAD_LETTER_TASK);
         Map<String, Object> extra = new LinkedHashMap<>();
         extra.put("deadLetterTaskId", deadLetterTaskId);
-        extra.put("operatorId", Texts.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM);
+        extra.put("operatorId", EmptyValues.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM);
         extra.put(
                 "operatorType",
-                Texts.hasText(operatorId)
+                EmptyValues.hasText(operatorId)
                         ? AuditLogConstants.OPERATOR_TYPE_REQUEST
                         : AuditLogConstants.OPERATOR_TYPE_SYSTEM);
         extra.put("reason", reason);
@@ -520,7 +520,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_MANDATORY);
         RuntimeException failure = transaction.execute(
                 status -> replayDeadLetterWithinTransaction(tenantId, deadLetterTaskId, status, false));
-        if (EmptyChecks.isNotNull(failure)) {
+        if (failure != null) {
             throw failure;
         }
     }
@@ -535,7 +535,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
             throw BizException.of(ResultCode.NOT_FOUND, "error.dead_letter.not_found");
         }
         String traceId = deadLetterTask.getTraceId();
-        boolean injectMdc = traceId != null && !traceId.isBlank();
+        boolean injectMdc = EmptyValues.isNotBlank(traceId);
         if (injectMdc) {
             BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
             BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
@@ -651,7 +651,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         }
         String retryPolicy = jobDefinitionRecord.retryPolicy();
         Integer retryMaxCount = jobDefinitionRecord.retryMaxCount();
-        if (retryPolicy == null || retryPolicy.isBlank()) {
+        if (EmptyValues.isBlank(retryPolicy)) {
             retryPolicy = RetryPolicyType.FIXED.code();
         }
         return new RetryPolicyPlan(
@@ -660,13 +660,13 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
 
     private RetryPolicyPlan resolveRetryPolicy(JobInstanceEntity jobInstance) {
         Map<String, Object> snapshot = executionPolicySnapshot(jobInstance);
-        if (EmptyChecks.isNotNull(snapshot)) {
+        if (snapshot != null) {
             Object retryPolicyValue = snapshot.get("retryPolicy");
             String retryPolicy = Objects.toString(retryPolicyValue, null);
             Integer retryMaxCount = integerValue(snapshot.get("retryMaxCount"));
-            String resolvedRetryPolicy = Texts.hasText(retryPolicy) ? retryPolicy : RetryPolicyType.FIXED.code();
+            String resolvedRetryPolicy = EmptyValues.hasText(retryPolicy) ? retryPolicy : RetryPolicyType.FIXED.code();
             Integer resolvedRetryMaxCount =
-                    EmptyChecks.isNull(retryMaxCount) ? governance.retry().getDefaultMaxRetryCount() : retryMaxCount;
+                    retryMaxCount == null ? governance.retry().getDefaultMaxRetryCount() : retryMaxCount;
             return new RetryPolicyPlan(resolvedRetryPolicy, resolvedRetryMaxCount);
         }
         return resolveRetryPolicy(jobInstance.getJobDefinitionId());
@@ -674,7 +674,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> executionPolicySnapshot(JobInstanceEntity jobInstance) {
-        if (EmptyChecks.isNull(jobInstance) || !Texts.hasText(jobInstance.getParamsSnapshot())) {
+        if (jobInstance == null || !EmptyValues.hasText(jobInstance.getParamsSnapshot())) {
             return null;
         }
         try {
@@ -699,7 +699,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         if (value instanceof Number number) {
             return number.intValue();
         }
-        if (value instanceof String text && EmptyChecks.isNotEmpty(text)) {
+        if (value instanceof String text && EmptyValues.isNotEmpty(text)) {
             try {
                 return Integer.valueOf(text);
             } catch (NumberFormatException ignored) {
@@ -858,7 +858,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         RuntimeException failure = newTransaction()
                 .execute(status -> replayDeadLetterWithinTransaction(
                         tenantId, deadLetterTaskId, status, externalActionVerifiedNotExecuted));
-        if (EmptyChecks.isNotNull(failure)) {
+        if (failure != null) {
             throw failure;
         }
     }
@@ -878,7 +878,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
             return "";
         }
         String raw = exception.getMessage();
-        if (raw == null || raw.isBlank()) {
+        if (EmptyValues.isBlank(raw)) {
             raw = exception.getClass().getSimpleName();
         }
         final int max = 512;

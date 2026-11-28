@@ -3,8 +3,7 @@ package io.github.pinpols.batch.console.application.config;
 import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.config.mapper.ConfigCacheInvalidationOutboxMapper;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import io.micrometer.core.instrument.Counter;
@@ -171,7 +170,7 @@ public class ConsoleConfigCacheInvalidationService {
     }
 
     private void evictByPatternAfterCommit(String tenantId, String type, String code, String pattern) {
-        if (!Texts.hasText(pattern)) {
+        if (!EmptyValues.hasText(pattern)) {
             return;
         }
         Runnable evict = () -> {
@@ -212,7 +211,7 @@ public class ConsoleConfigCacheInvalidationService {
 
     private void evictAfterCommit(String tenantId, String type, String code) {
         String key = configKey(tenantId, type, code);
-        if (!Texts.hasText(key)) {
+        if (!EmptyValues.hasText(key)) {
             return;
         }
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -294,7 +293,7 @@ public class ConsoleConfigCacheInvalidationService {
     }
 
     private void increment(Counter counter) {
-        if (EmptyChecks.isNotNull(counter)) {
+        if (counter != null) {
             counter.increment();
         }
     }
@@ -307,7 +306,7 @@ public class ConsoleConfigCacheInvalidationService {
     }
 
     private String safe(String value) {
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             return "_";
         }
         return value.replace(':', '_');

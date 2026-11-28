@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.quota;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService.QuotaReservationRequest;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.QuotaResetPolicy;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
@@ -14,11 +13,11 @@ final class QuotaReservationSupport {
     private QuotaReservationSupport() {}
 
     static Precheck precheck(QuotaReservationRequest request) {
-        boolean reservationRequestIsNotApplicable = EmptyChecks.isNull(request)
+        boolean reservationRequestIsNotApplicable = request == null
                 || request.owner() == null
-                || !Texts.hasText(request.owner().tenantId())
-                || !Texts.hasText(request.owner().quotaScope())
-                || !Texts.hasText(request.owner().ownerCode())
+                || !EmptyValues.hasText(request.owner().tenantId())
+                || !EmptyValues.hasText(request.owner().quotaScope())
+                || !EmptyValues.hasText(request.owner().ownerCode())
                 || request.policy() == null
                 || request.policy().baseCap() <= 0;
         if (reservationRequestIsNotApplicable) {

@@ -2,9 +2,8 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -21,7 +20,7 @@ final class SingleSheetExcelCellParsers {
 
     static String requireText(Map<String, String> values, String key, int maxLength, List<String> issues) {
         String normalized = normalize(values.get(key));
-        if (!Texts.hasText(normalized)) {
+        if (!EmptyValues.hasText(normalized)) {
             issues.add(key + " is required");
             return null;
         }
@@ -34,7 +33,7 @@ final class SingleSheetExcelCellParsers {
 
     static String optionalText(Map<String, String> values, String key, int maxLength, List<String> issues) {
         String normalized = normalize(values.get(key));
-        if (!Texts.hasText(normalized)) {
+        if (!EmptyValues.hasText(normalized)) {
             return null;
         }
         if (normalized.length() > maxLength) {
@@ -47,7 +46,7 @@ final class SingleSheetExcelCellParsers {
     static String requireEnum(
             Map<String, String> values, String key, Set<String> allowed, int maxLength, List<String> issues) {
         String normalized = requireText(values, key, maxLength, issues);
-        if (EmptyChecks.isNull(normalized)) {
+        if (normalized == null) {
             return null;
         }
         String upper = normalized.toUpperCase(Locale.ROOT);
@@ -66,7 +65,7 @@ final class SingleSheetExcelCellParsers {
             String defaultValue,
             List<String> issues) {
         String normalized = normalize(values.get(key));
-        if (!Texts.hasText(normalized)) {
+        if (!EmptyValues.hasText(normalized)) {
             return defaultValue;
         }
         if (normalized.length() > maxLength) {
@@ -83,7 +82,7 @@ final class SingleSheetExcelCellParsers {
     static Integer optionalInteger(
             Map<String, String> values, String key, int min, int defaultValue, List<String> issues) {
         String normalized = normalize(values.get(key));
-        if (!Texts.hasText(normalized)) {
+        if (!EmptyValues.hasText(normalized)) {
             return defaultValue;
         }
         try {
@@ -102,7 +101,7 @@ final class SingleSheetExcelCellParsers {
 
     static Integer requireInteger(Map<String, String> values, String key, int min, List<String> issues) {
         String normalized = normalize(values.get(key));
-        if (!Texts.hasText(normalized)) {
+        if (!EmptyValues.hasText(normalized)) {
             issues.add(key + " is required");
             return min;
         }
@@ -122,7 +121,7 @@ final class SingleSheetExcelCellParsers {
 
     static Boolean optionalBoolean(Map<String, String> values, String key, Boolean defaultValue, List<String> issues) {
         String normalized = normalize(values.get(key));
-        if (!Texts.hasText(normalized)) {
+        if (!EmptyValues.hasText(normalized)) {
             return defaultValue;
         }
         String upper = normalized.toUpperCase(Locale.ROOT);
@@ -139,7 +138,7 @@ final class SingleSheetExcelCellParsers {
     /** 租户字段解析：空则用当前租户，不匹配则报错。 */
     static String resolveTenantField(Map<String, String> values, String tenantId, List<String> issues) {
         String effectiveTenant = normalize(values.get("tenant_id"));
-        if (!Texts.hasText(effectiveTenant)) {
+        if (!EmptyValues.hasText(effectiveTenant)) {
             return tenantId;
         }
         if (!tenantId.equals(effectiveTenant)) {
@@ -151,7 +150,7 @@ final class SingleSheetExcelCellParsers {
     /** 可选 JSON 字段：非空时校验 JSON 合法性。 */
     static String optionalJson(Map<String, String> values, String key, List<String> issues) {
         String normalized = normalize(values.get(key));
-        if (!Texts.hasText(normalized)) {
+        if (!EmptyValues.hasText(normalized)) {
             return null;
         }
         try {

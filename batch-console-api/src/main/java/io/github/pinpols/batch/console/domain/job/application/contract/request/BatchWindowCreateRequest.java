@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.request;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
 import jakarta.validation.constraints.AssertTrue;
@@ -46,7 +46,7 @@ public class BatchWindowCreateRequest {
     /** timezone 必须是合法 IANA 时区（如 Asia/Shanghai），拒绝 Mars/Phobos 之类。 */
     @AssertTrue(message = "timezone is invalid")
     public boolean isTimezoneValid() {
-        if (timezone == null || timezone.isBlank()) {
+        if (EmptyValues.isBlank(timezone)) {
             return true; // 空由 @NotBlank 处理
         }
         try {
@@ -61,7 +61,7 @@ public class BatchWindowCreateRequest {
     @AssertTrue(message = "startTime must be earlier than endTime when allowCrossDay is false")
     public boolean isWindowRangeValid() {
         boolean sameDayWindowValidationIsNotApplicable =
-                Boolean.TRUE.equals(allowCrossDay) || EmptyChecks.isNull(startTime) || EmptyChecks.isNull(endTime);
+                Boolean.TRUE.equals(allowCrossDay) || startTime == null || endTime == null;
         if (sameDayWindowValidationIsNotApplicable) {
             return true;
         }

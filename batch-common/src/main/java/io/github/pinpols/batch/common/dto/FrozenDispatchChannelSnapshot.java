@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.common.dto;
 
 import io.github.pinpols.batch.common.enums.DispatchTaskKeys;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -17,13 +17,13 @@ public record FrozenDispatchChannelSnapshot(
     public static final int CURRENT_SCHEMA_VERSION = 1;
 
     public FrozenDispatchChannelSnapshot {
-        boolean snapshotFieldsAreInvalid = EmptyChecks.isNull(schemaVersion)
+        boolean snapshotFieldsAreInvalid = schemaVersion == null
                 || schemaVersion != CURRENT_SCHEMA_VERSION
-                || EmptyChecks.isBlank(tenantId)
-                || EmptyChecks.isBlank(channelCode)
-                || EmptyChecks.isNull(channelId)
+                || EmptyValues.isBlank(tenantId)
+                || EmptyValues.isBlank(channelCode)
+                || channelId == null
                 || channelId <= 0
-                || EmptyChecks.isEmpty(configuration);
+                || EmptyValues.isEmpty(configuration);
         if (snapshotFieldsAreInvalid) {
             throw invalid();
         }
@@ -38,7 +38,7 @@ public record FrozenDispatchChannelSnapshot(
             throw invalid();
         }
         String configurationChannelType = text(configuration.get("channel_type"));
-        if (EmptyChecks.isBlank(configurationChannelType)) {
+        if (EmptyValues.isBlank(configurationChannelType)) {
             throw invalid();
         }
         if (!(configuration.get("config_json") instanceof Map<?, ?>)) {
@@ -51,7 +51,7 @@ public record FrozenDispatchChannelSnapshot(
     }
 
     public static FrozenDispatchChannelSnapshot capture(Map<String, Object> configuration) {
-        if (EmptyChecks.isEmpty(configuration)) {
+        if (EmptyValues.isEmpty(configuration)) {
             throw invalid();
         }
         String tenantId = text(configuration.get("tenant_id"));
@@ -130,10 +130,7 @@ public record FrozenDispatchChannelSnapshot(
     }
 
     private static Object copyScalar(Object value) {
-        if (EmptyChecks.isNull(value)
-                || value instanceof String
-                || value instanceof Number
-                || value instanceof Boolean) {
+        if (value == null || value instanceof String || value instanceof Number || value instanceof Boolean) {
             return value;
         }
         throw invalid();

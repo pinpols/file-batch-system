@@ -3,7 +3,7 @@ package io.github.pinpols.batch.common.file;
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import lombok.Builder;
 
 /** 导出文件名解析器。Console 预览与 Worker 运行时必须共用此实现。 */
@@ -25,7 +25,7 @@ public final class ExportFileNameResolver {
     public static String resolve(Input input) {
         String normalizedBatchNo = defaultText(input.batchNo(), "batch");
         String normalizedVersion = defaultText(input.version(), "v1");
-        if (EmptyChecks.isNotBlank(input.namingRule())) {
+        if (EmptyValues.isNotBlank(input.namingRule())) {
             String normalizedBizType = defaultText(input.bizType(), "export");
             String normalizedBizDate = defaultText(input.bizDate(), "");
             String normalizedTenantId = defaultText(input.tenantId(), "");
@@ -48,7 +48,7 @@ public final class ExportFileNameResolver {
         String defaultFormatCode = FileTemplateFormat.JSON.code();
         String normalizedFormatCode = defaultText(fileFormatType, defaultFormatCode);
         FileTemplateFormat format = DictEnum.fromCode(FileTemplateFormat.class, normalizedFormatCode);
-        if (EmptyChecks.isNull(format)) {
+        if (format == null) {
             return BatchFileConstants.JSON_SUFFIX;
         }
         return switch (format) {
@@ -61,6 +61,6 @@ public final class ExportFileNameResolver {
     }
 
     private static String defaultText(String value, String fallback) {
-        return EmptyChecks.isNotBlank(value) ? value : fallback;
+        return EmptyValues.isNotBlank(value) ? value : fallback;
     }
 }

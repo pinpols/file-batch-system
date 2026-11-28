@@ -1,8 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.batchday;
 
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceInsertIfAbsentParam;
@@ -62,7 +61,7 @@ public class ExpectedWorkRegistrationService {
                     request.tenantId(), request.calendarCode(), request.bizDate());
             WorkflowDefinitionView workflow = workflowDefinitionMapper.selectByTenantAndIdAndEnabled(
                     request.tenantId(), request.workflowDefinitionId(), true);
-            if (EmptyChecks.isNull(workflow) || !request.calendarCode().equals(workflow.calendarCode())) {
+            if (workflow == null || !request.calendarCode().equals(workflow.calendarCode())) {
                 throw new OperationFailure(
                         Kind.INVALID_CONFIGURATION, "Expected work calendar must match the workflow calendar");
             }
@@ -84,16 +83,16 @@ public class ExpectedWorkRegistrationService {
     }
 
     private static void validate(FileGroupExpectation request) {
-        boolean requiredFieldsAreValid = EmptyChecks.isNotNull(request)
+        boolean requiredFieldsAreValid = request != null
                 && valid(request.tenantId(), TENANT_ID_MAX_LENGTH)
                 && valid(request.calendarCode(), CALENDAR_CODE_MAX_LENGTH)
-                && EmptyChecks.isNotNull(request.workflowDefinitionId())
+                && request.workflowDefinitionId() != null
                 && request.workflowDefinitionId() > 0
                 && valid(request.fileGroupCode(), FILE_GROUP_CODE_MAX_LENGTH)
-                && EmptyChecks.isNotNull(request.bizDate())
-                && EmptyChecks.isNotNull(request.expectedAt());
+                && request.bizDate() != null
+                && request.expectedAt() != null;
         boolean dueAtIsValidWhenRequiredFieldsAreValid = !requiredFieldsAreValid
-                || EmptyChecks.isNull(request.dueAt())
+                || request.dueAt() == null
                 || !request.dueAt().isBefore(request.expectedAt());
         boolean requestIsValid = requiredFieldsAreValid && dueAtIsValidWhenRequiredFieldsAreValid;
         if (!requestIsValid) {
@@ -103,7 +102,7 @@ public class ExpectedWorkRegistrationService {
     }
 
     private static boolean valid(String value, int maxLength) {
-        return Texts.hasText(value) && value.trim().length() <= maxLength;
+        return EmptyValues.hasText(value) && value.trim().length() <= maxLength;
     }
 
     public record FileGroupExpectation(

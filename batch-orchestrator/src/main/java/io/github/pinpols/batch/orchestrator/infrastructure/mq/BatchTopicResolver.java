@@ -2,8 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.mq;
 
 import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.config.BatchMqTopicsProperties;
 import io.github.pinpols.batch.orchestrator.config.MqRoutingProperties;
 import java.util.Locale;
@@ -41,7 +40,7 @@ public class BatchTopicResolver {
         }
         return switch (routingProperties.getMode()) {
             case TENANT -> {
-                if (!Texts.hasText(dispatch.tenantId())) {
+                if (!EmptyValues.hasText(dispatch.tenantId())) {
                     yield base;
                 }
                 String tenantId = dispatch.tenantId();
@@ -49,7 +48,7 @@ public class BatchTopicResolver {
                 yield base + "." + safeTenantId;
             }
             case PRIORITY -> {
-                if (!Texts.hasText(dispatch.priorityBand())) {
+                if (!EmptyValues.hasText(dispatch.priorityBand())) {
                     yield base;
                 }
                 String priorityBand = dispatch.priorityBand();
@@ -63,7 +62,7 @@ public class BatchTopicResolver {
 
     public String resolveBaseTopic(String workerType) {
         String baseTopic = topicsProperties.resolveDispatchTopic(workerType);
-        return EmptyChecks.isNull(baseTopic) ? null : topicNamespace.topic(baseTopic);
+        return baseTopic == null ? null : topicNamespace.topic(baseTopic);
     }
 
     private static String safe(String s) {

@@ -7,8 +7,7 @@ import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
@@ -169,7 +168,7 @@ public class DispatchChannelHealthService {
     }
 
     public boolean allowDispatch(Map<String, Object> channelConfig) {
-        boolean channelHealthCheckIsUnavailable = !properties.isEnabled() || EmptyChecks.isEmpty(channelConfig);
+        boolean channelHealthCheckIsUnavailable = !properties.isEnabled() || EmptyValues.isEmpty(channelConfig);
         if (channelHealthCheckIsUnavailable) {
             return true;
         }
@@ -211,7 +210,7 @@ public class DispatchChannelHealthService {
 
     public void recordDispatchOutcome(
             Map<String, Object> channelConfig, boolean success, String message, String evidence) {
-        boolean channelFailureTrackingIsUnavailable = !properties.isEnabled() || EmptyChecks.isEmpty(channelConfig);
+        boolean channelFailureTrackingIsUnavailable = !properties.isEnabled() || EmptyValues.isEmpty(channelConfig);
         if (channelFailureTrackingIsUnavailable) {
             return;
         }
@@ -357,7 +356,7 @@ public class DispatchChannelHealthService {
                 } catch (ExecutionException executionEx) {
                     probeFailureCount.incrementAndGet();
                     Throwable probeCause = executionEx.getCause();
-                    Throwable reportedFailure = EmptyChecks.isNull(probeCause) ? executionEx : probeCause;
+                    Throwable reportedFailure = probeCause == null ? executionEx : probeCause;
                     String errorSummary = SwallowedExceptionLogger.summary(reportedFailure);
                     log.warn(
                             "dispatch channel probe exception: error={}, channel={}",
@@ -391,7 +390,7 @@ public class DispatchChannelHealthService {
     }
 
     private static String probeLogIdentity(Map<String, Object> row) {
-        return EmptyChecks.isNull(row) ? "(null)" : LogSanitizer.value(ChannelIdentity.from(row));
+        return row == null ? "(null)" : LogSanitizer.value(ChannelIdentity.from(row));
     }
 
     @PreDestroy
@@ -426,7 +425,7 @@ public class DispatchChannelHealthService {
     }
 
     private void stopHttpProbeClient() {
-        if (EmptyChecks.isNull(httpProbeClient)) {
+        if (httpProbeClient == null) {
             return;
         }
         httpProbeClient.dispatcher().cancelAll();
@@ -448,7 +447,7 @@ public class DispatchChannelHealthService {
             return new DispatchChannelProbeResult(false, "probe target missing tenant/channel/type", null);
         }
         DispatchChannelHealthSnapshot snapshot = repository.findHealth(channel.tenantId(), channel.channelCode());
-        boolean channelProbeIsNotDue = EmptyChecks.isNotNull(snapshot)
+        boolean channelProbeIsNotDue = snapshot != null
                 && snapshot.nextProbeAt() != null
                 && BatchDateTimeSupport.utcNow().isBefore(snapshot.nextProbeAt());
         if (channelProbeIsNotDue) {
@@ -491,7 +490,7 @@ public class DispatchChannelHealthService {
             return null;
         }
         String text = String.valueOf(value);
-        return Texts.hasText(text) && !"null".equalsIgnoreCase(text) ? text.trim() : null;
+        return EmptyValues.hasText(text) && !"null".equalsIgnoreCase(text) ? text.trim() : null;
     }
 
     /**
@@ -508,11 +507,11 @@ public class DispatchChannelHealthService {
         }
 
         boolean isTargetable() {
-            return Texts.hasText(tenantId) && Texts.hasText(channelCode);
+            return EmptyValues.hasText(tenantId) && EmptyValues.hasText(channelCode);
         }
 
         boolean isFullyIdentified() {
-            return isTargetable() && Texts.hasText(channelType);
+            return isTargetable() && EmptyValues.hasText(channelType);
         }
     }
 

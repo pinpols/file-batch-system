@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.config.BatchSchedulingProperties;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowLaunchWaitProperties;
 import java.io.IOException;
 import java.time.Duration;
@@ -57,7 +56,7 @@ class OrchestratorSchedulerShutdownTest {
             boolean terminated = executor.awaitTermination(200, TimeUnit.MILLISECONDS);
             assertThat(terminated).as("已暂停的上下文关闭后不能留下beforeExecute等待线程").isTrue();
         } finally {
-            if (EmptyChecks.isNotNull(queued)) queued.cancel(true);
+            if (queued != null) queued.cancel(true);
             executor.shutdownNow();
             scheduler.start();
             context.close();
@@ -139,7 +138,7 @@ class OrchestratorSchedulerShutdownTest {
             assertThat(delayed.isCancelled()).isTrue();
             assertThat(ran).isFalse();
         } finally {
-            if (EmptyChecks.isNotNull(delayed)) delayed.cancel(true);
+            if (delayed != null) delayed.cancel(true);
             executor.shutdownNow();
             scheduler.start();
             context.close();

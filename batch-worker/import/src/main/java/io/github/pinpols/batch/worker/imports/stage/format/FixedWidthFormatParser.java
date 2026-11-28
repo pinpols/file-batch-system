@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.worker.imports.stage.format;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.io.BufferedReader;
@@ -49,7 +49,7 @@ public class FixedWidthFormatParser implements FormatParser {
             String line;
             int nonBlankLineNo = 0;
             while ((line = reader.readLine()) != null) {
-                if (!Texts.hasText(line)) {
+                if (!EmptyValues.hasText(line)) {
                     continue;
                 }
                 nonBlankLineNo++;
@@ -131,7 +131,7 @@ public class FixedWidthFormatParser implements FormatParser {
     private static FixedWidthField fixedWidthField(Object item) {
         if (!(item instanceof Map<?, ?> map)
                 || !(map.get("target") instanceof String target)
-                || !Texts.hasText(target)) {
+                || !EmptyValues.hasText(target)) {
             throw new IllegalArgumentException("invalid FIXED_WIDTH field mapping target");
         }
         int start = fixedWidthInteger(map.get("start"));

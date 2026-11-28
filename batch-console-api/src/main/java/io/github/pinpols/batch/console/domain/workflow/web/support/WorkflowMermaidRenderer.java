@@ -3,8 +3,7 @@ package io.github.pinpols.batch.console.domain.workflow.web.support;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.WorkflowEdgeType;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowEdgeResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowNodeResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionDetailResponse;
@@ -28,7 +27,7 @@ public final class WorkflowMermaidRenderer {
         if (detail == null) {
             return sb.toString();
         }
-        if (Texts.hasText(detail.workflowName()) || Texts.hasText(detail.workflowCode())) {
+        if (EmptyValues.hasText(detail.workflowName()) || EmptyValues.hasText(detail.workflowCode())) {
             sb.append("  %% ")
                     .append(detail.workflowName() == null ? "" : detail.workflowName())
                     .append(" · ")
@@ -40,14 +39,14 @@ public final class WorkflowMermaidRenderer {
         Map<String, String> nodeIds = new HashMap<>();
         List<ConsoleWorkflowNodeResponse> nodes = detail.nodes() == null ? List.of() : detail.nodes();
         for (ConsoleWorkflowNodeResponse n : nodes) {
-            if (!Texts.hasText(n.nodeCode())) continue;
+            if (!EmptyValues.hasText(n.nodeCode())) continue;
             String id = sanitizeId(n.nodeCode());
             nodeIds.put(n.nodeCode(), id);
             sb.append("  ").append(id).append(shapeFor(n)).append("\n");
         }
         List<ConsoleWorkflowEdgeResponse> edges = detail.edges() == null ? List.of() : detail.edges();
         for (ConsoleWorkflowEdgeResponse e : edges) {
-            if (!Texts.hasText(e.fromNodeCode()) || !Texts.hasText(e.toNodeCode())) continue;
+            if (!EmptyValues.hasText(e.fromNodeCode()) || !EmptyValues.hasText(e.toNodeCode())) continue;
             String fromNodeCode = e.fromNodeCode();
             String fallbackFromNodeId = sanitizeId(e.fromNodeCode());
             String from = nodeIds.getOrDefault(fromNodeCode, fallbackFromNodeId);
@@ -62,7 +61,7 @@ public final class WorkflowMermaidRenderer {
     private static String shapeFor(ConsoleWorkflowNodeResponse n) {
         String label = escapeLabel(displayLabel(n));
         WorkflowNodeType type = DictEnum.fromCode(WorkflowNodeType.class, n.nodeType());
-        if (EmptyChecks.isNull(type)) {
+        if (type == null) {
             return "[" + label + "]";
         }
         return switch (type) {
@@ -74,7 +73,7 @@ public final class WorkflowMermaidRenderer {
     }
 
     private static String displayLabel(ConsoleWorkflowNodeResponse n) {
-        if (Texts.hasText(n.nodeName())) {
+        if (EmptyValues.hasText(n.nodeName())) {
             return n.nodeName() + " · " + n.nodeCode();
         }
         return n.nodeCode();
@@ -82,12 +81,12 @@ public final class WorkflowMermaidRenderer {
 
     private static String arrowFor(ConsoleWorkflowEdgeResponse e) {
         WorkflowEdgeType type = DictEnum.fromCode(WorkflowEdgeType.class, e.edgeType());
-        if (EmptyChecks.isNull(type)) {
+        if (type == null) {
             return " --> ";
         }
         if (type == WorkflowEdgeType.CONDITION) {
             String conditionExpr = e.conditionExpr();
-            String conditionLabel = Texts.hasText(conditionExpr) ? conditionExpr : "?";
+            String conditionLabel = EmptyValues.hasText(conditionExpr) ? conditionExpr : "?";
             String escapedConditionLabel = escapeLabel(conditionLabel);
             return " -- \"" + escapedConditionLabel + "\" --> ";
         }

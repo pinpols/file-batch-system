@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.storage;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.InputStream;
 import java.time.Duration;
 import java.util.Collection;
@@ -16,8 +16,7 @@ public final class NamespacedObjectStore implements BatchObjectStore {
     private final String prefix;
 
     public NamespacedObjectStore(BatchObjectStore delegate, String namespace) {
-        if (EmptyChecks.isNull(namespace)
-                || !VALID_NAMESPACE.matcher(namespace.trim()).matches()) {
+        if (namespace == null || !VALID_NAMESPACE.matcher(namespace.trim()).matches()) {
             throw new IllegalArgumentException("object storage namespace is invalid");
         }
         this.delegate = delegate;
@@ -41,13 +40,13 @@ public final class NamespacedObjectStore implements BatchObjectStore {
 
     @Override
     public void deleteMany(String bucket, Collection<String> keys) {
-        if (EmptyChecks.isNull(keys)) {
+        if (keys == null) {
             return;
         }
         delegate.deleteMany(
                 bucket,
                 keys.stream()
-                        .filter(key -> EmptyChecks.isNotBlank(key))
+                        .filter(key -> EmptyValues.isNotBlank(key))
                         .map(this::physicalKey)
                         .toList());
     }
@@ -80,10 +79,7 @@ public final class NamespacedObjectStore implements BatchObjectStore {
     @Override
     public ObjectListing list(String bucket, String keyPrefix, String afterMarker, int maxKeys) {
         ObjectListing listing = delegate.list(
-                bucket,
-                EmptyChecks.isNull(keyPrefix) ? prefix : physicalKey(keyPrefix),
-                physicalMarker(afterMarker),
-                maxKeys);
+                bucket, keyPrefix == null ? prefix : physicalKey(keyPrefix), physicalMarker(afterMarker), maxKeys);
         List<ObjectSummary> objects = listing.objects().stream()
                 .filter(summary -> {
                     String physicalKey = summary.key();
@@ -115,18 +111,18 @@ public final class NamespacedObjectStore implements BatchObjectStore {
     }
 
     private String physicalKey(String key) {
-        if (EmptyChecks.isNull(key)) {
+        if (key == null) {
             return key;
         }
         return prefix + key;
     }
 
     private String physicalMarker(String marker) {
-        return EmptyChecks.isBlank(marker) ? marker : physicalKey(marker);
+        return EmptyValues.isBlank(marker) ? marker : physicalKey(marker);
     }
 
     private String logicalMarker(String marker) {
-        return EmptyChecks.isBlank(marker) ? marker : logicalKey(marker);
+        return EmptyValues.isBlank(marker) ? marker : logicalKey(marker);
     }
 
     private String logicalKey(String key) {

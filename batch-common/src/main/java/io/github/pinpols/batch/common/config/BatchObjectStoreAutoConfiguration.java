@@ -9,8 +9,7 @@ import io.github.pinpols.batch.common.storage.MeteredObjectStore;
 import io.github.pinpols.batch.common.storage.NamespacedObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectStorageBackendGuard;
 import io.github.pinpols.batch.common.storage.S3ObjectStore;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.micrometer.core.instrument.MeterRegistry;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
@@ -91,7 +90,7 @@ public class BatchObjectStoreAutoConfiguration {
     @ConditionalOnProperty(name = "batch.storage.backend", havingValue = "filesystem")
     public RawObjectStoreBackend filesystemRawObjectStore(
             FilesystemStorageProperties properties, BatchSecurityProperties securityProperties) {
-        String secret = Texts.hasText(properties.getPresignSecret())
+        String secret = EmptyValues.hasText(properties.getPresignSecret())
                 ? properties.getPresignSecret()
                 : securityProperties.getInternalSecret();
         FilesystemObjectStore filesystemObjectStore = new FilesystemObjectStore(
@@ -119,15 +118,14 @@ public class BatchObjectStoreAutoConfiguration {
             ObjectProvider<MeterRegistry> meterRegistryProvider) {
         KafkaNamespaceProperties deploymentNamespace = deploymentNamespaceProvider.getObject();
         BatchObjectStore raw = rawBackend.delegate();
-        if (Texts.hasText(deploymentNamespace.getNamespace())) {
+        if (EmptyValues.hasText(deploymentNamespace.getNamespace())) {
             raw = new NamespacedObjectStore(raw, deploymentNamespace.getNamespace());
         }
         BatchObjectCryptoService crypto = cryptoProvider.getIfAvailable();
         BatchKmsProperties kmsProperties = kmsPropertiesProvider.getIfAvailable();
         BatchObjectStore store;
-        boolean objectStoreEncryptionIsUnavailable = !encryptionProperties.isDecoratorEnabled()
-                || securityProperties.isBypassMode()
-                || EmptyChecks.isNull(crypto);
+        boolean objectStoreEncryptionIsUnavailable =
+                !encryptionProperties.isDecoratorEnabled() || securityProperties.isBypassMode() || crypto == null;
         if (objectStoreEncryptionIsUnavailable) {
             store = raw;
         } else {

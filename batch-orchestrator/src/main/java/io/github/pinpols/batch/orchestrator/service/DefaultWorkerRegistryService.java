@@ -10,7 +10,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.security.SensitiveDataValidator;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
@@ -67,7 +67,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     @Transactional
     public WorkerRegistryEntity register(WorkerHeartbeatDto request) {
         if (!tenantActionRateLimiter.tryConsume(
-                EmptyChecks.isNull(request) ? null : request.tenantId(), RateLimitAction.WORKER_REGISTER)) {
+                request == null ? null : request.tenantId(), RateLimitAction.WORKER_REGISTER)) {
             throw new OperationFailure(Kind.RATE_LIMITED, "worker register rate limit exceeded");
         }
         rejectMissingWorkerGroup(request);
@@ -85,18 +85,18 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
                 ? request.maxConcurrent()
                 : (registry == null ? WorkerRegistryEntity.DEFAULT_MAX_CONCURRENT : registry.maxConcurrent());
         JsonbString newTags;
-        if (EmptyChecks.isNotNull(request.capabilityTags())) {
+        if (request.capabilityTags() != null) {
             String capabilityTagsJson = JsonUtils.toJson(request.capabilityTags());
             newTags = JsonbString.of(capabilityTagsJson);
         } else {
-            newTags = EmptyChecks.isNull(registry) ? null : registry.capabilityTags();
+            newTags = registry == null ? null : registry.capabilityTags();
         }
         JsonbString newTaskCapabilities;
-        if (EmptyChecks.isNotNull(request.taskCapabilities())) {
+        if (request.taskCapabilities() != null) {
             String taskCapabilitiesJson = JsonUtils.toJson(request.taskCapabilities());
             newTaskCapabilities = JsonbString.of(taskCapabilitiesJson);
         } else {
-            newTaskCapabilities = EmptyChecks.isNull(registry) ? null : registry.taskCapabilities();
+            newTaskCapabilities = registry == null ? null : registry.taskCapabilities();
         }
 
         if (registry == null) {
@@ -136,7 +136,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
                     .withTaskCapabilities(newTaskCapabilities);
         }
         WorkerRegistryEntity saved = persistRegistration(registry, expectedStatus);
-        if (EmptyChecks.isNotNull(request.replayCapabilities())) {
+        if (request.replayCapabilities() != null) {
             String replayCapabilitiesJson = JsonUtils.toJson(request.replayCapabilities());
             int updatedRows = workerRegistryMapper.updateReplayCapabilities(
                     request.tenantId(), request.workerCode(), replayCapabilitiesJson);
@@ -176,7 +176,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
      */
     private void rejectMissingWorkerGroup(WorkerHeartbeatDto request) {
         String workerGroup = request == null ? null : request.workerGroup();
-        if (workerGroup == null || workerGroup.isBlank()) {
+        if (EmptyValues.isBlank(workerGroup)) {
             throw BizException.of(ResultCode.VALIDATION_ERROR, "error.worker.missing_worker_group");
         }
     }
@@ -191,7 +191,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
      */
     private void rejectUnsupportedProtocolVersion(WorkerHeartbeatDto request) {
         String protocolVersion = request.protocolVersion();
-        if (protocolVersion == null || protocolVersion.isBlank()) {
+        if (EmptyValues.isBlank(protocolVersion)) {
             return;
         }
         if (!SdkProtocolVersions.isSupportedMajor(protocolVersion)) {
@@ -220,12 +220,12 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
      */
     private void rejectOutdatedSdkVersion(WorkerHeartbeatDto request) {
         String reportedSdkVersion = request.sdkVersion();
-        if (reportedSdkVersion == null || reportedSdkVersion.isBlank()) {
+        if (EmptyValues.isBlank(reportedSdkVersion)) {
             return;
         }
         String requiredMinVersion =
                 systemParameterMapper.selectParamValue(request.tenantId(), MIN_SDK_VERSION_PARAM_KEY);
-        if (requiredMinVersion == null || requiredMinVersion.isBlank()) {
+        if (EmptyValues.isBlank(requiredMinVersion)) {
             return;
         }
         Integer requiredMajor = SdkVersions.parseMajor(requiredMinVersion);
@@ -263,15 +263,15 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
      */
     private void upsertDeclaredTaskTypes(WorkerHeartbeatDto request) {
         List<WorkerTaskTypeDescriptorDto> taskTypes = request.taskTypes();
-        if (taskTypes == null || taskTypes.isEmpty()) {
+        if (EmptyValues.isEmpty(taskTypes)) {
             return;
         }
         for (WorkerTaskTypeDescriptorDto descriptor : taskTypes) {
-            if (EmptyChecks.isNull(descriptor)) {
+            if (descriptor == null) {
                 continue;
             }
             String taskTypeCode = descriptor.code();
-            if (EmptyChecks.isBlank(taskTypeCode)) {
+            if (EmptyValues.isBlank(taskTypeCode)) {
                 continue;
             }
             // Lane C:在持久化前对 descriptor.defaults / inputSchema 做凭据静态拒入,
@@ -305,7 +305,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
         String newStatus = resolveHeartbeatStatus(request, registry.status());
         Integer newLoad = request.currentLoad() != null ? request.currentLoad() : registry.currentLoad();
         JsonbString newTags;
-        if (EmptyChecks.isNotNull(request.capabilityTags())) {
+        if (request.capabilityTags() != null) {
             String capabilityTagsJson = JsonUtils.toJson(request.capabilityTags());
             newTags = JsonbString.of(capabilityTagsJson);
         } else {
@@ -377,14 +377,14 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
      * 没有 drain 起始时间的 DRAINING / DECOMMISSIONED 只可能是上一代进程关机时自报的残留，按新注册复活为 ONLINE。
      */
     private String resolveRegisterStatus(WorkerHeartbeatDto request, WorkerRegistryEntity registry) {
-        if (EmptyChecks.isNotNull(registry)
-                && EmptyChecks.isNotNull(registry.drainStartedAt())
+        if (registry != null
+                && registry.drainStartedAt() != null
                 && (WorkerRegistryStatus.DRAINING.code().equals(registry.status())
                         || WorkerRegistryStatus.DECOMMISSIONED.code().equals(registry.status()))) {
             return registry.status();
         }
         return resolveIncomingStatus(
-                request, WorkerRegistryStatus.ONLINE.code(), EmptyChecks.isNull(registry) ? null : registry.status());
+                request, WorkerRegistryStatus.ONLINE.code(), registry == null ? null : registry.status());
     }
 
     private String resolveHeartbeatStatus(WorkerHeartbeatDto request, String currentStatus) {
@@ -404,7 +404,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
 
     private String resolveWorkerPoolCode(WorkerHeartbeatDto request) {
         String requestedWorkerPoolCode = request.workerPoolCode();
-        if (EmptyChecks.isBlank(requestedWorkerPoolCode)) {
+        if (EmptyValues.isBlank(requestedWorkerPoolCode)) {
             return request.workerCode();
         }
         return requestedWorkerPoolCode;
@@ -418,11 +418,11 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
         // 防非枚举值(如 "RUNNING")直写违反 ck_worker_registry_status CHECK → 500
         // (契约 fixtures 01/03-06:请求 status=RUNNING → 存储/响应 ONLINE)。
         boolean requestedRegistryStatusIsValid =
-                EmptyChecks.isNotBlank(requestedStatus) && isValidRegistryStatus(requestedStatus);
+                EmptyValues.isNotBlank(requestedStatus) && isValidRegistryStatus(requestedStatus);
         if (requestedRegistryStatusIsValid) {
             return requestedStatus;
         }
-        if (EmptyChecks.isBlank(defaultStatus)) {
+        if (EmptyValues.isBlank(defaultStatus)) {
             return currentStatus;
         }
         return defaultStatus;

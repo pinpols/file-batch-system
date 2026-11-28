@@ -24,7 +24,7 @@ public final class SensitiveEvidenceMasking {
 
     /** 拷贝 JSON 对象，递归脱敏敏感键、端点和已识别的凭据表达式。 */
     public static Map<String, Object> maskMetadata(Map<String, Object> metadata) {
-        if (EmptyChecks.isNull(metadata)) {
+        if (metadata == null) {
             return null;
         }
         Map<String, Object> masked = new LinkedHashMap<>();
@@ -35,7 +35,7 @@ public final class SensitiveEvidenceMasking {
 
     /** 对 JSON 文本做结构化脱敏；非 JSON 文本按自由文本处理。无效 JSON 不原样回显凭据语法。 */
     public static String maskJsonOrText(String value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String trimmed = value.stripLeading();

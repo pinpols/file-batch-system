@@ -3,10 +3,9 @@ package io.github.pinpols.batch.console.domain.job.infrastructure;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchDayCatchUpOperationMapper;
 import io.github.pinpols.batch.console.domain.job.param.BatchDayCatchUpOperationCreate;
 import io.github.pinpols.batch.console.domain.job.param.BatchDayCatchUpOperationTransition;
@@ -36,20 +35,20 @@ public class BatchDayCatchUpOperationStore {
     /** 同键同请求返回首次快照，同键不同请求拒绝；不会用重试时的新候选覆盖旧候选。 */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public BatchDayCatchUpOperation prepare(Prepare input) {
-        if (EmptyChecks.isNull(input)
-                || !Texts.hasText(input.tenantId())
-                || !Texts.hasText(input.requestKey())
-                || !Texts.hasText(input.requestJson())) {
+        if (input == null
+                || !EmptyValues.hasText(input.tenantId())
+                || !EmptyValues.hasText(input.requestKey())
+                || !EmptyValues.hasText(input.requestJson())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_MESSAGE);
         }
         mapper.setTenantContext(input.tenantId());
         String keyHash = Hashes.sha256Hex(KEY_NAMESPACE + input.requestKey());
         String requestHash = Hashes.sha256Hex(input.requestJson());
         BatchDayCatchUpOperation existing = mapper.select(input.tenantId(), keyHash);
-        if (EmptyChecks.isNotNull(existing)) {
+        if (existing != null) {
             return requireSameRequest(existing, requestHash);
         }
-        if (!Texts.hasText(input.snapshotJson()) || !Texts.hasText(input.itemsJson())) {
+        if (!EmptyValues.hasText(input.snapshotJson()) || !EmptyValues.hasText(input.itemsJson())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_MESSAGE);
         }
         BatchDayCatchUpOperationCreate operation = BatchDayCatchUpOperationCreate.builder()
@@ -62,7 +61,7 @@ public class BatchDayCatchUpOperationStore {
                 .build();
         mapper.insertIfAbsent(operation);
         BatchDayCatchUpOperation persisted = mapper.select(input.tenantId(), keyHash);
-        if (EmptyChecks.isNull(persisted)) {
+        if (persisted == null) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.common.system_error");
         }
         return requireSameRequest(persisted, requestHash);
@@ -71,18 +70,18 @@ public class BatchDayCatchUpOperationStore {
     /** 在计算当前候选前回查首次记录；未找到仅表示当前查询未看到记录。 */
     @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
     public BatchDayCatchUpOperation find(String tenantId, String requestKey, String requestJson) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(requestKey) || !Texts.hasText(requestJson)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(requestKey) || !EmptyValues.hasText(requestJson)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_MESSAGE);
         }
         mapper.setTenantContext(tenantId);
         BatchDayCatchUpOperation persisted = mapper.select(tenantId, Hashes.sha256Hex(KEY_NAMESPACE + requestKey));
-        return EmptyChecks.isNull(persisted) ? null : requireSameRequest(persisted, Hashes.sha256Hex(requestJson));
+        return persisted == null ? null : requireSameRequest(persisted, Hashes.sha256Hex(requestJson));
     }
 
     /** 只读查询原请求键；未找到不能推断远端未受理。 */
     @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
     public BatchDayCatchUpOperation findByRequestKey(String tenantId, String requestKey) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(requestKey)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(requestKey)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_MESSAGE);
         }
         mapper.setTenantContext(tenantId);
@@ -93,10 +92,10 @@ public class BatchDayCatchUpOperationStore {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public BatchDayCatchUpOperation abandonUnprepared(
             String tenantId, String requestKey, String bizDate, String calendarCode) {
-        if (!Texts.hasText(tenantId)
-                || !Texts.hasText(requestKey)
-                || !Texts.hasText(bizDate)
-                || !Texts.hasText(calendarCode)) {
+        if (!EmptyValues.hasText(tenantId)
+                || !EmptyValues.hasText(requestKey)
+                || !EmptyValues.hasText(bizDate)
+                || !EmptyValues.hasText(calendarCode)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_MESSAGE);
         }
         mapper.setTenantContext(tenantId);
@@ -114,7 +113,7 @@ public class BatchDayCatchUpOperationStore {
                 .build();
         mapper.insertAbandonedIfAbsent(operation);
         BatchDayCatchUpOperation persisted = mapper.select(tenantId, keyHash);
-        if (EmptyChecks.isNull(persisted)) {
+        if (persisted == null) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.common.system_error");
         }
         return persisted;
@@ -123,7 +122,7 @@ public class BatchDayCatchUpOperationStore {
     /** 对账内部读取冻结记录；调用方须先完成租户授权。 */
     @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
     BatchDayCatchUpOperation findByHash(String tenantId, String requestKeyHash) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(requestKeyHash)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(requestKeyHash)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_MESSAGE);
         }
         mapper.setTenantContext(tenantId);
@@ -134,18 +133,16 @@ public class BatchDayCatchUpOperationStore {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     BatchDayCatchUpOperation resolveUnknown(
             String tenantId, String requestKeyHash, long revision, String sourceKey, String referenceNo) {
-        if (!Texts.hasText(tenantId)
-                || !Texts.hasText(requestKeyHash)
-                || !Texts.hasText(sourceKey)
-                || !Texts.hasText(referenceNo)
+        if (!EmptyValues.hasText(tenantId)
+                || !EmptyValues.hasText(requestKeyHash)
+                || !EmptyValues.hasText(sourceKey)
+                || !EmptyValues.hasText(referenceNo)
                 || revision < 0) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_MESSAGE);
         }
         mapper.setTenantContext(tenantId);
         BatchDayCatchUpOperation persisted = mapper.select(tenantId, requestKeyHash);
-        if (EmptyChecks.isNull(persisted)
-                || persisted.revision() != revision
-                || !"UNKNOWN".equals(persisted.operationStatus())) {
+        if (persisted == null || persisted.revision() != revision || !"UNKNOWN".equals(persisted.operationStatus())) {
             throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
         }
         List<BatchDayCatchUpProgress.Item> items = matchingItems(persisted);
@@ -162,7 +159,7 @@ public class BatchDayCatchUpOperationStore {
             throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
         }
         BatchDayCatchUpOperation result = mapper.select(tenantId, requestKeyHash);
-        if (EmptyChecks.isNull(result)) {
+        if (result == null) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.common.system_error");
         }
         return result;
@@ -201,12 +198,15 @@ public class BatchDayCatchUpOperationStore {
             String sourceKey,
             ItemAction action,
             String referenceNo) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(requestKeyHash) || !Texts.hasText(sourceKey) || revision < 0) {
+        if (!EmptyValues.hasText(tenantId)
+                || !EmptyValues.hasText(requestKeyHash)
+                || !EmptyValues.hasText(sourceKey)
+                || revision < 0) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_MESSAGE);
         }
         mapper.setTenantContext(tenantId);
         BatchDayCatchUpOperation persisted = mapper.select(tenantId, requestKeyHash);
-        if (EmptyChecks.isNull(persisted) || persisted.revision() != revision) {
+        if (persisted == null || persisted.revision() != revision) {
             throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
         }
         String status = persisted.operationStatus();
@@ -242,7 +242,7 @@ public class BatchDayCatchUpOperationStore {
             throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
         }
         BatchDayCatchUpOperation result = mapper.select(tenantId, requestKeyHash);
-        if (EmptyChecks.isNull(result)) {
+        if (result == null) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.common.system_error");
         }
         return result;
@@ -251,12 +251,12 @@ public class BatchDayCatchUpOperationStore {
     /** 只根据数据库内的冻结身份和已确认结果完成批次；回执真实性须由调用方先核验。 */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public BatchDayCatchUpOperation complete(String tenantId, String requestKeyHash, long revision) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(requestKeyHash) || revision < 0) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(requestKeyHash) || revision < 0) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_MESSAGE);
         }
         mapper.setTenantContext(tenantId);
         BatchDayCatchUpOperation persisted = mapper.select(tenantId, requestKeyHash);
-        if (EmptyChecks.isNull(persisted) || persisted.revision() != revision || !hasConfirmedTargets(persisted)) {
+        if (persisted == null || persisted.revision() != revision || !hasConfirmedTargets(persisted)) {
             throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
         }
         if ("COMPLETE".equals(persisted.operationStatus())) {
@@ -268,7 +268,7 @@ public class BatchDayCatchUpOperationStore {
             throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
         }
         BatchDayCatchUpOperation completed = mapper.select(tenantId, requestKeyHash);
-        if (EmptyChecks.isNull(completed)) {
+        if (completed == null) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.common.system_error");
         }
         return completed;
@@ -282,14 +282,14 @@ public class BatchDayCatchUpOperationStore {
         try {
             BatchDayCatchUpProgress.Item[] parsed =
                     JsonUtils.fromJsonStrict(operation.itemsJson(), BatchDayCatchUpProgress.Item[].class);
-            if (EmptyChecks.isNull(parsed)) {
+            if (parsed == null) {
                 throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
             }
             List<BatchDayCatchUpProgress.Item> items = List.of(parsed);
             BatchDayCatchUpProgress.isComplete(items);
             JsonNode snapshot = JsonUtils.fromJsonStrict(operation.snapshotJson(), JsonNode.class);
-            JsonNode targets = EmptyChecks.isNull(snapshot) ? null : snapshot.get("targets");
-            if (EmptyChecks.isNull(targets) || !targets.isArray() || targets.size() != items.size()) {
+            JsonNode targets = snapshot == null ? null : snapshot.get("targets");
+            if (targets == null || !targets.isArray() || targets.size() != items.size()) {
                 throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
             }
             for (int index = 0; index < items.size(); index++) {

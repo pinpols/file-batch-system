@@ -6,9 +6,9 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleNotificationApplicationService;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.NotificationChannelUpdateRequest;
@@ -169,7 +169,8 @@ public class DefaultConsoleNotificationApplicationService implements ConsoleNoti
     public ConsoleNotificationChannelResponse getChannel(String tenantId, String channelCode) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         NotificationChannelRow channel = channelMapper.selectByCode(resolved, channelCode);
-        NotificationChannelRow existingChannel = Guard.requireFound(channel, ERR_CHANNEL_NOT_FOUND + channelCode);
+        NotificationChannelRow existingChannel =
+                Preconditions.requireFound(channel, ERR_CHANNEL_NOT_FOUND + channelCode);
         return ConsoleNotificationChannelResponse.from(existingChannel);
     }
 
@@ -178,8 +179,8 @@ public class DefaultConsoleNotificationApplicationService implements ConsoleNoti
     public void createChannel(String tenantId, NotificationChannelUpsertRequest request) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         String channelCode = ConsoleTextSanitizer.safeInput(request.getChannelCode(), CHANNEL_CODE_MAX_LENGTH);
-        Guard.requireText(channelCode, "channelCode is required");
-        Guard.requireText(request.getChannelName(), "channelName is required");
+        Preconditions.requireText(channelCode, "channelCode is required");
+        Preconditions.requireText(request.getChannelName(), "channelName is required");
         String channelType = request.getChannelType();
         requireKnownChannelType(channelType);
         validateWebhookChannelUrl(channelType, request.getConfigJson());
@@ -210,9 +211,10 @@ public class DefaultConsoleNotificationApplicationService implements ConsoleNoti
     public void updateChannel(String tenantId, String channelCode, NotificationChannelUpdateRequest request) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         NotificationChannelRow selectedChannel = channelMapper.selectByCode(resolved, channelCode);
-        NotificationChannelRow existing = Guard.requireFound(selectedChannel, ERR_CHANNEL_NOT_FOUND + channelCode);
+        NotificationChannelRow existing =
+                Preconditions.requireFound(selectedChannel, ERR_CHANNEL_NOT_FOUND + channelCode);
         requireKnownChannelType(request.getChannelType());
-        String configJson = EmptyChecks.isNotNull(request.getConfigJson())
+        String configJson = request.getConfigJson() != null
                 ? preserveMaskedChannelConfig(request.getConfigJson(), existing.configJson())
                 : null;
         validateWebhookChannelUrl(request.getChannelType(), configJson);
@@ -232,7 +234,7 @@ public class DefaultConsoleNotificationApplicationService implements ConsoleNoti
     }
 
     private static String preserveMaskedChannelConfig(String submittedJson, Object storedValue) {
-        boolean storedConfigIsMissing = EmptyChecks.isNull(storedValue);
+        boolean storedConfigIsMissing = storedValue == null;
         if (storedConfigIsMissing) {
             return submittedJson;
         }
@@ -255,7 +257,7 @@ public class DefaultConsoleNotificationApplicationService implements ConsoleNoti
         }
         String url = WebhookDeliverySupport.configText(
                 configJson, "url", DefaultConsoleNotificationApplicationService.class);
-        if (url != null && !url.isBlank()) {
+        if (EmptyValues.isNotBlank(url)) {
             callbackUrlValidator.validate(url);
         }
     }
@@ -291,7 +293,7 @@ public class DefaultConsoleNotificationApplicationService implements ConsoleNoti
     public ConsoleSubscriptionRuleResponse getRule(String tenantId, Long ruleId) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         SubscriptionRuleRow rule = ruleMapper.selectById(resolved, ruleId);
-        SubscriptionRuleRow existingRule = Guard.requireFound(rule, "subscription rule not found: " + ruleId);
+        SubscriptionRuleRow existingRule = Preconditions.requireFound(rule, "subscription rule not found: " + ruleId);
         return ConsoleSubscriptionRuleResponse.from(existingRule);
     }
 
@@ -300,14 +302,14 @@ public class DefaultConsoleNotificationApplicationService implements ConsoleNoti
     public void createRule(String tenantId, SubscriptionRuleUpsertRequest request) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         String eventTypes = ConsoleTextSanitizer.safeInput(request.getEventTypes(), EVENT_TYPES_MAX_LENGTH);
-        Guard.requireText(eventTypes, "eventTypes is required");
+        Preconditions.requireText(eventTypes, "eventTypes is required");
         NotificationEventTypePolicy.requireBusinessEventTypes(eventTypes);
         String channelCode = request.getChannelCode();
         NotificationChannelRow selectedChannel = channelMapper.selectByCode(resolved, channelCode);
-        Guard.requireFound(selectedChannel, ERR_CHANNEL_NOT_FOUND + channelCode);
+        Preconditions.requireFound(selectedChannel, ERR_CHANNEL_NOT_FOUND + channelCode);
         String operator = metadataResolver.current().operatorId();
         String ruleName = ConsoleTextSanitizer.safeInput(request.getRuleName(), RULE_NAME_MAX_LENGTH);
-        Guard.requireText(ruleName, "ruleName is required");
+        Preconditions.requireText(ruleName, "ruleName is required");
         String severityFilter = ConsoleTextSanitizer.safeInput(request.getSeverityFilter(), SEVERITY_FILTER_MAX_LENGTH);
         String jobCodeFilter = ConsoleTextSanitizer.safeInput(request.getJobCodeFilter(), JOB_CODE_FILTER_MAX_LENGTH);
         Boolean enabled = enabledOrDefault(request.getEnabled());
@@ -330,19 +332,19 @@ public class DefaultConsoleNotificationApplicationService implements ConsoleNoti
     public void updateRule(String tenantId, Long ruleId, SubscriptionRuleUpsertRequest request) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         String eventTypes = ConsoleTextSanitizer.safeInput(request.getEventTypes(), EVENT_TYPES_MAX_LENGTH);
-        Guard.requireText(eventTypes, "eventTypes is required");
+        Preconditions.requireText(eventTypes, "eventTypes is required");
         NotificationEventTypePolicy.requireBusinessEventTypes(eventTypes);
         SubscriptionRuleRow selectedRule = ruleMapper.selectById(resolved, ruleId);
-        Guard.requireFound(selectedRule, "subscription rule not found: " + ruleId);
+        Preconditions.requireFound(selectedRule, "subscription rule not found: " + ruleId);
         // P1-4: update 也必须校验 channel 存在(与 createRule 一致)。否则可写入失效 channelCode,
         // 而 SubscriptionRuleMapper.selectEnabledByEventType 要 join notification_channel,
         // 失效 channel 会让规则永不命中(保存成功但永远不生效的无效规则)。
         String channelCode = request.getChannelCode();
         NotificationChannelRow selectedChannel = channelMapper.selectByCode(resolved, channelCode);
-        Guard.requireFound(selectedChannel, ERR_CHANNEL_NOT_FOUND + channelCode);
+        Preconditions.requireFound(selectedChannel, ERR_CHANNEL_NOT_FOUND + channelCode);
         String operator = metadataResolver.current().operatorId();
         String ruleName = ConsoleTextSanitizer.safeInput(request.getRuleName(), RULE_NAME_MAX_LENGTH);
-        Guard.requireText(ruleName, "ruleName is required");
+        Preconditions.requireText(ruleName, "ruleName is required");
         String severityFilter = ConsoleTextSanitizer.safeInput(request.getSeverityFilter(), SEVERITY_FILTER_MAX_LENGTH);
         String jobCodeFilter = ConsoleTextSanitizer.safeInput(request.getJobCodeFilter(), JOB_CODE_FILTER_MAX_LENGTH);
         Boolean enabled = enabledOrDefault(request.getEnabled());
@@ -397,7 +399,8 @@ public class DefaultConsoleNotificationApplicationService implements ConsoleNoti
             throw BizException.of(ResultCode.RATE_LIMITED, "error.common.rate_limited");
         }
         NotificationChannelRow selectedChannel = channelMapper.selectByCode(resolved, channelCode);
-        NotificationChannelRow channel = Guard.requireFound(selectedChannel, ERR_CHANNEL_NOT_FOUND + channelCode);
+        NotificationChannelRow channel =
+                Preconditions.requireFound(selectedChannel, ERR_CHANNEL_NOT_FOUND + channelCode);
         String channelType = channel.channelType();
         String configJson = channel.configJson();
 
@@ -442,7 +445,7 @@ public class DefaultConsoleNotificationApplicationService implements ConsoleNoti
     }
 
     private static String safeTestError(String errorSummary) {
-        if (EmptyChecks.isNull(errorSummary)) {
+        if (errorSummary == null) {
             return null;
         }
         String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(errorSummary));

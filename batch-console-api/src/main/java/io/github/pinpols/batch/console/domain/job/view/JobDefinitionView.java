@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.job.view;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import java.time.LocalTime;
@@ -31,18 +31,18 @@ public class JobDefinitionView extends JobDefinitionEntity {
     private Integer dependencyCompletionWindowSeconds;
 
     public void setDependencyRulesJson(String value) {
-        jobDependencyRules = EmptyChecks.isBlank(value)
+        jobDependencyRules = EmptyValues.isBlank(value)
                 ? List.of()
                 : JsonUtils.fromJson(value, new TypeReference<List<JobDependencyRuleView>>() {});
     }
 
     public void setDependsOnJobCodesCsv(String value) {
         dependsOnJobCodesCsv = value;
-        dependsOnJobCodes = EmptyChecks.isBlank(value)
+        dependsOnJobCodes = EmptyValues.isBlank(value)
                 ? List.of()
                 : Arrays.stream(value.split(DEPENDENCY_CODE_DELIMITER))
                         .map(String::trim)
-                        .filter(code -> EmptyChecks.isNotEmpty(code))
+                        .filter(code -> EmptyValues.isNotEmpty(code))
                         .toList();
     }
 }

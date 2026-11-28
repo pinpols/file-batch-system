@@ -5,9 +5,8 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Nullables;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.application.config.ConsoleResourceQueueApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueCreateRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueListRequest;
@@ -61,18 +60,14 @@ public class DefaultConsoleResourceQueueApplicationService implements ConsoleRes
                 .queueCode(queueCode)
                 .queueName(request.getQueueName())
                 .queueType(request.getQueueType())
-                .maxRunningJobs(EmptyChecks.isNotNull(request.getMaxRunningJobs()) ? request.getMaxRunningJobs() : 0)
-                .maxRunningPartitions(
-                        EmptyChecks.isNotNull(request.getMaxRunningPartitions())
-                                ? request.getMaxRunningPartitions()
-                                : 0)
-                .maxQps(EmptyChecks.isNotNull(request.getMaxQps()) ? request.getMaxQps() : 0)
+                .maxRunningJobs(request.getMaxRunningJobs() != null ? request.getMaxRunningJobs() : 0)
+                .maxRunningPartitions(request.getMaxRunningPartitions() != null ? request.getMaxRunningPartitions() : 0)
+                .maxQps(request.getMaxQps() != null ? request.getMaxQps() : 0)
                 .workerGroup(request.getWorkerGroup())
                 .resourceTag(request.getResourceTag())
-                .priorityPolicy(
-                        EmptyChecks.isNotNull(request.getPriorityPolicy()) ? request.getPriorityPolicy() : "FIFO")
-                .fairShareWeight(EmptyChecks.isNotNull(request.getFairShareWeight()) ? request.getFairShareWeight() : 1)
-                .enabled(EmptyChecks.isNull(request.getEnabled()) || request.getEnabled())
+                .priorityPolicy(request.getPriorityPolicy() != null ? request.getPriorityPolicy() : "FIFO")
+                .fairShareWeight(request.getFairShareWeight() != null ? request.getFairShareWeight() : 1)
+                .enabled(request.getEnabled() == null || request.getEnabled())
                 .description(request.getDescription())
                 .build();
         resourceQueueMapper.insert(params);
@@ -85,7 +80,7 @@ public class DefaultConsoleResourceQueueApplicationService implements ConsoleRes
     public ResourceQueueResponse update(Long id, ResourceQueueUpdateRequest request) {
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
         ResourceQueueRow selectedQueue = resourceQueueMapper.selectById(tenantId, id);
-        ResourceQueueRow existing = Guard.requireFound(selectedQueue, "resource queue not found");
+        ResourceQueueRow existing = Preconditions.requireFound(selectedQueue, "resource queue not found");
         ResourceQueueUpdateParam params = ResourceQueueUpdateParam.builder()
                 .tenantId(tenantId)
                 .id(id)

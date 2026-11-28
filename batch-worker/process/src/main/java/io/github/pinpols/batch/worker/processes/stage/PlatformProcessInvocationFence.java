@@ -2,8 +2,7 @@ package io.github.pinpols.batch.worker.processes.stage;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.processes.domain.ProcessInvocationIdentity;
@@ -36,7 +35,7 @@ public class PlatformProcessInvocationFence implements ProcessInvocationFence {
         Map<String, Object> attributes = context.getAttributes();
         Object taskValue = attributes.get(PipelineRuntimeKeys.TASK_ID);
         // 未持久化任务的本地直接执行没有可供校验的 Orchestrator 租约。
-        if (EmptyChecks.isNull(taskValue)) {
+        if (taskValue == null) {
             return stageExecution.get();
         }
 
@@ -45,10 +44,10 @@ public class PlatformProcessInvocationFence implements ProcessInvocationFence {
         Long jobInstanceId = requiredId(attributes.get(PipelineRuntimeKeys.JOB_INSTANCE_ID));
         Long jobPartitionId = requiredId(attributes.get(PipelineRuntimeKeys.JOB_PARTITION_ID));
         Object invocationValue = attributes.get(PipelineRuntimeKeys.PARTITION_INVOCATION_ID);
-        String invocationId = EmptyChecks.isNull(invocationValue) ? null : String.valueOf(invocationValue);
+        String invocationId = invocationValue == null ? null : String.valueOf(invocationValue);
         String workerId = context.getWorkerId();
         boolean hasRequiredInvocationFenceIdentity =
-                Texts.hasText(tenantId) && Texts.hasText(workerId) && Texts.hasText(invocationId);
+                EmptyValues.hasText(tenantId) && EmptyValues.hasText(workerId) && EmptyValues.hasText(invocationId);
         if (!hasRequiredInvocationFenceIdentity) {
             throw staleInvocation();
         }
@@ -86,12 +85,12 @@ public class PlatformProcessInvocationFence implements ProcessInvocationFence {
     }
 
     private static Long requiredId(Object value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             throw staleInvocation();
         }
         try {
             Long id = PlatformRuntimeValues.toLong(value);
-            if (EmptyChecks.isNull(id)) {
+            if (id == null) {
                 throw staleInvocation();
             }
             return id;

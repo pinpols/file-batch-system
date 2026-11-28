@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.support.excel;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Locale;
 
 /** Excel 校验规则共用的标量转换辅助方法。 */
@@ -13,7 +12,7 @@ public final class ConsoleExcelValueSupport {
     }
 
     public static String upper(String value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String trimmedValue = value.trim();

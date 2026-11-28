@@ -8,10 +8,9 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowMonitoringPolicyEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.TenantConfigPackageExcelService;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigPackageExcelApplyRequest;
 import io.github.pinpols.batch.console.application.contract.response.ExcelDownload;
@@ -244,23 +243,19 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
                     }
                     row.put(COL_WORKFLOW_CODE, definition.getWorkflowCode());
                     row.put(COL_WORKFLOW_VERSION, definition.getVersion());
-                    row.put(COL_SOFT_RUNTIME_SECONDS, EmptyChecks.isNull(policy) ? 0 : policy.getSoftRuntimeSeconds());
-                    row.put(
-                            COL_SOFT_RUNTIME_SEVERITY,
-                            EmptyChecks.isNull(policy) ? "WARN" : policy.getSoftRuntimeSeverity());
-                    row.put(COL_START_GRACE_SECONDS, EmptyChecks.isNull(policy) ? 0 : policy.getStartGraceSeconds());
-                    row.put(
-                            COL_START_GRACE_SEVERITY,
-                            EmptyChecks.isNull(policy) ? "WARN" : policy.getStartGraceSeverity());
+                    row.put(COL_SOFT_RUNTIME_SECONDS, policy == null ? 0 : policy.getSoftRuntimeSeconds());
+                    row.put(COL_SOFT_RUNTIME_SEVERITY, policy == null ? "WARN" : policy.getSoftRuntimeSeverity());
+                    row.put(COL_START_GRACE_SECONDS, policy == null ? 0 : policy.getStartGraceSeconds());
+                    row.put(COL_START_GRACE_SEVERITY, policy == null ? "WARN" : policy.getStartGraceSeverity());
                     row.put(
                             COL_COMPLETION_DEADLINE_LOCAL_TIME,
-                            EmptyChecks.isNull(policy) ? null : policy.getCompletionDeadlineLocalTime());
+                            policy == null ? null : policy.getCompletionDeadlineLocalTime());
                     row.put(
                             COL_COMPLETION_DEADLINE_DAY_OFFSET,
-                            EmptyChecks.isNull(policy) ? 0 : policy.getCompletionDeadlineDayOffset());
+                            policy == null ? 0 : policy.getCompletionDeadlineDayOffset());
                     row.put(
                             COL_COMPLETION_DEADLINE_SEVERITY,
-                            EmptyChecks.isNull(policy) ? "WARN" : policy.getCompletionDeadlineSeverity());
+                            policy == null ? "WARN" : policy.getCompletionDeadlineSeverity());
                     return row;
                 })
                 .toList();
@@ -285,9 +280,9 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
 
     @Override
     public ExcelDownload downloadSampleTemplate(String scenario, List<String> scenarios) {
-        List<String> rawScenarios = EmptyChecks.isNotEmpty(scenarios)
+        List<String> rawScenarios = EmptyValues.isNotEmpty(scenarios)
                 ? scenarios
-                : EmptyChecks.isNotBlank(scenario) ? List.of(scenario) : List.of();
+                : EmptyValues.isNotBlank(scenario) ? List.of(scenario) : List.of();
         List<String> normalizedScenarios = ConfigPackageSampleDataFactory.normalizeScenarios(rawScenarios).stream()
                 .toList();
         ConfigPackageExcelWorkbookWriter writer = workbookWriter(normalizedScenarios);
@@ -308,17 +303,17 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
             String sheetAppliesTo = appliesToFor(sheet.name(), "");
             for (String column : sheet.columns()) {
                 ConsoleExcelStyles.ColumnGuide guide = sheet.guides().get(column);
-                boolean required = EmptyChecks.isNotNull(guide) && guide.required();
+                boolean required = guide != null && guide.required();
                 TenantConfigPackageExcelGuideResponse.ColumnGuide columnGuide =
                         TenantConfigPackageExcelGuideResponse.ColumnGuide.builder()
                                 .columnName(column)
                                 .required(required)
-                                .readOnly(EmptyChecks.isNotNull(guide) && guide.readOnly())
+                                .readOnly(guide != null && guide.readOnly())
                                 .guideLevel(guideLevelFor(sheet.name(), column, required))
-                                .format(EmptyChecks.isNull(guide) ? "" : guide.formatHint())
-                                .allowedValues(EmptyChecks.isNull(guide) ? List.of() : guide.allowedValues())
-                                .description(EmptyChecks.isNull(guide) ? "" : guide.description())
-                                .example(EmptyChecks.isNull(guide) ? "" : guide.example())
+                                .format(guide == null ? "" : guide.formatHint())
+                                .allowedValues(guide == null ? List.of() : guide.allowedValues())
+                                .description(guide == null ? "" : guide.description())
+                                .example(guide == null ? "" : guide.example())
                                 .fillExample(fillExampleFor(sheet.name(), column, guide))
                                 .defaultBehavior(defaultBehaviorFor(column, guide))
                                 .appliesTo(appliesToFor(sheet.name(), column))
@@ -343,7 +338,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     }
 
     private String calendarHolidaysText(Long calendarId) {
-        if (EmptyChecks.isNull(calendarId)) {
+        if (calendarId == null) {
             return null;
         }
         List<CalendarHolidayRow> holidayRows = calendarHolidayMapper.selectByCalendarId(calendarId);
@@ -355,12 +350,12 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     @Override
     public TenantConfigPackageExcelUploadResponse upload(MultipartFile file, String requestTenantId)
             throws IOException {
-        Guard.require(file != null && !file.isEmpty(), "file is required");
+        Preconditions.require(file != null && !file.isEmpty(), "file is required");
         UploadFileGuard.requireExcel(file);
         String tenantId = tenantGuard.resolveTenant(requestTenantId);
         String fileName = fileNameOrDefault(file.getOriginalFilename());
         String uploadedBy = requestMetadataResolver.current().operatorId();
-        if (!Texts.hasText(uploadedBy)) {
+        if (!EmptyValues.hasText(uploadedBy)) {
             throw BizException.of(ResultCode.FORBIDDEN, "error.config_package.session_actor_required");
         }
         PackageExcelSession session;
@@ -399,7 +394,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         PackageExcelSession currentSession = loadSession(uploadToken);
         long configurationRevision = currentConfigurationRevision(currentSession.tenantId());
         PreviewSnapshot snapshot = importStore.issuePreviewSnapshot(uploadToken, configurationRevision);
-        if (EmptyChecks.isNull(snapshot)) {
+        if (snapshot == null) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_package.apply_in_progress");
         }
         PackageExcelSession session = snapshot.session();
@@ -423,10 +418,10 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         requireNotApplying(uploadToken);
         PackageExcelSession patched = copySession(session);
         List<Map<String, String>> rows = sheetRowsByName(patched).get(sheetName);
-        Guard.require(rows != null, "unknown sheet: " + sheetName);
-        Guard.require(rowNo >= 2, "row out of range: " + rowNo);
+        Preconditions.require(rows != null, "unknown sheet: " + sheetName);
+        Preconditions.require(rowNo >= 2, "row out of range: " + rowNo);
         int idx = rowNo - 2;
-        Guard.require(idx >= 0 && idx < rows.size(), "row out of range: " + rowNo);
+        Preconditions.require(idx >= 0 && idx < rows.size(), "row out of range: " + rowNo);
         Map<String, String> target = rows.get(idx);
         if (values != null) {
             values.forEach((k, v) -> {
@@ -508,10 +503,10 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
             String uploadToken, TenantConfigPackageExcelApplyRequest request) {
         PackageExcelSession session = loadSession(uploadToken);
         String previewToken = request.getPreviewToken();
-        if (EmptyChecks.isNull(previewToken)) {
+        if (previewToken == null) {
             PreviewSnapshot currentPreview =
                     importStore.issuePreviewSnapshot(uploadToken, currentConfigurationRevision(session.tenantId()));
-            if (EmptyChecks.isNull(currentPreview)) {
+            if (currentPreview == null) {
                 throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_package.preview_stale");
             }
             previewToken = currentPreview.previewToken();
@@ -527,7 +522,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
             long expectedRevision = importStore.configurationRevisionForApply(uploadToken, applyOwnerToken);
             // 租户自有 Pipeline 配置。
             // 读取依赖图前，使用与 Job 服务及 V301 触发器相同的租户图锁。
-            if (EmptyChecks.isNotEmpty(session.jobRows())) {
+            if (EmptyValues.isNotEmpty(session.jobRows())) {
                 jobDefinitionMapper.lockDependencyGraph(session.tenantId());
             }
             long actualRevision = lockConfigurationRevision(session.tenantId());
@@ -576,7 +571,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
 
     private long currentConfigurationRevision(String tenantId) {
         Long revision = tenantConfigRevisionMapper.currentConfigurationRevision(tenantId);
-        if (EmptyChecks.isNull(revision)) {
+        if (revision == null) {
             throw new IllegalStateException("tenant configuration revision is missing");
         }
         return revision;
@@ -584,7 +579,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
 
     private long lockConfigurationRevision(String tenantId) {
         Long revision = tenantConfigRevisionMapper.lockConfigurationRevision(tenantId);
-        if (EmptyChecks.isNull(revision)) {
+        if (revision == null) {
             throw new IllegalStateException("tenant configuration revision is missing");
         }
         return revision;
@@ -633,7 +628,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
             List<Map<String, String>> channelRows = parseOptionalSheet(wb, CHANNEL_SHEET, CHANNEL_COLUMNS, tenantId);
             List<Map<String, String>> fileTemplateRows =
                     parseOptionalSheet(wb, FILE_TEMPLATE_SHEET, FILE_TEMPLATE_COLUMNS, tenantId);
-            if (EmptyChecks.isNotNull(wb.getSheet(PIPELINE_SHEET)) || EmptyChecks.isNotNull(wb.getSheet(STEP_SHEET))) {
+            if (wb.getSheet(PIPELINE_SHEET) != null || wb.getSheet(STEP_SHEET) != null) {
                 throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.config.package.retired_sheet");
             }
             List<Map<String, String>> pipelineRows = List.of();
@@ -735,16 +730,16 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
                 ConsoleExcelStyles.SHEET_NAME_DICT);
         for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
             String name = workbook.getSheetName(i);
-            Guard.require(accepted.contains(name), "unsupported excel sheet: " + name);
+            Preconditions.require(accepted.contains(name), "unsupported excel sheet: " + name);
         }
     }
 
     private List<Map<String, String>> parseSheet(Workbook wb, String sheetName, List<String> columns, String tenantId) {
         Sheet sheet = wb.getSheet(sheetName);
-        Guard.require(sheet != null, "excel sheet missing: " + sheetName);
+        Preconditions.require(sheet != null, "excel sheet missing: " + sheetName);
         DataFormatter fmt = new DataFormatter();
         Row headerRow = sheet.getRow(sheet.getFirstRowNum());
-        Guard.require(headerRow != null, "header row missing in sheet: " + sheetName);
+        Preconditions.require(headerRow != null, "header row missing in sheet: " + sheetName);
         Map<String, Integer> headerIndex = buildHeaderIndex(sheetName, headerRow, fmt);
         Set<String> requiredHeaders = ConfigPackageSheetSpecs.requiredImportHeaders(sheetName, columns);
         validateSheetHeaders(sheetName, headerIndex, requiredHeaders, Set.copyOf(columns));
@@ -764,7 +759,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
                 String normalizedCellText = TenantConfigPackageExcelValueSupport.normalize(rawCellText);
                 values.put(col, normalizedCellText);
             }
-            if (tenantId != null && !Texts.hasText(values.get(COL_TENANT_ID))) {
+            if (tenantId != null && !EmptyValues.hasText(values.get(COL_TENANT_ID))) {
                 values.put(COL_TENANT_ID, tenantId);
             }
             rows.add(values);
@@ -863,14 +858,14 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
 
     private PackageExcelSession loadSession(String uploadToken) {
         PackageExcelSession session =
-                Guard.requireFound(importStore.get(uploadToken), "excel upload session not found");
+                Preconditions.requireFound(importStore.get(uploadToken), "excel upload session not found");
         tenantGuard.assertTenantAllowed(session.tenantId());
         assertSessionOwner(session);
         return session;
     }
 
     private void assertSessionOwner(PackageExcelSession session) {
-        if (EmptyChecks.isNull(session.uploadedBy())) {
+        if (session.uploadedBy() == null) {
             return;
         }
         ConsoleRequestMetadata metadata = requestMetadataResolver.current();
@@ -882,7 +877,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
 
     private static Set<String> currentPermissionScope() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (EmptyChecks.isNull(authentication) || !authentication.isAuthenticated()) {
+        if (authentication == null || !authentication.isAuthenticated()) {
             return Set.of();
         }
         return authentication.getAuthorities().stream()
@@ -894,8 +889,8 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         Map<String, Integer> index = new LinkedHashMap<>();
         for (int c = headerRow.getFirstCellNum(); c < headerRow.getLastCellNum(); c++) {
             String header = TenantConfigPackageExcelValueSupport.normalize(fmt.formatCellValue(headerRow.getCell(c)));
-            if (Texts.hasText(header)) {
-                if (EmptyChecks.isNotNull(index.putIfAbsent(header, c))) {
+            if (EmptyValues.hasText(header)) {
+                if (index.putIfAbsent(header, c) != null) {
                     throw BizException.of(
                             ResultCode.INVALID_ARGUMENT,
                             ResultCode.INVALID_ARGUMENT.detailKey(),
@@ -919,7 +914,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         List<String> unknown = headerIndex.keySet().stream()
                 .filter(header -> !supported.contains(header))
                 .toList();
-        if (EmptyChecks.isNotEmpty(unknown)) {
+        if (EmptyValues.isNotEmpty(unknown)) {
             throw BizException.of(
                     ResultCode.INVALID_ARGUMENT,
                     ResultCode.INVALID_ARGUMENT.detailKey(),
@@ -929,7 +924,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
 
     private static boolean isRowBlank(Row row, DataFormatter fmt) {
         for (int c = row.getFirstCellNum(); c < row.getLastCellNum(); c++) {
-            if (Texts.hasText(fmt.formatCellValue(row.getCell(c)))) {
+            if (EmptyValues.hasText(fmt.formatCellValue(row.getCell(c)))) {
                 return false;
             }
         }
@@ -945,6 +940,6 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     }
 
     private static String fileNameOrDefault(String originalFileName) {
-        return Texts.hasText(originalFileName) ? originalFileName : "tenant-config-package.xlsx";
+        return EmptyValues.hasText(originalFileName) ? originalFileName : "tenant-config-package.xlsx";
     }
 }

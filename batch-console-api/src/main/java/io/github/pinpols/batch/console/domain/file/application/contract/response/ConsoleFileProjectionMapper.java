@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.file.application.contract.response;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
@@ -11,7 +10,7 @@ public final class ConsoleFileProjectionMapper {
     private ConsoleFileProjectionMapper() {}
 
     public static ConsoleFileChannelResponse channelView(FileChannelConfigQueryView row) {
-        if (EmptyChecks.isNull(row)) {
+        if (row == null) {
             return null;
         }
         String configJson = safeMaskedConfigJson(row.configJson());
@@ -34,7 +33,7 @@ public final class ConsoleFileProjectionMapper {
 
     private static String safeMaskedConfigJson(Object value) {
         try {
-            String configJson = EmptyChecks.isNull(value) ? null : value.toString();
+            String configJson = value == null ? null : value.toString();
             return SecretMasking.maskSensitiveJson(configJson);
         } catch (IllegalArgumentException ignored) {
             return null;
@@ -42,7 +41,7 @@ public final class ConsoleFileProjectionMapper {
     }
 
     public static ConsoleFileTemplateResponse templateView(FileTemplateConfigQueryView row) {
-        if (EmptyChecks.isNull(row)) {
+        if (row == null) {
             return null;
         }
         return ConsoleFileTemplateResponse.builder()

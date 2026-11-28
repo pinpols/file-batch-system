@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.config.SlaGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
@@ -29,9 +29,9 @@ public class JobMonitoringAlertEmissionService {
         Long jobInstanceId = scanned.jobInstanceId();
         Long triggerRequestId = scanned.triggerRequestId();
         jobMonitoringMapper.setTenantContext(tenantId);
-        boolean lockAcquired = EmptyChecks.isNotNull(jobInstanceId)
+        boolean lockAcquired = jobInstanceId != null
                 ? jobMonitoringMapper.tryAcquireInstanceAdvisoryLock(tenantId, jobInstanceId)
-                : EmptyChecks.isNotNull(triggerRequestId)
+                : triggerRequestId != null
                         && jobMonitoringMapper.tryAcquireRequestAdvisoryLock(tenantId, triggerRequestId);
         if (!lockAcquired) {
             return false;
@@ -40,10 +40,10 @@ public class JobMonitoringAlertEmissionService {
         JobMonitoringRecheckQuery query = new JobMonitoringRecheckQuery(
                 tenantId, jobInstanceId, triggerRequestId, violation.name(), lookbackSeconds);
         JobMonitoringAlertCandidate candidate = jobMonitoringMapper.selectCandidateForRecheck(query);
-        if (EmptyChecks.isNull(candidate)) {
+        if (candidate == null) {
             return false;
         }
-        if (EmptyChecks.isNotNull(candidate.jobInstanceId())) {
+        if (candidate.jobInstanceId() != null) {
             int claimed =
                     jobMonitoringMapper.claimAlert(candidate.tenantId(), candidate.jobInstanceId(), violation.name());
             if (claimed == 0) {
@@ -54,21 +54,19 @@ public class JobMonitoringAlertEmissionService {
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put(
                 "jobInstanceId",
-                EmptyChecks.isNull(candidate.jobInstanceId())
+                candidate.jobInstanceId() == null
                         ? null
                         : candidate.jobInstanceId().toString());
         detail.put(
                 "bizDate",
-                EmptyChecks.isNull(candidate.bizDate())
-                        ? null
-                        : candidate.bizDate().toString());
-        if (EmptyChecks.isNotNull(candidate.workflowRunId())) {
+                candidate.bizDate() == null ? null : candidate.bizDate().toString());
+        if (candidate.workflowRunId() != null) {
             detail.put("workflowRunId", candidate.workflowRunId().toString());
         }
-        if (EmptyChecks.isNotNull(candidate.triggerRequestId())) {
+        if (candidate.triggerRequestId() != null) {
             detail.put("triggerRequestId", candidate.triggerRequestId().toString());
         }
-        if (!EmptyChecks.isBlank(candidate.nodeCode())) {
+        if (!EmptyValues.isBlank(candidate.nodeCode())) {
             detail.put("nodeCode", candidate.nodeCode());
         }
         detail.put("jobCode", candidate.jobCode());
@@ -82,16 +80,15 @@ public class JobMonitoringAlertEmissionService {
         detail.put("executionStartedAt", candidate.executionStartedAt());
         detail.put(
                 "executionTimingSource",
-                EmptyChecks.isNull(candidate.executionStartedAt()) ? "UNOBSERVED" : "WORKER_ENTRY_CONFIRMATION");
+                candidate.executionStartedAt() == null ? "UNOBSERVED" : "WORKER_ENTRY_CONFIRMATION");
         detail.put("finishedAt", candidate.finishedAt());
         if (violation == Violation.FAILED_PARTITION) {
             detail.put("failedPartitionCount", candidate.failedPartitionCount());
         }
-        boolean isWorkflowChildJob =
-                EmptyChecks.isNotNull(candidate.workflowRunId()) && EmptyChecks.isNotNull(candidate.triggerRequestId());
+        boolean isWorkflowChildJob = candidate.workflowRunId() != null && candidate.triggerRequestId() != null;
         String monitoringResourceKey =
                 isWorkflowChildJob ? "workflow_job_request:" + candidate.triggerRequestId() : null;
-        if (EmptyChecks.isNotNull(monitoringResourceKey)) {
+        if (monitoringResourceKey != null) {
             detail.put("monitoringResourceKey", monitoringResourceKey);
         }
 
@@ -100,11 +97,11 @@ public class JobMonitoringAlertEmissionService {
                 .tenantId(candidate.tenantId())
                 .serviceName("batch-orchestrator")
                 .alertType(violation.alertType())
-                .severity(EmptyChecks.isBlank(candidate.severity()) ? "WARN" : candidate.severity())
+                .severity(EmptyValues.isBlank(candidate.severity()) ? "WARN" : candidate.severity())
                 .title(violation.title(candidate.jobCode()))
                 .detailJson(detailJson)
                 .resourceKey(
-                        EmptyChecks.isNull(monitoringResourceKey)
+                        monitoringResourceKey == null
                                 ? String.valueOf(candidate.jobInstanceId())
                                 : monitoringResourceKey)
                 .traceId(candidate.traceId())

@@ -14,11 +14,10 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.IdGenerator;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.application.audit.ConsoleAiTools;
 import io.github.pinpols.batch.console.application.contract.request.auth.AiChatRequest;
 import io.github.pinpols.batch.console.application.observability.ConsoleQueryApplicationService;
@@ -182,8 +181,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         authorizationService.assertAllowed();
         ConsoleRequestMetadata metadata = requestMetadataResolver.current();
         requireRequestIdentity(metadata);
-        String requestId =
-                EmptyChecks.isNull(metadata.requestId()) ? IdGenerator.newBusinessNo("ai") : metadata.requestId();
+        String requestId = metadata.requestId() == null ? IdGenerator.newBusinessNo("ai") : metadata.requestId();
         ConsoleRequestMetadata captured = new ConsoleRequestMetadata(
                 requestId,
                 metadata.traceId(),
@@ -205,9 +203,9 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     }
 
     private ConsoleRequestMetadata requireRequestIdentity(ConsoleRequestMetadata metadata) {
-        if (EmptyChecks.isNull(metadata)
-                || !Texts.hasText(metadata.tenantId())
-                || !Texts.hasText(metadata.operatorId())) {
+        if (metadata == null
+                || !EmptyValues.hasText(metadata.tenantId())
+                || !EmptyValues.hasText(metadata.operatorId())) {
             throw BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey());
         }
         return metadata;
@@ -280,10 +278,10 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
                 .contextJson(contextJson)
                 .category(gateResult.category())
                 .contextVersion(request.getContextVersion())
-                .history(EmptyChecks.isNull(persistedTurn) ? List.of() : persistedTurn.history())
+                .history(persistedTurn == null ? List.of() : persistedTurn.history())
                 .build();
         String promptPayload = buildPrompt(promptAssemblyContext);
-        boolean toolsEnabled = EmptyChecks.isNotNull(tools);
+        boolean toolsEnabled = tools != null;
         String systemPrompt = buildSystemPrompt(snippets, toolsEnabled);
         List<ConsoleAiAttachmentUseCase.ImageContent> images;
         ConsoleAiCostService.Reservation reservation;
@@ -307,7 +305,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         ModelCallResult modelCall;
         try {
             modelCall = callModel(chatClients, snippets, promptPayload, images, tools, observer);
-            if (EmptyChecks.isNotNull(observer) && observer.isCancelled()) {
+            if (observer != null && observer.isCancelled()) {
                 throw new CancellationException("AI stream cancelled");
             }
             chatResponse = modelCall.response();
@@ -325,7 +323,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
                     .operatorId(requestMetadata.operatorId())
                     .build();
             AiChatResponse degraded = degradeAndAudit(auditRequest, prompt, gateResult, exception, failedCost);
-            if (EmptyChecks.isNotNull(persistedTurn)) {
+            if (persistedTurn != null) {
                 ConsoleAiConversationService.TurnCompletion failedTurnCompletion =
                         ConsoleAiConversationService.TurnCompletion.builder()
                                 .tenantId(tenantId)
@@ -361,20 +359,20 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     /** 在任何持久化和费用预留前确认提供商与图片能力，保留准入失败的原错误优先级。 */
     private PreparedChatClients prepareChatClients(AiChatRequest request) {
         ConsoleAiClients chatClients = chatClientsProvider.getIfAvailable();
-        if (EmptyChecks.isNull(chatClients) || EmptyChecks.isNull(chatClients.primary())) {
+        if (chatClients == null || chatClients.primary() == null) {
             throw BizException.of(ResultCode.FORBIDDEN, "error.ai.assistant_not_configured");
         }
-        boolean hasImages = EmptyChecks.isNotEmpty(request.getAttachmentIds());
+        boolean hasImages = EmptyValues.isNotEmpty(request.getAttachmentIds());
         boolean imageInputIsUnavailable = hasImages
                 && (!aiProperties.getPersistence().isEnabled()
                         || !chatClients.primary().imageInput());
         if (imageInputIsUnavailable) {
             throw BizException.of(ResultCode.FORBIDDEN, "error.ai.assistant_not_configured");
         }
-        if (hasImages && EmptyChecks.isNull(request.getClientTurnId())) {
+        if (hasImages && request.getClientTurnId() == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
         }
-        List<String> configuredProviders = EmptyChecks.isNull(chatClients.fallback())
+        List<String> configuredProviders = chatClients.fallback() == null
                 ? List.of(chatClients.primary().provider())
                 : List.of(
                         chatClients.primary().provider(), chatClients.fallback().provider());
@@ -400,7 +398,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     /** 费用或图片读取失败后结束已创建的轮次；收尾异常仅附加到原异常，不能掩盖原拒绝原因。 */
     private void completeReservationRejectedTurn(
             String tenantId, ConsoleAiConversationService.StartedTurn persistedTurn, RuntimeException exception) {
-        if (EmptyChecks.isNotNull(persistedTurn)) {
+        if (persistedTurn != null) {
             String decision =
                     exception instanceof BizException bizException && bizException.getCode() == ResultCode.RATE_LIMITED
                             ? "REJECTED_BUDGET"
@@ -521,7 +519,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     private AiChatResponse completeApprovedChat(ApprovedChatExecution execution) {
         Integer promptTokens = null;
         Integer completionTokens = null;
-        Usage usage = EmptyChecks.isNull(execution.chatResponse().getMetadata())
+        Usage usage = execution.chatResponse().getMetadata() == null
                 ? null
                 : execution.chatResponse().getMetadata().getUsage();
         if (usage != null) {
@@ -529,7 +527,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
             completionTokens = usage.getCompletionTokens();
         }
         ConsoleAiCostService.CostResult cost;
-        boolean hasMeasuredUsage = EmptyChecks.isNotNull(promptTokens) && EmptyChecks.isNotNull(completionTokens);
+        boolean hasMeasuredUsage = promptTokens != null && completionTokens != null;
         if (hasMeasuredUsage) {
             String providerName = execution.modelCall().provider().provider();
             ConsoleAiCostService.MeasuredUsage measuredUsage =
@@ -548,7 +546,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
 
         AiChatResponse response = buildApprovedChatResponse(execution, answer);
 
-        if (EmptyChecks.isNotNull(execution.persistedTurn())) {
+        if (execution.persistedTurn() != null) {
             ConsoleAiConversationService.TurnCompletion approvedTurnCompletion =
                     ConsoleAiConversationService.TurnCompletion.builder()
                             .tenantId(execution.tenantId())
@@ -601,7 +599,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         response.setRefusalReason(null);
         response.setSources(execution.snippets().stream()
                 .map(ConsoleAiKnowledgeBase.Snippet::source)
-                .filter(Texts::hasText)
+                .filter(EmptyValues::hasText)
                 .distinct()
                 .map(AiSourceResponse::new)
                 .toList());
@@ -623,7 +621,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
             throws InterruptedException, ExecutionException, TimeoutException {
         long timeoutMillis = Math.max(1, aiProperties.getRequestTimeout().toMillis());
         long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
-        long primaryBudget = EmptyChecks.isNull(providers.fallback()) ? timeoutMillis : Math.max(1, timeoutMillis / 2);
+        long primaryBudget = providers.fallback() == null ? timeoutMillis : Math.max(1, timeoutMillis / 2);
         try {
             ConsoleAiClients.ProviderClient primaryProvider = providers.primary();
             long primaryDeadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(primaryBudget);
@@ -639,17 +637,17 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
                     .build();
             return callProvider(providerInvocation);
         } catch (Exception primaryFailure) {
-            boolean fallbackProviderIsMissing = EmptyChecks.isNull(providers.fallback());
+            boolean fallbackProviderIsMissing = providers.fallback() == null;
             if (fallbackProviderIsMissing) {
                 throw primaryFailure;
             }
             boolean fallbackProviderCannotHandleImages =
-                    EmptyChecks.isNotEmpty(images) && !providers.fallback().imageInput();
+                    EmptyValues.isNotEmpty(images) && !providers.fallback().imageInput();
             if (fallbackProviderCannotHandleImages) {
                 throw primaryFailure;
             }
             boolean streamObserverPreventsFallback =
-                    EmptyChecks.isNotNull(observer) && (observer.isCancelled() || observer.hasEmitted());
+                    observer != null && (observer.isCancelled() || observer.hasEmitted());
             if (streamObserverPreventsFallback) {
                 throw primaryFailure;
             }
@@ -692,10 +690,10 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         long deadlineNanos = invocation.deadlineNanos();
 
         ChatClient.ChatClientRequestSpec spec = provider.client().prompt();
-        boolean toolsEnabled = EmptyChecks.isNotNull(tools);
+        boolean toolsEnabled = tools != null;
         String systemPrompt = buildSystemPrompt(snippets, toolsEnabled);
         spec = spec.system(systemPrompt);
-        if (EmptyChecks.isEmpty(images)) {
+        if (EmptyValues.isEmpty(images)) {
             spec = spec.user(promptPayload);
         } else {
             if (!provider.imageInput()) throw new IllegalStateException("image input not enabled for model");
@@ -715,7 +713,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         int maxCompletionTokens = Math.max(1, aiProperties.getMaxCompletionTokens());
         ChatOptions.Builder<?> requestOptions = chatOptionsBuilder.maxTokens(maxCompletionTokens);
         spec = spec.options(requestOptions);
-        if (EmptyChecks.isNotNull(tools)) {
+        if (tools != null) {
             spec = spec.tools(tools);
         }
         ChatClient.ChatClientRequestSpec requestSpec = spec;
@@ -724,9 +722,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
             throw new TimeoutException("AI provider request deadline exceeded");
         }
         long timeoutMillis = Math.max(1, TimeUnit.NANOSECONDS.toMillis(remainingNanos));
-        Future<ChatResponse> future = modelCallExecutor.submit(() -> EmptyChecks.isNull(observer)
-                ? requestSpec.call().chatResponse()
-                : streamResponse(requestSpec, observer));
+        Future<ChatResponse> future = modelCallExecutor.submit(
+                () -> observer == null ? requestSpec.call().chatResponse() : streamResponse(requestSpec, observer));
         try {
             ChatResponse response = future.get(timeoutMillis, TimeUnit.MILLISECONDS);
             return new ModelCallResult(response, provider);
@@ -748,12 +745,11 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
                     if (observer.isCancelled()) {
                         throw new CancellationException("AI stream cancelled");
                     }
-                    if (EmptyChecks.isNotNull(chunk.getMetadata())
-                            && EmptyChecks.isNotNull(chunk.getMetadata().getUsage())) {
+                    if (chunk.getMetadata() != null && chunk.getMetadata().getUsage() != null) {
                         metadata.set(chunk.getMetadata());
                     }
                     String delta = extractContent(chunk);
-                    if (EmptyChecks.isNotEmpty(delta) && answer.length() < aiProperties.getMaxResponseLength()) {
+                    if (EmptyValues.isNotEmpty(delta) && answer.length() < aiProperties.getMaxResponseLength()) {
                         int remaining = aiProperties.getMaxResponseLength() - answer.length();
                         String boundedDelta = delta.substring(0, Math.min(delta.length(), remaining));
                         answer.append(boundedDelta);
@@ -772,7 +768,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     }
 
     private boolean isFallbackEligible(Throwable failure) {
-        for (Throwable cause = failure; EmptyChecks.isNotNull(cause); cause = cause.getCause()) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
             if (cause instanceof InterruptedException || cause instanceof CancellationException) {
                 return false;
             }
@@ -814,7 +810,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
                 .map(ChatResponse::getMetadata)
                 .map(ChatResponseMetadata::getModel)
                 .orElse(null);
-        return provider.provider() + ":" + (Texts.hasText(model) ? model : "unknown");
+        return provider.provider() + ":" + (EmptyValues.hasText(model) ? model : "unknown");
     }
 
     private record ModelCallResult(ChatResponse response, ConsoleAiClients.ProviderClient provider) {}
@@ -888,7 +884,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     private void enforceRateLimit(String tenantId, String operatorId) {
         int limit = aiProperties.getRateLimitPerMinute();
         if (limit > 0) {
-            String user = Texts.hasText(operatorId) ? operatorId : "anonymous";
+            String user = EmptyValues.hasText(operatorId) ? operatorId : "anonymous";
             String key = "ai:chat:tenant:" + tenantId + ":user:" + user;
             boolean allowed;
             try {
@@ -1003,7 +999,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         String sessionId = context.request().sessionId();
         String operatorId = context.request().operatorId();
         AiPromptCategory promptCategory = context.result().promptCategory();
-        String promptCategoryCode = EmptyChecks.isNull(promptCategory)
+        String promptCategoryCode = promptCategory == null
                 ? AiPromptCategory.OUT_OF_SCOPE.code()
                 : context.result().promptCategory().code();
         String decisionCode = context.result().decision().code();
@@ -1012,7 +1008,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         Integer promptTokens = context.result().promptTokens();
         Integer completionTokens = context.result().completionTokens();
         BigDecimal estimatedCostUsd = context.result().estimatedCostUsd();
-        String costStatus = EmptyChecks.isNull(context.result().costStatus())
+        String costStatus = context.result().costStatus() == null
                 ? "UNPRICED"
                 : context.result().costStatus();
         Instant auditedAt = BatchDateTimeSupport.utcNow();
@@ -1142,19 +1138,19 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     }
 
     private String resolveTenantId(String requestTenantId, String headerTenantId) {
-        boolean requestTenantConflictsWithHeader = Texts.hasText(requestTenantId)
-                && Texts.hasText(headerTenantId)
+        boolean requestTenantConflictsWithHeader = EmptyValues.hasText(requestTenantId)
+                && EmptyValues.hasText(headerTenantId)
                 && !requestTenantId.equals(headerTenantId);
         if (requestTenantConflictsWithHeader) {
             throw BizException.of(ResultCode.FORBIDDEN, "error.common.tenant_id_mismatch");
         }
-        String tenantId = Texts.hasText(requestTenantId) ? requestTenantId : headerTenantId;
-        Guard.requireText(tenantId, "tenantId is required");
+        String tenantId = EmptyValues.hasText(requestTenantId) ? requestTenantId : headerTenantId;
+        Preconditions.requireText(tenantId, "tenantId is required");
         return tenantId;
     }
 
     private String resolveSessionId(String sessionId, String fallbackRequestId) {
-        if (Texts.hasText(sessionId)) {
+        if (EmptyValues.hasText(sessionId)) {
             return sessionId;
         }
         return fallbackRequestId;
@@ -1179,7 +1175,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     }
 
     private String firstNonBlank(String value, String fallback) {
-        return Texts.hasText(value) ? value : fallback;
+        return EmptyValues.hasText(value) ? value : fallback;
     }
 
     @Builder

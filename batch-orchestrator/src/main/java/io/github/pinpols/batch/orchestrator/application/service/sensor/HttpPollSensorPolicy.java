@@ -10,7 +10,7 @@ import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.config.SensorProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.http.OrchestratorOutboundTransport;
 import java.io.IOException;
@@ -85,7 +85,7 @@ public class HttpPollSensorPolicy implements SensorPolicy {
     public SensorProbeResult probe(SensorContext ctx) {
         Map<String, Object> spec = ctx.sensorSpec();
         String url = SensorSpecs.string(spec, "url");
-        if (!Texts.hasText(url)) {
+        if (!EmptyValues.hasText(url)) {
             return SensorProbeResult.error("error.workflow.sensor_spec_invalid", List.of("HTTP_POLL", "url required"));
         }
         String method = upperOrDefault(SensorSpecs.string(spec, "method"), "GET");
@@ -95,7 +95,7 @@ public class HttpPollSensorPolicy implements SensorPolicy {
                     List.of("HTTP_POLL", "method must be one of " + ALLOWED_METHODS));
         }
         String matchExpr = SensorSpecs.string(spec, "matchExpr");
-        if (!Texts.hasText(matchExpr)) {
+        if (!EmptyValues.hasText(matchExpr)) {
             return SensorProbeResult.error(
                     "error.workflow.sensor_spec_invalid", List.of("HTTP_POLL", "matchExpr required"));
         }
@@ -158,7 +158,7 @@ public class HttpPollSensorPolicy implements SensorPolicy {
 
     private Map<String, String> parseHeaders(String headersJson) throws JsonProcessingException {
         Map<String, String> headers = new LinkedHashMap<>();
-        if (!Texts.hasText(headersJson)) {
+        if (!EmptyValues.hasText(headersJson)) {
             return headers;
         }
         JsonNode node = objectMapper.readTree(headersJson);
@@ -178,7 +178,7 @@ public class HttpPollSensorPolicy implements SensorPolicy {
         return headers.entrySet().stream()
                 .filter(entry -> "Content-Type".equalsIgnoreCase(entry.getKey()))
                 .map(Map.Entry::getValue)
-                .filter(Texts::hasText)
+                .filter(EmptyValues::hasText)
                 .findFirst()
                 .orElse("application/json; charset=utf-8");
     }
@@ -232,7 +232,7 @@ public class HttpPollSensorPolicy implements SensorPolicy {
     }
 
     private static String upperOrDefault(String s, String dflt) {
-        if (!Texts.hasText(s)) {
+        if (!EmptyValues.hasText(s)) {
             return dflt;
         }
         String trimmedValue = s.trim();

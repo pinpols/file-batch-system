@@ -8,7 +8,6 @@ import static org.mockito.Mockito.doAnswer;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.e2e.apps.E2eImportApplication;
 import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
@@ -327,7 +326,7 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
                             .computeIfAbsent(id, ignored -> new AtomicInteger())
                             .incrementAndGet();
                     Object claimed = invocation.callRealMethod();
-                    if (EmptyChecks.isNotNull(claimed)) {
+                    if (claimed != null) {
                         successfulClaims
                                 .computeIfAbsent(id, ignored -> new AtomicInteger())
                                 .incrementAndGet();

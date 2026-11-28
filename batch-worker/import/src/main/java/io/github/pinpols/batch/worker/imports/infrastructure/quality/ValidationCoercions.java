@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -31,7 +31,7 @@ final class ValidationCoercions {
     }
 
     static String defaultText(String value, String fallback) {
-        return Texts.hasText(value) ? value : fallback;
+        return EmptyValues.hasText(value) ? value : fallback;
     }
 
     static boolean booleanValue(Object value, boolean defaultValue) {
@@ -96,18 +96,21 @@ final class ValidationCoercions {
         if (value instanceof Collection<?> collection) {
             return collection.stream()
                     .map(ValidationCoercions::stringValue)
-                    .filter(Texts::hasText)
+                    .filter(EmptyValues::hasText)
                     .toList();
         }
         if (value == null) {
             return List.of();
         }
         String text = String.valueOf(value);
-        if (!Texts.hasText(text)) {
+        if (!EmptyValues.hasText(text)) {
             return List.of();
         }
         String[] values = text.split(",");
-        return Arrays.stream(values).filter(Texts::hasText).map(String::trim).toList();
+        return Arrays.stream(values)
+                .filter(EmptyValues::hasText)
+                .map(String::trim)
+                .toList();
     }
 
     static boolean containsIgnoreCase(List<String> candidates, String value) {

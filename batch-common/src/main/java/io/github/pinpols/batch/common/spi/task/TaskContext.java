@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.spi.task;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -43,7 +43,7 @@ public record TaskContext(
     }
 
     private static Map<String, Object> immutableNullableMap(Map<String, Object> source) {
-        if (EmptyChecks.isEmpty(source)) {
+        if (EmptyValues.isEmpty(source)) {
             return Map.of();
         }
         Map<String, Object> snapshot = new LinkedHashMap<>(source);

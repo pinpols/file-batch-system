@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Date;
@@ -95,7 +95,7 @@ public class GenerateCursorCodec {
     }
 
     private Optional<String> encodeTuple(List<?> values) {
-        if (EmptyChecks.isEmpty(values)) {
+        if (EmptyValues.isEmpty(values)) {
             return Optional.empty();
         }
         StringBuilder encoded = new StringBuilder("K|");
@@ -159,7 +159,7 @@ public class GenerateCursorCodec {
             values.add(decodeCursor(encoded.substring(start, end)));
             index = end;
         }
-        if (EmptyChecks.isEmpty(values)) {
+        if (EmptyValues.isEmpty(values)) {
             throw new IllegalArgumentException("empty tuple cursor");
         }
         return List.copyOf(values);

@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.domain.audit.support.OperationAuditEvent;
@@ -69,7 +69,7 @@ public class TerminalNotificationRecoveryService {
             TerminalDeliveryRetryRequest request,
             ConsoleRequestMetadata metadata) {
         String tenant = tenants.resolveTenant(tenantId);
-        if (!request.confirmedNotDelivered() || EmptyChecks.isBlank(metadata.operatorId())) {
+        if (!request.confirmedNotDelivered() || EmptyValues.isBlank(metadata.operatorId())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.notification.recovery_confirmation_required");
         }
         String aggregateId = source.name() + ":" + id;
@@ -78,11 +78,11 @@ public class TerminalNotificationRecoveryService {
                 () -> transaction.executeWithoutResult(status -> {
                     mapper.bindTenant(tenant);
                     TerminalDeliveryRecoveryResponse row = mapper.lock(tenant, source.name(), id);
-                    if (EmptyChecks.isNull(row)) {
+                    if (row == null) {
                         // 归档仅移动已闭合投递；原人工请求仍须通过冷审计识别幂等。
                         row = mapper.archived(tenant, source.name(), id);
                     }
-                    if (EmptyChecks.isNull(row)) {
+                    if (row == null) {
                         throw BizException.of(ResultCode.NOT_FOUND, "error.notification.delivery_not_found");
                     }
                     String reason = request.reason().trim();
@@ -91,7 +91,7 @@ public class TerminalNotificationRecoveryService {
                     RecoveryAuditEvidence evidence = new RecoveryAuditEvidence(
                             reason, reconciliationReference, request.expectedAttempt(), true, row.terminalEventKey());
                     String existing = mapper.replayAudit(tenant, aggregateId, request.requestId());
-                    if (EmptyChecks.isNotNull(existing)) {
+                    if (existing != null) {
                         Map<?, ?> existingEvidence = JsonUtils.fromJson(existing, Map.class);
                         // 保留完整 JSON 字段集合比较，不能因 DTO 忽略未知字段而误判为同一人工请求。
                         Map<String, Object> requestedEvidenceFields = JsonUtils.toMap(evidence);

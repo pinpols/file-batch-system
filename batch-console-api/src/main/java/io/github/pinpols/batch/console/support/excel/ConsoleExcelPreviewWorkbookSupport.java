@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.support.excel;
 
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -36,13 +37,13 @@ public final class ConsoleExcelPreviewWorkbookSupport {
 
     public static List<WorkbookIssue> expandIssues(
             String sheetName, Integer rowNo, List<String> messages, List<String> knownColumns) {
-        if (rowNo == null || messages == null || messages.isEmpty()) {
+        if (rowNo == null || EmptyValues.isEmpty(messages)) {
             return List.of();
         }
         List<String> safeColumns = knownColumns == null ? List.of() : knownColumns;
         List<WorkbookIssue> issues = new ArrayList<>();
         for (String message : messages) {
-            if (message == null || message.isBlank()) {
+            if (EmptyValues.isBlank(message)) {
                 continue;
             }
             List<String> matchedColumns = findMatchedColumns(message, safeColumns);
@@ -75,7 +76,7 @@ public final class ConsoleExcelPreviewWorkbookSupport {
 
     public static void addIssueComments(
             Sheet sheet, List<String> columns, List<WorkbookIssue> issues, int fallbackColumnIndex) {
-        if (issues == null || issues.isEmpty()) {
+        if (EmptyValues.isEmpty(issues)) {
             return;
         }
         Map<String, List<String>> messagesByCell = new LinkedHashMap<>();
@@ -107,9 +108,7 @@ public final class ConsoleExcelPreviewWorkbookSupport {
     }
 
     public static String previewWorkbookFileName(String originalFileName) {
-        String baseName = (originalFileName == null || originalFileName.isBlank())
-                ? "excel-preview.xlsx"
-                : originalFileName.trim();
+        String baseName = (EmptyValues.isBlank(originalFileName)) ? "excel-preview.xlsx" : originalFileName.trim();
         if (baseName.endsWith(".xlsx")) {
             return baseName.substring(0, baseName.length() - 5) + "-preview.xlsx";
         }

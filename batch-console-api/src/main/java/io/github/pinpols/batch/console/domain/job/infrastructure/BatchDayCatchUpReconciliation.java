@@ -6,9 +6,8 @@ import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.job.view.BatchDayCatchUpOperation;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSourceRecord;
@@ -37,11 +36,11 @@ public class BatchDayCatchUpReconciliation {
     /** 根据原请求和作业核验未确定回执，不信任客户端提供的来源键。 */
     @Transactional(propagation = Propagation.NEVER)
     public BatchDayCatchUpOperation reconcileOriginal(String tenantId, String requestKey, String jobCode) {
-        if (!Texts.hasText(jobCode)) {
+        if (!EmptyValues.hasText(jobCode)) {
             throw conflict();
         }
         BatchDayCatchUpOperation operation = store.findByRequestKey(tenantId, requestKey);
-        if (EmptyChecks.isNull(operation)
+        if (operation == null
                 || (!"UNKNOWN".equals(operation.operationStatus()) && !"RUNNING".equals(operation.operationStatus()))) {
             throw conflict();
         }
@@ -49,7 +48,7 @@ public class BatchDayCatchUpReconciliation {
                 ? BatchDayCatchUpProgress.ItemStatus.UNKNOWN
                 : BatchDayCatchUpProgress.ItemStatus.IN_FLIGHT;
         JsonNode snapshot = JsonUtils.fromJsonStrict(operation.snapshotJson(), JsonNode.class);
-        if (EmptyChecks.isNull(snapshot) || !snapshot.path("catchUpPolicy").isTextual()) {
+        if (snapshot == null || !snapshot.path("catchUpPolicy").isTextual()) {
             throw conflict();
         }
         String policy = snapshot.path("catchUpPolicy").asText();
@@ -87,10 +86,10 @@ public class BatchDayCatchUpReconciliation {
                 .body(payload)
                 .retrieve()
                 .body(new ParameterizedTypeReference<>() {});
-        if (EmptyChecks.isNull(response)
+        if (response == null
                 || response.code() != ResultCode.SUCCESS
-                || EmptyChecks.isNull(response.data())
-                || !Texts.hasText(response.data().instanceNo())) throw conflict();
+                || response.data() == null
+                || !EmptyValues.hasText(response.data().instanceNo())) throw conflict();
         return response.data().instanceNo();
     }
 
@@ -99,8 +98,8 @@ public class BatchDayCatchUpReconciliation {
         try {
             JsonNode snapshot = JsonUtils.fromJsonStrict(operation.snapshotJson(), JsonNode.class);
             JsonNode identity = JsonUtils.fromJsonStrict(operation.requestJson(), JsonNode.class);
-            boolean snapshotStructureIsInvalid = EmptyChecks.isNull(snapshot)
-                    || EmptyChecks.isNull(identity)
+            boolean snapshotStructureIsInvalid = snapshot == null
+                    || identity == null
                     || !snapshot.path("targets").isArray()
                     || !snapshot.path(BIZ_DATE_FIELD).isTextual()
                     || !snapshot.path("calendarCode").isTextual();
@@ -113,11 +112,11 @@ public class BatchDayCatchUpReconciliation {
             JsonNode match = null;
             for (JsonNode target : snapshot.path("targets")) {
                 if (item.sourceKey().equals(target.path("sourceKey").asText())) {
-                    if (EmptyChecks.isNotNull(match)) throw conflict();
+                    if (match != null) throw conflict();
                     match = target;
                 }
             }
-            if (EmptyChecks.isNull(match)
+            if (match == null
                     || !item.jobCode().equals(match.path("jobCode").asText())
                     || !match.path("workflowDefinitionId").canConvertToLong()
                     || match.path("workflowDefinitionId").asLong() <= 0) throw conflict();
@@ -151,10 +150,10 @@ public class BatchDayCatchUpReconciliation {
     @Transactional(propagation = Propagation.NEVER)
     public BatchDayCatchUpOperation reconcile(String tenantId, String requestKeyHash, long revision, String sourceKey) {
         BatchDayCatchUpOperation operation = store.findByHash(tenantId, requestKeyHash);
-        if (EmptyChecks.isNull(operation)
+        if (operation == null
                 || operation.revision() != revision
                 || !"UNKNOWN".equals(operation.operationStatus())
-                || !Texts.hasText(sourceKey)) {
+                || !EmptyValues.hasText(sourceKey)) {
             throw conflict();
         }
         String receipt = verifiedApprovalReceipt(operation, sourceKey);
@@ -164,10 +163,10 @@ public class BatchDayCatchUpReconciliation {
     private String verifiedApprovalReceipt(BatchDayCatchUpOperation operation, String sourceKey) {
         ApprovalSubmitCommand expected = frozenApproval(operation, sourceKey);
         ApprovalSourceRecord record = approvals.lookupVerifiedSubmission(expected);
-        if (EmptyChecks.isNull(record)
+        if (record == null
                 || !operation.tenantId().equals(record.tenantId())
                 || !sourceKey.equals(record.sourceIdempotencyKey())
-                || !Texts.hasText(record.approvalNo())) {
+                || !EmptyValues.hasText(record.approvalNo())) {
             throw conflict();
         }
         return record.approvalNo();
@@ -185,13 +184,13 @@ public class BatchDayCatchUpReconciliation {
             JsonNode match = null;
             for (JsonNode target : targets) {
                 if (sourceKey.equals(target.path("sourceKey").asText())) {
-                    if (EmptyChecks.isNotNull(match)) {
+                    if (match != null) {
                         throw conflict();
                     }
                     match = target;
                 }
             }
-            if (EmptyChecks.isNull(match)
+            if (match == null
                     || !match.path("jobCode").isTextual()
                     || !match.path("approval").isObject()) {
                 throw conflict();
@@ -204,10 +203,10 @@ public class BatchDayCatchUpReconciliation {
                     || !"CATCH_UP".equals(command.approvalType())
                     || !"CATCH_UP".equals(command.actionType())
                     || !"CATCH_UP".equals(command.targetType())
-                    || EmptyChecks.isNotNull(command.targetId())
-                    || !Texts.hasText(command.requesterId());
+                    || command.targetId() != null
+                    || !EmptyValues.hasText(command.requesterId());
             if (approvalIdentityIsInvalid
-                    || EmptyChecks.isNull(payload)
+                    || payload == null
                     || !payload.isObject()
                     || !operation.tenantId().equals(payload.path("tenantId").asText())
                     || !match.path("jobCode")

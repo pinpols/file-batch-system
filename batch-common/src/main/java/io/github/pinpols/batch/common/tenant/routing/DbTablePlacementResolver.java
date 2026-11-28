@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.common.tenant.routing;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongSupplier;
@@ -52,7 +52,7 @@ public final class DbTablePlacementResolver implements BusinessPlacementResolver
 
     @Override
     public String resolve(String tenantId) {
-        if (!Texts.hasText(tenantId)) {
+        if (!EmptyValues.hasText(tenantId)) {
             return fallback.resolve(tenantId);
         }
         String key = currentMapping().get(tenantId);

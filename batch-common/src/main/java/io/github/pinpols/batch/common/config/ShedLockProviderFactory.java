@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.config;
 
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import javax.sql.DataSource;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.provider.jdbctemplate.JdbcTemplateLockProvider;
@@ -67,7 +68,7 @@ public final class ShedLockProviderFactory {
      * @param environment 环境名(prod / staging / dev),作为 key 第二层 prefix
      */
     public static LockProvider redisLockProvider(RedisConnectionFactory connectionFactory, String environment) {
-        String keyPrefix = "shedlock:" + (environment == null || environment.isBlank() ? "default" : environment);
+        String keyPrefix = "shedlock:" + (EmptyValues.isBlank(environment) ? "default" : environment);
         return new RedisLockProvider(connectionFactory, keyPrefix);
     }
 }

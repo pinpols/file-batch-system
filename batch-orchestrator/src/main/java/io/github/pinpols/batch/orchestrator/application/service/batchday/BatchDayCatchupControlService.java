@@ -3,8 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.batchday;
 import io.github.pinpols.batch.common.jdbc.JdbcExceptionSupport;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity;
@@ -77,7 +76,7 @@ public class BatchDayCatchupControlService {
             controlMapper.setTenantContext(tenantId);
             ensureEnabledCalendar(tenantId, calendarCode);
             BatchDayCatchupControlEntity current = controlMapper.selectCurrent(tenantId, calendarCode);
-            return EmptyChecks.isNull(current)
+            return current == null
                     ? new BatchDayCatchupControlEntity(
                             tenantId, calendarCode, false, null, null, null, dateTimeSupport.nowInstant())
                     : current;
@@ -97,7 +96,7 @@ public class BatchDayCatchupControlService {
             ensureEnabledCalendar(tenantId, calendarCode);
             controlMapper.insertIfMissing(tenantId, calendarCode);
             BatchDayCatchupControlEntity current = controlMapper.selectForUpdate(tenantId, calendarCode);
-            if (EmptyChecks.isNull(current)) {
+            if (current == null) {
                 throw new IllegalStateException("Catch-up control row could not be initialized");
             }
             if (current.paused() == pause) return current;
@@ -130,7 +129,7 @@ public class BatchDayCatchupControlService {
     private void ensureEnabledCalendar(String tenantId, String calendarCode) {
         BusinessCalendarEntity calendar =
                 calendarMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, calendarCode, true);
-        if (EmptyChecks.isNull(calendar)) {
+        if (calendar == null) {
             throw new OperationFailure(Kind.NOT_FOUND, "Enabled business calendar was not found");
         }
     }
@@ -140,12 +139,12 @@ public class BatchDayCatchupControlService {
     }
 
     private static void validate(PauseCommand command) {
-        boolean hasRequiredFields = EmptyChecks.isNotNull(command)
-                && Texts.hasText(command.tenantId())
-                && Texts.hasText(command.calendarCode())
-                && Texts.hasText(command.action())
-                && Texts.hasText(command.operatorId())
-                && Texts.hasText(command.reason());
+        boolean hasRequiredFields = command != null
+                && EmptyValues.hasText(command.tenantId())
+                && EmptyValues.hasText(command.calendarCode())
+                && EmptyValues.hasText(command.action())
+                && EmptyValues.hasText(command.operatorId())
+                && EmptyValues.hasText(command.reason());
         if (!hasRequiredFields) {
             throw new IllegalArgumentException("tenant, calendar, action, operator and reason are required");
         }
@@ -165,7 +164,7 @@ public class BatchDayCatchupControlService {
     }
 
     private static void validateIdentity(String tenantId, String calendarCode) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(calendarCode)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(calendarCode)) {
             throw new IllegalArgumentException("tenantId and calendarCode are required");
         }
     }

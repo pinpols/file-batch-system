@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import java.util.Map;
 import java.util.Objects;
@@ -21,7 +21,7 @@ public record WorkflowLaunchWaitSnapshot(
 
     public static WorkflowLaunchWaitSnapshot capture(
             LaunchRequest original, LaunchRequest effective, WorkflowRunEntity prepared) {
-        Map<String, Object> params = EmptyChecks.isNull(effective.params()) ? Map.of() : effective.params();
+        Map<String, Object> params = effective.params() == null ? Map.of() : effective.params();
         String originalJson = JsonUtils.toJson(original);
         String paramsJson = JsonUtils.toJson(params);
         WorkflowLaunchWaitSnapshot snapshot = new WorkflowLaunchWaitSnapshot(
@@ -40,7 +40,7 @@ public record WorkflowLaunchWaitSnapshot(
 
     public LaunchRequest effectiveRequest() {
         Map<String, Object> params = JsonUtils.fromJson(launchParamsJson, new TypeReference<Map<String, Object>>() {});
-        if (EmptyChecks.isNull(params)) {
+        if (params == null) {
             throw invalidSnapshot();
         }
         LaunchRequest original = originalRequest();
@@ -57,28 +57,28 @@ public record WorkflowLaunchWaitSnapshot(
     }
 
     public void validate() {
-        boolean snapshotFieldsAreInvalid = EmptyChecks.isBlank(originalRequestJson)
-                || EmptyChecks.isBlank(launchParamsJson)
-                || EmptyChecks.isNull(workflowVersion)
+        boolean snapshotFieldsAreInvalid = EmptyValues.isBlank(originalRequestJson)
+                || EmptyValues.isBlank(launchParamsJson)
+                || workflowVersion == null
                 || workflowVersion <= 0
-                || EmptyChecks.isBlank(traceId)
-                || EmptyChecks.isBlank(executionSnapshotJson);
+                || EmptyValues.isBlank(traceId)
+                || EmptyValues.isBlank(executionSnapshotJson);
         if (snapshotFieldsAreInvalid) {
             throw invalidSnapshot();
         }
         LaunchRequest original = originalRequest();
-        boolean originalRequestIsInvalid = EmptyChecks.isNull(original)
-                || EmptyChecks.isNull(original.workflowDefinitionId())
+        boolean originalRequestIsInvalid = original == null
+                || original.workflowDefinitionId() == null
                 || original.workflowDefinitionId() <= 0
-                || EmptyChecks.isNotNull(original.jobCode())
-                || EmptyChecks.isBlank(original.tenantId())
-                || EmptyChecks.isBlank(original.requestId())
-                || EmptyChecks.isNull(original.bizDate());
+                || original.jobCode() != null
+                || EmptyValues.isBlank(original.tenantId())
+                || EmptyValues.isBlank(original.requestId())
+                || original.bizDate() == null;
         if (originalRequestIsInvalid) {
             throw invalidSnapshot();
         }
         WorkflowRunExecutionSnapshot parsed = executionSnapshot();
-        if (EmptyChecks.isNull(parsed) || EmptyChecks.isBlank(parsed.workflowCalendarCode())) {
+        if (parsed == null || EmptyValues.isBlank(parsed.workflowCalendarCode())) {
             throw invalidSnapshot();
         }
         Map<String, Object> raw =
@@ -108,10 +108,10 @@ public record WorkflowLaunchWaitSnapshot(
     }
 
     private static Map<String, Object> comparableRequest(LaunchRequest request) {
-        if (EmptyChecks.isNull(request)) {
+        if (request == null) {
             throw invalidSnapshot();
         }
-        Map<String, Object> params = EmptyChecks.isNull(request.params()) ? Map.of() : request.params();
+        Map<String, Object> params = request.params() == null ? Map.of() : request.params();
         LaunchRequest normalized = request.toBuilder()
                 .params(params)
                 .dryRun(Boolean.TRUE.equals(request.dryRun()))

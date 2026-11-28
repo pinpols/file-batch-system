@@ -1,8 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.storage;
 
 import io.github.pinpols.batch.common.config.S3StorageProperties;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.dryrun.DryRunFinding;
 import io.github.pinpols.batch.orchestrator.application.service.dryrun.DryRunObjectStorageProbe;
 import java.util.List;
@@ -31,15 +30,15 @@ public final class S3DryRunObjectStorageProbe implements DryRunObjectStorageProb
     }
 
     @Override
-    // S2259 无法识别 EmptyChecks 对 ObjectProvider 可空结果的保护。
+    // S2259 无法识别 EmptyValues 对 ObjectProvider 可空结果的保护。
     @SuppressWarnings("java:S2259")
     public int probe(Map<String, Object> params, List<DryRunFinding> findings) {
         String bucket = stringValue(params, "s3Bucket");
-        if (!Texts.hasText(bucket)) {
+        if (!EmptyValues.hasText(bucket)) {
             S3StorageProperties properties = s3PropertiesProvider.getIfAvailable();
-            bucket = EmptyChecks.isNull(properties) ? null : properties.getBucket();
+            bucket = properties == null ? null : properties.getBucket();
         }
-        if (!Texts.hasText(bucket)) {
+        if (!EmptyValues.hasText(bucket)) {
             return 0;
         }
         if (!S3_BUCKET_PATTERN.matcher(bucket).matches()) {
@@ -51,7 +50,7 @@ public final class S3DryRunObjectStorageProbe implements DryRunObjectStorageProb
             return 1;
         }
         S3Client client = s3ClientProvider.getIfAvailable();
-        if (EmptyChecks.isNull(client)) {
+        if (client == null) {
             findings.add(DryRunFinding.warn(
                     "EXEC_S3_CLIENT_UNAVAILABLE",
                     SCOPE_EXECUTION,
@@ -85,7 +84,7 @@ public final class S3DryRunObjectStorageProbe implements DryRunObjectStorageProb
     }
 
     private static String stringValue(Map<String, Object> params, String key) {
-        Object raw = EmptyChecks.isNull(params) ? null : params.get(key);
+        Object raw = params == null ? null : params.get(key);
         return raw instanceof String string ? string : null;
     }
 }

@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.quota;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import io.github.pinpols.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity;
 import io.github.pinpols.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
@@ -34,10 +33,10 @@ class QuotaRuntimeStateSnapshotWriter {
         QuotaRuntimeStateService.QuotaDescribeRequest request = new QuotaRuntimeStateService.QuotaDescribeRequest(
                 owner, policy, burstLimit, SNAPSHOT_SLIDING_WINDOW_HOURS);
         QuotaRuntimeStateService.QuotaRuntimeSnapshot snap = quotaRuntimeStateService.describe(request);
-        boolean hasNoActiveBorrowedQuota = EmptyChecks.isNull(snap)
+        boolean hasNoActiveBorrowedQuota = snap == null
                 || snap.peakBorrowedCount() == null
                 || snap.peakBorrowedCount() == 0
-                || EmptyChecks.isNull(snap.windowExpiresAt());
+                || snap.windowExpiresAt() == null;
         if (hasNoActiveBorrowedQuota) {
             return 0;
         }

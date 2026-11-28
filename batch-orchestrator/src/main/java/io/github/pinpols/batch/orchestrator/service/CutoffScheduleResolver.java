@@ -2,8 +2,8 @@ package io.github.pinpols.batch.orchestrator.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -42,7 +42,7 @@ public class CutoffScheduleResolver {
 
     /** 解析 cutoff time。schedule 错误时记 warn 并退化到 defaultCutoffTime。 */
     public LocalTime resolveCutoffTime(String cutoffSchedule, LocalDate bizDate, LocalTime defaultCutoffTime) {
-        if (!Texts.hasText(cutoffSchedule) || bizDate == null) {
+        if (!EmptyValues.hasText(cutoffSchedule) || bizDate == null) {
             return defaultCutoffTime;
         }
         Map<String, Object> schedule;
@@ -120,7 +120,7 @@ public class CutoffScheduleResolver {
     }
 
     private LocalTime parseLocalTime(String text) {
-        if (text == null || text.isBlank()) return null;
+        if (EmptyValues.isBlank(text)) return null;
         try {
             String trimmedTime = text.trim();
             return LocalTime.parse(trimmedTime);
@@ -131,7 +131,7 @@ public class CutoffScheduleResolver {
     }
 
     private LocalDate parseLocalDate(String text) {
-        if (text == null || text.isBlank()) return null;
+        if (EmptyValues.isBlank(text)) return null;
         try {
             String trimmedDate = text.trim();
             return LocalDate.parse(trimmedDate);
@@ -142,7 +142,7 @@ public class CutoffScheduleResolver {
     }
 
     private DayOfWeek parseDayOfWeek(String text) {
-        if (text == null || text.isBlank()) return null;
+        if (EmptyValues.isBlank(text)) return null;
         try {
             String trimmedWeekday = text.trim();
             String normalizedWeekday = trimmedWeekday.toUpperCase(Locale.ROOT);

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.logging;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.regex.Pattern;
 import org.slf4j.LoggerFactory;
 
@@ -51,12 +51,12 @@ public final class SwallowedExceptionLogger {
      * {@link Throwable} 作为日志末参数输出完整堆栈。
      */
     public static String summary(Throwable t) {
-        if (EmptyChecks.isNull(t)) {
+        if (t == null) {
             return "(null)";
         }
         String type = t.getClass().getSimpleName();
         String message = sanitize(t.getMessage());
-        String value = type + (EmptyChecks.isBlank(message) ? "" : ": " + message);
+        String value = type + (EmptyValues.isBlank(message) ? "" : ": " + message);
         if (value.length() <= MAX_SUMMARY_LENGTH) {
             return value;
         }
@@ -70,7 +70,7 @@ public final class SwallowedExceptionLogger {
 
     /** 按调用方的字段长度上限净化失败消息；先遮蔽凭据，再截断文本。 */
     public static String safeMessage(String message, int maxLength) {
-        if (EmptyChecks.isNull(message)) {
+        if (message == null) {
             return null;
         }
         if (maxLength < 4) {
@@ -85,7 +85,7 @@ public final class SwallowedExceptionLogger {
 
     /** 判断文本是否含有本类已识别的凭据赋值、Bearer 令牌或 URI userinfo 语法。 */
     public static boolean containsCredentialSyntax(String message) {
-        if (EmptyChecks.isBlank(message)) {
+        if (EmptyValues.isBlank(message)) {
             return false;
         }
         return QUOTED_SENSITIVE_ASSIGNMENT.matcher(message).find()
@@ -95,7 +95,7 @@ public final class SwallowedExceptionLogger {
     }
 
     private static String sanitize(String message) {
-        if (EmptyChecks.isBlank(message)) {
+        if (EmptyValues.isBlank(message)) {
             return "";
         }
         String singleLine = CONTROL_CHARACTERS.matcher(message).replaceAll(" ").trim();

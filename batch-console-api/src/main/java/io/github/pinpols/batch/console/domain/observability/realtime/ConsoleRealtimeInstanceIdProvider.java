@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.observability.realtime;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleInstanceIdProperties;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +28,7 @@ public class ConsoleRealtimeInstanceIdProvider {
 
     private String resolveInstanceId(ConsoleInstanceIdProperties properties) {
         String configured = properties.getInstanceId();
-        if (EmptyChecks.isNotBlank(configured)) {
+        if (EmptyValues.isNotBlank(configured)) {
             return configured.trim();
         }
         UUID generatedId = UUID.randomUUID();

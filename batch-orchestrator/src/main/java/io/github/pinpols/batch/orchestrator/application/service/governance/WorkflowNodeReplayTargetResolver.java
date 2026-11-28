@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -31,13 +31,13 @@ public class WorkflowNodeReplayTargetResolver {
     @Transactional
     public WorkflowNodeReplayTarget resolve(String tenantId, Long workflowRunId, Long nodeRunId) {
         boolean nodeReplayIdentityIsIncomplete =
-                EmptyChecks.isBlank(tenantId) || EmptyChecks.isNull(workflowRunId) || EmptyChecks.isNull(nodeRunId);
+                EmptyValues.isBlank(tenantId) || workflowRunId == null || nodeRunId == null;
         if (nodeReplayIdentityIsIncomplete) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_request");
         }
 
         WorkflowRunEntity sourceRun = workflowRunMapper.selectByTenantAndIdForUpdate(tenantId, workflowRunId);
-        if (EmptyChecks.isNull(sourceRun)) {
+        if (sourceRun == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.replay_source_run_not_found");
         }
         if (!WorkflowRunStatus.FAILED.code().equals(sourceRun.getRunStatus())
@@ -47,21 +47,21 @@ public class WorkflowNodeReplayTargetResolver {
 
         WorkflowNodeRunEntity sourceNodeRun =
                 workflowNodeRunMapper.selectByTenantRunAndIdForUpdate(tenantId, workflowRunId, nodeRunId);
-        if (EmptyChecks.isNull(sourceNodeRun)) {
+        if (sourceNodeRun == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.replay_source_node_not_found");
         }
         boolean sourceNodeCannotReplayFailedJob = !WorkflowNodeType.JOB.code().equals(sourceNodeRun.getNodeType())
                 || !WorkflowNodeRunStatus.FAILED.code().equals(sourceNodeRun.getNodeStatus())
-                || EmptyChecks.isNull(sourceNodeRun.getJobInstanceId());
+                || sourceNodeRun.getJobInstanceId() == null;
         if (sourceNodeCannotReplayFailedJob) {
             throw invalidSource("source node must be a failed JOB node with a JobInstance");
         }
 
         JobInstanceEntity sourceJobInstance = jobInstanceMapper.selectById(tenantId, sourceNodeRun.getJobInstanceId());
-        boolean sourceJobInstanceMatchesFailedNode = EmptyChecks.isNotNull(sourceJobInstance)
+        boolean sourceJobInstanceMatchesFailedNode = sourceJobInstance != null
                 && JobInstanceStatus.unsuccessfulTerminalCodes().contains(sourceJobInstance.getInstanceStatus())
                 && !Boolean.TRUE.equals(sourceJobInstance.getDryRun())
-                && EmptyChecks.isNotNull(sourceRun.getBizDate())
+                && sourceRun.getBizDate() != null
                 && sourceRun.getBizDate().equals(sourceJobInstance.getBizDate());
         if (!sourceJobInstanceMatchesFailedNode) {
             throw invalidSource("source JobInstance does not match the failed node execution");

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import lombok.RequiredArgsConstructor;
@@ -43,7 +43,7 @@ class FairShareGroupAdmissionGuard {
 
     private static boolean hasHardCap(TenantQuotaPolicyEntity quotaPolicy) {
         boolean sharedGroupHardCapEnabled = quotaPolicy != null
-                && Texts.hasText(quotaPolicy.fairShareGroup())
+                && EmptyValues.hasText(quotaPolicy.fairShareGroup())
                 && quotaPolicy.groupSharedMaxRunningJobs() != null
                 && quotaPolicy.groupSharedMaxRunningJobs() > 0;
         return sharedGroupHardCapEnabled;

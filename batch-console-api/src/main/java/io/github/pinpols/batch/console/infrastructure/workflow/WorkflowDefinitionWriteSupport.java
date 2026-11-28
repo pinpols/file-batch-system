@@ -5,9 +5,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.SecretMasking;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.workflow.application.command.WorkflowVersionSnapshotCommand;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
@@ -54,7 +53,7 @@ public final class WorkflowDefinitionWriteSupport {
         WorkflowNodeQuery query = WorkflowNodeQuery.ofDefinition(tenantId, definitionId, null);
         List<WorkflowNodeEntity> nodes = nodeMapper.selectByQuery(query);
         return nodes.stream()
-                .filter(node -> EmptyChecks.isNotNull(node.getNodeParams()))
+                .filter(node -> node.getNodeParams() != null)
                 .collect(Collectors.toMap(
                         WorkflowNodeEntity::getNodeCode, WorkflowNodeEntity::getNodeParams, (first, ignored) -> first));
     }
@@ -106,10 +105,10 @@ public final class WorkflowDefinitionWriteSupport {
     }
 
     private static String resolveNodeParams(String submitted, String stored) {
-        if (!Texts.hasText(submitted)) {
+        if (!EmptyValues.hasText(submitted)) {
             return submitted;
         }
-        String resolved = EmptyChecks.isNull(stored) ? submitted : SecretMasking.preserveMaskedJson(submitted, stored);
+        String resolved = stored == null ? submitted : SecretMasking.preserveMaskedJson(submitted, stored);
         if (SecretMasking.containsMaskedSensitiveValue(resolved)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.config.masked_secret_requires_value");
         }
@@ -159,7 +158,7 @@ public final class WorkflowDefinitionWriteSupport {
     }
 
     public List<WorkflowNodeEntity> readNodesJson(String json) {
-        if (EmptyChecks.isBlank(json)) {
+        if (EmptyValues.isBlank(json)) {
             return List.of();
         }
         try {
@@ -173,7 +172,7 @@ public final class WorkflowDefinitionWriteSupport {
     }
 
     public List<WorkflowEdgeEntity> readEdgesJson(String json) {
-        if (EmptyChecks.isBlank(json)) {
+        if (EmptyValues.isBlank(json)) {
             return List.of();
         }
         try {

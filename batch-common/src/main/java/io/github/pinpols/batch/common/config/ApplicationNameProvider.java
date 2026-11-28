@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
@@ -46,6 +46,6 @@ public class ApplicationNameProvider {
      */
     public static String resolve(Environment environment, String fallback) {
         String value = environment.getProperty(APPLICATION_NAME_KEY);
-        return Texts.hasText(value) ? value : fallback;
+        return EmptyValues.hasText(value) ? value : fallback;
     }
 }

@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.notification.application.contract
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.Instant;
 import org.springframework.web.util.HtmlUtils;
 
@@ -27,7 +26,7 @@ public record TerminalDeliveryRecoveryResponse(
 
     public TerminalDeliveryRecoveryResponse {
         // 热表和冷表均由 MyBatis 直接构造此响应；历史错误值也必须在回查边界遮蔽。
-        if (EmptyChecks.isNotNull(errorMessage)) {
+        if (errorMessage != null) {
             String decodedError = HtmlUtils.htmlUnescape(errorMessage);
             String normalizedError = ConsoleTextSanitizer.normalize(decodedError);
             String maskedError = SwallowedExceptionLogger.safeMessage(normalizedError, ERROR_MESSAGE_MAX_LENGTH);

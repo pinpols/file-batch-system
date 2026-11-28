@@ -1,8 +1,7 @@
 package io.github.pinpols.batch.worker.exports.region;
 
 import io.github.pinpols.batch.common.exception.WorkerConfigException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,9 +43,9 @@ public final class ExportRegionResolver {
         Object snakeCaseAllowedRegions = regionCfg.get("allowed_regions");
         List<String> allowed = stringList(camelCaseAllowedRegions, snakeCaseAllowedRegions);
 
-        String region = Texts.hasText(triggerRegion) ? triggerRegion : defaultRegion;
-        if (!EmptyChecks.isEmpty(Objects.requireNonNull(allowed))) {
-            boolean regionMissing = EmptyChecks.isNull(region);
+        String region = EmptyValues.hasText(triggerRegion) ? triggerRegion : defaultRegion;
+        if (!EmptyValues.isEmpty(Objects.requireNonNull(allowed))) {
+            boolean regionMissing = region == null;
             boolean regionNotAllowed = !regionMissing && !allowed.contains(region);
             if (regionMissing || regionNotAllowed) {
                 throw new WorkerConfigException(
@@ -62,7 +61,7 @@ public final class ExportRegionResolver {
      */
     private static Map<String, Object> regionConfig(Map<String, Object> templateConfig) {
         Map<String, Object> out = new LinkedHashMap<>();
-        if (templateConfig == null || templateConfig.isEmpty()) {
+        if (EmptyValues.isEmpty(templateConfig)) {
             return out;
         }
         Object qps = templateConfig.get("query_param_schema");
@@ -98,7 +97,7 @@ public final class ExportRegionResolver {
     }
 
     private static String stringValue(Object v) {
-        if (EmptyChecks.isNull(v)) {
+        if (v == null) {
             return null;
         }
         String valueText = String.valueOf(v);
@@ -106,10 +105,10 @@ public final class ExportRegionResolver {
     }
 
     private static String firstNonBlank(String a, String b) {
-        if (Texts.hasText(a)) {
+        if (EmptyValues.hasText(a)) {
             return a;
         }
-        if (Texts.hasText(b)) {
+        if (EmptyValues.hasText(b)) {
             return b;
         }
         return null;
@@ -122,11 +121,11 @@ public final class ExportRegionResolver {
         }
         return list.stream()
                 .filter(value -> {
-                    if (EmptyChecks.isNull(value)) {
+                    if (value == null) {
                         return false;
                     }
                     String filterText = String.valueOf(value);
-                    return Texts.hasText(filterText);
+                    return EmptyValues.hasText(filterText);
                 })
                 .map(value -> {
                     String mappedText = String.valueOf(value);

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.plan;
 
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Data;
@@ -47,7 +48,7 @@ public class SchedulePlan {
      * totalExpectedRows，则按 shardIndex/shardTotal 做半开区间 [rangeStartInclusive, rangeEndExclusive) 均分。
      */
     public void normalizePartitionContract() {
-        if (partitions == null || partitions.isEmpty()) {
+        if (EmptyValues.isEmpty(partitions)) {
             return;
         }
         int total = partitions.size();

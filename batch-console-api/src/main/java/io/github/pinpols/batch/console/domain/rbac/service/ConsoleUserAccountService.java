@@ -4,9 +4,8 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleUserAccountResponse;
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
@@ -75,14 +74,14 @@ public class ConsoleUserAccountService {
      */
     public ConsoleUserAccountResponse create(
             String tenantId, String username, String password, String displayName, String authoritiesCsv) {
-        Guard.require(Texts.hasText(username), USERNAME_REQUIRED);
-        Guard.require(password != null && !password.isBlank(), "password is required");
+        Preconditions.require(EmptyValues.hasText(username), USERNAME_REQUIRED);
+        Preconditions.require(EmptyValues.isNotBlank(password), "password is required");
         String effectiveTenantId = enforceTenantScope(tenantId);
         String normalizedAuthorities = normalizeAuthorities(authoritiesCsv);
         enforceGrantableAuthorities(normalizedAuthorities);
         enforceRoleTenantBinding(effectiveTenantId, normalizedAuthorities);
         ConsoleUserAccountRow existingAccount = userAccountMapper.selectByUsername(username);
-        if (EmptyChecks.isNotNull(existingAccount)) {
+        if (existingAccount != null) {
             throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", username);
         }
         ConsoleUserAccountInsertParam consoleUserAccountInsertParam = ConsoleUserAccountInsertParam.builder()
@@ -101,13 +100,13 @@ public class ConsoleUserAccountService {
     /** 批量开户沿用单账号的租户与角色守卫，初始密码只存哈希并标记改密提醒。 */
     public ConsoleUserAccountResponse createProvisioned(
             String tenantId, String username, String password, String displayName, String role) {
-        Guard.require(Texts.hasText(username), USERNAME_REQUIRED);
+        Preconditions.require(EmptyValues.hasText(username), USERNAME_REQUIRED);
         String effectiveTenantId = enforceTenantScope(tenantId);
         String normalizedRole = normalizeAuthorities(role);
         enforceGrantableAuthorities(normalizedRole);
         enforceRoleTenantBinding(effectiveTenantId, normalizedRole);
         ConsoleUserAccountRow existingAccount = userAccountMapper.selectByUsername(username);
-        if (EmptyChecks.isNotNull(existingAccount)) {
+        if (existingAccount != null) {
             throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", username);
         }
         ConsoleUserAccountInsertProvisionedParam consoleUserAccountInsertProvisionedParam =
@@ -148,9 +147,9 @@ public class ConsoleUserAccountService {
      * —— 防止越权改他人密码。旧密码错误 / 新旧相同一律拒绝。
      */
     public void changeOwnPassword(String username, String currentPassword, String newPassword) {
-        Guard.requireText(username, USERNAME_REQUIRED);
-        Guard.require(currentPassword != null && !currentPassword.isBlank(), "current password is required");
-        Guard.require(newPassword != null && !newPassword.isBlank(), "new password is required");
+        Preconditions.requireText(username, USERNAME_REQUIRED);
+        Preconditions.require(EmptyValues.isNotBlank(currentPassword), "current password is required");
+        Preconditions.require(EmptyValues.isNotBlank(newPassword), "new password is required");
         ConsoleUserAccountEntity account = userAccountMapper
                 .findByUsernameIgnoreCase(username)
                 .orElseThrow(() -> BizException.of(ResultCode.NOT_FOUND, "error.account.not_found", username));
@@ -185,7 +184,7 @@ public class ConsoleUserAccountService {
 
     private ConsoleUserAccountRow assertExists(long id) {
         ConsoleUserAccountRow account = userAccountMapper.selectById(id);
-        return Guard.requireFound(account, "user account not found: " + id);
+        return Preconditions.requireFound(account, "user account not found: " + id);
     }
 
     /**
@@ -239,7 +238,7 @@ public class ConsoleUserAccountService {
             }
         }
         ConsolePrincipal principal = currentPrincipal();
-        if (EmptyChecks.isNull(principal) || isGlobalCaller(principal)) return;
+        if (principal == null || isGlobalCaller(principal)) return;
         for (String authority : requested) {
             if (!TENANT_ADMIN_GRANTABLE_ROLES.contains(authority)) {
                 throw BizException.of(ResultCode.FORBIDDEN, "error.account.role_grant_denied", authority);
@@ -271,11 +270,11 @@ public class ConsoleUserAccountService {
             return;
         }
         if (!hasTenantRole) return;
-        if (!Texts.hasText(tenantId)) {
+        if (!EmptyValues.hasText(tenantId)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.account.tenant_not_active");
         }
         TenantRow tenant = tenantMapper.selectByTenantId(tenantId);
-        if (EmptyChecks.isNull(tenant) || !"ACTIVE".equals(tenant.status())) {
+        if (tenant == null || !"ACTIVE".equals(tenant.status())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.account.tenant_not_active", tenantId);
         }
     }
@@ -283,14 +282,14 @@ public class ConsoleUserAccountService {
     private Set<String> parseAuthorities(String authoritiesCsv) {
         return Arrays.stream(authoritiesCsv.split(","))
                 .map(String::trim)
-                .filter(EmptyChecks::isNotEmpty)
+                .filter(EmptyValues::isNotEmpty)
                 .collect(Collectors.toSet());
     }
 
     private ConsoleUserAccountResponse toResponse(ConsoleUserAccountRow row) {
         boolean enabled = Boolean.TRUE.equals(row.enabled());
-        String createdAtText = EmptyChecks.isNull(row.createdAt()) ? null : String.valueOf(row.createdAt());
-        String updatedAtText = EmptyChecks.isNull(row.updatedAt()) ? null : String.valueOf(row.updatedAt());
+        String createdAtText = row.createdAt() == null ? null : String.valueOf(row.createdAt());
+        String updatedAtText = row.updatedAt() == null ? null : String.valueOf(row.updatedAt());
         return new ConsoleUserAccountResponse(
                 row.id(),
                 row.tenantId(),
@@ -303,7 +302,7 @@ public class ConsoleUserAccountService {
     }
 
     private String normalizeAuthorities(String raw) {
-        if (raw == null || raw.isBlank()) {
+        if (EmptyValues.isBlank(raw)) {
             return ConsoleRoles.TENANT_USER;
         }
         String trimmedAuthorities = raw.trim();

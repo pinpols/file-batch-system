@@ -3,9 +3,8 @@ package io.github.pinpols.batch.worker.imports.stage.format;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
@@ -188,7 +187,7 @@ public class ExcelFormatParser implements FormatParser {
 
     /** "A1"→0, "B1"→1, "Z1"→25, "AA1"→26, ...；全数字 / 未知格式 → -1。 */
     private static int columnIndex(String cellReference) {
-        if (cellReference == null || cellReference.isEmpty()) {
+        if (EmptyValues.isEmpty(cellReference)) {
             return -1;
         }
         int idx = 0;
@@ -206,7 +205,7 @@ public class ExcelFormatParser implements FormatParser {
 
     private Map<String, String> buildRowMapFromCells(
             List<String> cells, List<String> headers, List<ColumnBinding> bindings) {
-        if (bindings != null && !bindings.isEmpty()) {
+        if (EmptyValues.isNotEmpty(bindings)) {
             Map<String, String> out = new LinkedHashMap<>();
             for (ColumnBinding binding : bindings) {
                 int idx = indexOfHeader(headers, binding.source());
@@ -222,7 +221,7 @@ public class ExcelFormatParser implements FormatParser {
         // Item 4：无 field_mappings 时按 Excel 实际表头名直通(headers 已是实际表头),
         // 不再硬编码 customer 7 列。headers 为空(无表头行)时才回落 defaultHeaders。
         Map<String, String> out = new LinkedHashMap<>();
-        List<String> defs = (headers == null || headers.isEmpty()) ? support.defaultHeaders() : headers;
+        List<String> defs = (EmptyValues.isEmpty(headers)) ? support.defaultHeaders() : headers;
         for (int i = 0; i < defs.size(); i++) {
             String field = defs.get(i);
             String raw = i < cells.size() ? cells.get(i) : null;
@@ -250,7 +249,7 @@ public class ExcelFormatParser implements FormatParser {
      * BizException} 报"缺哪列"——而非 indexOfHeader 返 -1 静默 null 导致整列 null、validate 集体报字段缺失。
      */
     private static void validateHeaders(List<String> headers, List<ColumnBinding> bindings) {
-        if (bindings == null || bindings.isEmpty()) {
+        if (EmptyValues.isEmpty(bindings)) {
             return;
         }
         List<String> missing = new ArrayList<>();
@@ -272,10 +271,10 @@ public class ExcelFormatParser implements FormatParser {
         // Item 5：优先按名(excelSheetName / excel_sheet_name);否则回落按数字 index(原行为)。
         Map<String, Object> hints = support.parseHints(templateConfigObject);
         String byName = stringHint(hints.get("excelSheetName"));
-        if (!Texts.hasText(byName) && templateConfigObject instanceof Map<?, ?> map) {
+        if (!EmptyValues.hasText(byName) && templateConfigObject instanceof Map<?, ?> map) {
             byName = stringHint(map.get("excel_sheet_name"));
         }
-        if (Texts.hasText(byName)) {
+        if (EmptyValues.hasText(byName)) {
             return SheetSelector.byName(byName.trim());
         }
         int sheetIndex = resolveExcelSheetIndex(templateConfigObject);
@@ -292,8 +291,8 @@ public class ExcelFormatParser implements FormatParser {
         if (v instanceof Number number) {
             return Math.max(0, number.intValue());
         }
-        String presenceText = EmptyChecks.isNull(v) ? null : String.valueOf(v);
-        if (EmptyChecks.isNotNull(v) && Texts.hasText(presenceText)) {
+        String presenceText = v == null ? null : String.valueOf(v);
+        if (v != null && EmptyValues.hasText(presenceText)) {
             String rawSheetIndex = String.valueOf(v);
             String sheetIndexText = rawSheetIndex.trim();
             int parsedSheetIndex = Integer.parseInt(sheetIndexText);
@@ -480,12 +479,12 @@ public class ExcelFormatParser implements FormatParser {
 
         /** 出错列:配 field_mappings 时无法精确到单列(投影整行),退化为 null;否则取首个非空表头作粗定位。 */
         private String resolveErrorColumn() {
-            if (bindings != null && !bindings.isEmpty()) {
+            if (EmptyValues.isNotEmpty(bindings)) {
                 return null;
             }
-            if (headers != null && !headers.isEmpty()) {
+            if (EmptyValues.isNotEmpty(headers)) {
                 String first = headers.get(0);
-                return Texts.hasText(first) ? first : null;
+                return EmptyValues.hasText(first) ? first : null;
             }
             return null;
         }
@@ -497,7 +496,7 @@ public class ExcelFormatParser implements FormatParser {
 
         private boolean isAllBlank(List<String> cells) {
             for (String c : cells) {
-                if (c != null && Texts.hasText(c.trim())) {
+                if (c != null && EmptyValues.hasText(c.trim())) {
                     return false;
                 }
             }

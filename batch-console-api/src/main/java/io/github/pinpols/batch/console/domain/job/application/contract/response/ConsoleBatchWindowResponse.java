@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.job.application.contract.response
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
 import java.time.Instant;
 import lombok.Builder;
@@ -35,7 +34,7 @@ public record ConsoleBatchWindowResponse(
         @JsonProperty("updated_at") Instant updatedAt) {
 
     public static ConsoleBatchWindowResponse from(BatchWindowRow row) {
-        if (EmptyChecks.isNull(row)) {
+        if (row == null) {
             return null;
         }
         return ConsoleBatchWindowResponse.builder()

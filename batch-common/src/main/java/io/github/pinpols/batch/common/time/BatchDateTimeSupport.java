@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.time;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -345,7 +346,7 @@ public class BatchDateTimeSupport {
     }
 
     private String normalizeExtension(String extension) {
-        if (extension == null || extension.isBlank()) {
+        if (EmptyValues.isBlank(extension)) {
             return "";
         }
         String text = extension.trim();

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.notification.view.NotificationDeliveryLogRow;
@@ -44,7 +43,7 @@ public record ConsoleNotificationDeliveryLogResponse(
     private static final int ERROR_MESSAGE_MAX_LENGTH = 1024;
 
     public static ConsoleNotificationDeliveryLogResponse from(NotificationDeliveryLogRow row) {
-        if (EmptyChecks.isNull(row)) {
+        if (row == null) {
             return null;
         }
         return ConsoleNotificationDeliveryLogResponse.builder()
@@ -65,13 +64,11 @@ public record ConsoleNotificationDeliveryLogResponse(
     }
 
     private static Object maskJsonValue(String json) {
-        return EmptyChecks.isNull(json)
-                ? null
-                : SecretMasking.maskSensitiveValue(JsonUtils.fromJson(json, Object.class), Set.of());
+        return json == null ? null : SecretMasking.maskSensitiveValue(JsonUtils.fromJson(json, Object.class), Set.of());
     }
 
     private static String safeErrorMessage(String storedErrorMessage) {
-        if (EmptyChecks.isNull(storedErrorMessage)) {
+        if (storedErrorMessage == null) {
             return null;
         }
         String decoded = HtmlUtils.htmlUnescape(storedErrorMessage);

@@ -9,7 +9,7 @@ import io.github.pinpols.batch.common.exception.SystemException;
 import io.github.pinpols.batch.common.i18n.BizMessageResolver;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.persistence.PostgresConstraintViolation;
@@ -106,8 +106,8 @@ public class ConsoleApiExceptionHandler {
     }
 
     private String bizExceptionMessage(BizException exception) {
-        if (EmptyChecks.isNull(bizMessageResolver)) {
-            if (EmptyChecks.isNull(exception.getMessageKey())) {
+        if (bizMessageResolver == null) {
+            if (exception.getMessageKey() == null) {
                 return exception.getMessage();
             }
             return exception.getCode().label();
@@ -137,7 +137,7 @@ public class ConsoleApiExceptionHandler {
         String message = exception.getBindingResult().getFieldErrors().stream()
                 .map(FieldError::getDefaultMessage)
                 .collect(Collectors.joining("; "));
-        if (EmptyChecks.isBlank(Objects.requireNonNull(message))) {
+        if (EmptyValues.isBlank(Objects.requireNonNull(message))) {
             message = resolveCommonCode(ResultCode.VALIDATION_ERROR);
         }
         CommonResponse<Object> failureBody = responseFactory.failure(ResultCode.VALIDATION_ERROR, message);
@@ -149,7 +149,7 @@ public class ConsoleApiExceptionHandler {
             ConstraintViolationException exception) {
         log.warn("console constraint violation exception: {}", SwallowedExceptionLogger.summary(exception));
         String message = exception.getMessage();
-        if (EmptyChecks.isBlank(message)) {
+        if (EmptyValues.isBlank(message)) {
             message = resolveCommonCode(ResultCode.VALIDATION_ERROR);
         }
         CommonResponse<Object> failureBody = responseFactory.failure(ResultCode.VALIDATION_ERROR, message);
@@ -208,7 +208,7 @@ public class ConsoleApiExceptionHandler {
         log.warn(
                 "console downstream rest error: status={}, responseBodyLength={}",
                 exception.getStatusCode().value(),
-                EmptyChecks.isNull(body) ? 0 : body.length());
+                body == null ? 0 : body.length());
         try {
             CommonResponse<Object> downstream =
                     JsonUtils.fromJson(body, new TypeReference<CommonResponse<Object>>() {});
@@ -216,7 +216,7 @@ public class ConsoleApiExceptionHandler {
                 // 以业务 code 为准，HTTP status 使用 code.httpStatus()（更稳定、跨服务一致）
                 ResultCode code = downstream.code();
                 String message = downstream.message();
-                if (code.httpStatus() >= 500 || EmptyChecks.isBlank(message)) {
+                if (code.httpStatus() >= 500 || EmptyValues.isBlank(message)) {
                     message = resolveCommonCode(code);
                 }
                 int responseStatus = downstream.code().httpStatus();
@@ -368,9 +368,7 @@ public class ConsoleApiExceptionHandler {
         } else if (kind == PgConstraintViolation.WORKFLOW_CALENDAR_EXPECTATION) {
             BizException conflict =
                     BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.calendar_has_expectations");
-            message = EmptyChecks.isNull(bizMessageResolver)
-                    ? conflict.getCode().label()
-                    : bizMessageResolver.resolve(conflict);
+            message = bizMessageResolver == null ? conflict.getCode().label() : bizMessageResolver.resolve(conflict);
         } else {
             message = resolveCommonCode(kind.resultCode());
         }
@@ -380,7 +378,7 @@ public class ConsoleApiExceptionHandler {
     }
 
     private String resolveCommonCode(ResultCode code) {
-        return EmptyChecks.isNull(bizMessageResolver) ? code.label() : bizMessageResolver.resolve(code);
+        return bizMessageResolver == null ? code.label() : bizMessageResolver.resolve(code);
     }
 
     /**
@@ -410,7 +408,7 @@ public class ConsoleApiExceptionHandler {
         }
 
         static PgConstraintViolation classify(String rawMsg, PostgresConstraintViolation violation) {
-            if (EmptyChecks.isNotNull(violation)) {
+            if (violation != null) {
                 if (violation.matches("23514", "batch", "job_dependency", "ck_job_dependency_acyclic")) {
                     return JOB_DEPENDENCY_CYCLE;
                 }

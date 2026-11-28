@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.enums.ShardStrategy;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
@@ -104,7 +104,7 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
             throw BundlePlanParams.invalidBundle("bundleFiles must contain usable bindings for " + bundleType);
         }
         boolean bundleFileCountDoesNotMatchPartitions =
-                bundleJob && !EmptyChecks.isEmpty(bundleFiles) && bundleFiles.size() != partitionCount;
+                bundleJob && !EmptyValues.isEmpty(bundleFiles) && bundleFiles.size() != partitionCount;
         if (bundleFileCountDoesNotMatchPartitions) {
             // 数量须吻合,否则是配置错(束作业须 shardStrategy=DYNAMIC 让 BundlePartitionCountResolver 生效,
             // 且束大小 ≤ maxPartitionCount=256)。fail-fast,绝不静默丢绑定项。
@@ -144,7 +144,7 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
 
     private JobDefinitionView resolveExecutionDefinition(SchedulePlanCommand command) {
         JobDefinitionView jobDefinition = command.executionDefinition();
-        if (EmptyChecks.isNull(jobDefinition)) {
+        if (jobDefinition == null) {
             jobDefinition = configCacheService.findEnabledJobDefinition(command.tenantId(), command.jobCode());
         } else {
             boolean executionDefinitionDoesNotMatchScheduleTarget =
@@ -319,9 +319,9 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
 
     private String firstText(Object... values) {
         for (Object value : values) {
-            if (EmptyChecks.isNotNull(value)) {
+            if (value != null) {
                 String checkedText = String.valueOf(value);
-                if (EmptyChecks.isNotBlank(checkedText)) {
+                if (EmptyValues.isNotBlank(checkedText)) {
                     String returnedText = String.valueOf(value);
                     return returnedText.trim();
                 }

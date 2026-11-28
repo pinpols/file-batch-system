@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.job.support;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.DateTimeException;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -16,7 +15,7 @@ public final class BatchWindowRules {
     private BatchWindowRules() {}
 
     public static void validate(String timezone, String startTime, String endTime, Boolean allowCrossDay) {
-        if (EmptyChecks.isNull(timezone)) {
+        if (timezone == null) {
             throw invalid("timezone");
         }
         try {
@@ -33,7 +32,7 @@ public final class BatchWindowRules {
     }
 
     private static LocalTime parseTime(String value, String field) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             throw invalid(field);
         }
         try {

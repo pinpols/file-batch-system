@@ -3,9 +3,9 @@ package io.github.pinpols.batch.sdk.client;
 import io.github.pinpols.batch.sdk.dispatcher.KafkaTaskConsumer;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
 import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyStore;
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import io.github.pinpols.batch.sdk.scheduler.HeartbeatScheduler;
 import io.github.pinpols.batch.sdk.scheduler.LeaseRenewalScheduler;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
@@ -129,7 +129,7 @@ public class BatchPlatformClient {
         requestBuilder.sdkVersion(sdkVersion);
         RegisterRequest request = requestBuilder
                 .protocolVersion(RegisterRequest.CURRENT_PROTOCOL_VERSION)
-                .taskTypes(EmptyChecks.isEmpty(descriptors) ? null : descriptors)
+                .taskTypes(SdkEmptyValues.isEmpty(descriptors) ? null : descriptors)
                 .build();
         try {
             PlatformHttpClient.WorkerRegistrationResponse resp = httpClient.register(request);
@@ -295,11 +295,11 @@ public class BatchPlatformClient {
     }
 
     private boolean hasRuntimeResources() {
-        return EmptyChecks.isNotNull(dispatcher)
-                || EmptyChecks.isNotNull(kafkaConsumer)
-                || EmptyChecks.isNotNull(kafkaConsumerThread)
-                || EmptyChecks.isNotNull(heartbeatScheduler)
-                || EmptyChecks.isNotNull(leaseRenewalScheduler);
+        return dispatcher != null
+                || kafkaConsumer != null
+                || kafkaConsumerThread != null
+                || heartbeatScheduler != null
+                || leaseRenewalScheduler != null;
     }
 
     private static long remainingMs(long startNanos, long totalMs) {
@@ -308,8 +308,7 @@ public class BatchPlatformClient {
     }
 
     private void closeSchedulersWithinBudget(long stopStartNanos, long totalMs) {
-        int schedulerCount =
-                (EmptyChecks.isNull(heartbeatScheduler) ? 0 : 1) + (EmptyChecks.isNull(leaseRenewalScheduler) ? 0 : 1);
+        int schedulerCount = (heartbeatScheduler == null ? 0 : 1) + (leaseRenewalScheduler == null ? 0 : 1);
         if (schedulerCount == 0) {
             return;
         }
@@ -317,11 +316,11 @@ public class BatchPlatformClient {
         long maximumSchedulerBudgetMs = totalMs * 10 / 100;
         long schedulerBudgetMs = Math.min(remainingStopBudgetMs, maximumSchedulerBudgetMs);
         long schedulerStartNanos = System.nanoTime();
-        if (EmptyChecks.isNotNull(heartbeatScheduler)) {
+        if (heartbeatScheduler != null) {
             long heartbeatBudgetMs = schedulerBudgetMs / schedulerCount;
             heartbeatScheduler.close(Duration.ofMillis(heartbeatBudgetMs));
         }
-        if (EmptyChecks.isNotNull(leaseRenewalScheduler)) {
+        if (leaseRenewalScheduler != null) {
             long schedulerElapsedMs = (System.nanoTime() - schedulerStartNanos) / 1_000_000L;
             long remainingStopBudgetForLeaseMs = remainingMs(stopStartNanos, totalMs);
             long remainingSchedulerBudgetMs = Math.max(0L, schedulerBudgetMs - schedulerElapsedMs);
@@ -331,7 +330,7 @@ public class BatchPlatformClient {
     }
 
     private static String optionalFingerprint(String value) {
-        return EmptyChecks.isBlank(value) ? null : value;
+        return SdkEmptyValues.isBlank(value) ? null : value;
     }
 
     /** 给业务可见的工具方法 — 让自己生成 idempotency-key。 */
@@ -410,7 +409,7 @@ public class BatchPlatformClient {
 
         public Builder register(SdkTaskHandler handler) {
             String type = handler.taskType();
-            if (type == null || type.isBlank()) {
+            if (SdkEmptyValues.isBlank(type)) {
                 throw new IllegalArgumentException("handler.taskType() must be non-blank");
             }
             SdkTaskHandler prev = handlers.putIfAbsent(type, handler);

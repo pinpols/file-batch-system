@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.domain.file.support;
 import io.github.pinpols.batch.common.enums.FileEncryptType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.param.FileTemplateConfigUpsertParam;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
@@ -28,7 +28,7 @@ public final class ImportEncryptTypeValidation {
     public static boolean needsPipelineCheck(Boolean enabled, String templateType, String encryptType) {
         return Boolean.TRUE.equals(enabled)
                 && "IMPORT".equalsIgnoreCase(templateType)
-                && Texts.hasText(encryptType)
+                && EmptyValues.hasText(encryptType)
                 && !IMPLICIT_SUPPORTED.contains(encryptType.trim().toUpperCase(Locale.ROOT));
     }
 

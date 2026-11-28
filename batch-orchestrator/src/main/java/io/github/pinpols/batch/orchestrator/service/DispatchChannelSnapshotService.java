@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.plan.BundlePlanParams;
 import io.github.pinpols.batch.orchestrator.mapper.DispatchChannelSnapshotMapper;
@@ -43,14 +43,14 @@ public class DispatchChannelSnapshotService {
         Set<String> requestedChannels =
                 bundleDispatch ? BundlePlanParams.dispatchChannelCodes(pinned) : channelCodes(pinned);
         String selectedChannel = bundleDispatch ? null : DispatchChannelSelection.explicitChannel(pinned);
-        if (EmptyChecks.isNotNull(selectedChannel)) {
+        if (selectedChannel != null) {
             requestedChannels.add(selectedChannel);
         }
-        if (EmptyChecks.isEmpty(Objects.requireNonNull(requestedChannels))) {
+        if (EmptyValues.isEmpty(Objects.requireNonNull(requestedChannels))) {
             return pinned;
         }
         Map<String, String> snapshots = captureLatest(tenantId, requestedChannels);
-        if (EmptyChecks.isNotNull(selectedChannel) && !snapshots.containsKey(selectedChannel)) {
+        if (selectedChannel != null && !snapshots.containsKey(selectedChannel)) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.file_channel.not_found", selectedChannel);
         }
         if (bundleDispatch && snapshots.size() != requestedChannels.size()) {
@@ -60,14 +60,14 @@ public class DispatchChannelSnapshotService {
                 }
             }
         }
-        if (EmptyChecks.isNotEmpty(snapshots)) {
+        if (EmptyValues.isNotEmpty(snapshots)) {
             pinned.put(FrozenDispatchChannelSnapshot.COLLECTION_KEY, snapshots);
         }
         return pinned;
     }
 
     public ReplayDispatchSelection captureForWorkflowReplay(ReplayDispatchCaptureRequest request) {
-        if (EmptyChecks.isNull(request)) {
+        if (request == null) {
             throw invalidSnapshot();
         }
         String tenantId = request.tenantId();
@@ -86,10 +86,10 @@ public class DispatchChannelSnapshotService {
         Map<String, Object> selectedParamsWithoutCallerSnapshots = withoutCallerSnapshots(selectedParams);
         Set<String> requestedChannels = channelCodes(selectedParamsWithoutCallerSnapshots);
         String selectedChannel = DispatchChannelSelection.explicitChannel(selectedParamsWithoutCallerSnapshots);
-        if (EmptyChecks.isNotNull(selectedChannel)) {
+        if (selectedChannel != null) {
             requestedChannels.add(selectedChannel);
         }
-        if (EmptyChecks.isEmpty(Objects.requireNonNull(requestedChannels))) {
+        if (EmptyValues.isEmpty(Objects.requireNonNull(requestedChannels))) {
             throw unavailableConfiguration();
         }
         Set<?> originalChannels = Set.of();
@@ -111,17 +111,17 @@ public class DispatchChannelSnapshotService {
             String protectedSnapshot = policy == ConfigVersionPolicy.USE_ORIGINAL_CONFIG
                     ? originalSnapshot(channelCode, originalEffectiveParams)
                     : captureLatestOne(tenantId, channelCode);
-            if (EmptyChecks.isBlank(protectedSnapshot)
-                    && EmptyChecks.isNotNull(selectedChannel)
+            if (EmptyValues.isBlank(protectedSnapshot)
+                    && selectedChannel != null
                     && !selectedChannel.equals(channelCode)) {
                 continue;
             }
             FrozenDispatchChannelSnapshot snapshot = reveal(protectedSnapshot, tenantId, channelCode);
             if (!snapshot.enabled()) {
-                if (EmptyChecks.isNotNull(selectedChannel) && !selectedChannel.equals(channelCode)) {
+                if (selectedChannel != null && !selectedChannel.equals(channelCode)) {
                     if (secretBindings.containsKey(channelCode)) {
                         Object binding = secretBindings.get(channelCode);
-                        if (EmptyChecks.isNull(binding)) {
+                        if (binding == null) {
                             throw invalidSnapshot();
                         }
                         validateSecretBindings(Map.of(channelCode, snapshot), Map.of(channelCode, binding));
@@ -133,10 +133,10 @@ public class DispatchChannelSnapshotService {
             }
             Map<String, Object> configJson = map(snapshot.configuration().get("config_json"));
             Object secretRef = configJson.get("secret_ref");
-            if (EmptyChecks.isNotNull(selectedChannel)
+            if (selectedChannel != null
                     && !selectedChannel.equals(channelCode)
                     && secretRef instanceof String text
-                    && !EmptyChecks.isBlank(text)
+                    && !EmptyValues.isBlank(text)
                     && !selectedSecretBindings.containsKey(channelCode)) {
                 continue;
             }
@@ -156,12 +156,11 @@ public class DispatchChannelSnapshotService {
             Map<String, Object> secretBindings) {
         Map<String, Object> pinned = withoutCallerSnapshots(effectiveParams);
         pinned.remove(DispatchTaskKeys.SECRET_BINDINGS);
-        Map<String, String> approvedSnapshots =
-                EmptyChecks.isNull(protectedSnapshots) ? Map.of() : Map.copyOf(protectedSnapshots);
+        Map<String, String> approvedSnapshots = protectedSnapshots == null ? Map.of() : Map.copyOf(protectedSnapshots);
         Map<String, Object> approvedBindings = copyStringMap(secretBindings);
         if (!JobType.DISPATCH.code().equals(jobType)) {
-            if (!EmptyChecks.isEmpty(Objects.requireNonNull(approvedSnapshots))
-                    || !EmptyChecks.isEmpty(Objects.requireNonNull(approvedBindings))) {
+            if (!EmptyValues.isEmpty(Objects.requireNonNull(approvedSnapshots))
+                    || !EmptyValues.isEmpty(Objects.requireNonNull(approvedBindings))) {
                 throw invalidSnapshot();
             }
             return pinned;
@@ -169,10 +168,10 @@ public class DispatchChannelSnapshotService {
 
         Set<String> requestedChannels = channelCodes(pinned);
         String selectedChannel = DispatchChannelSelection.explicitChannel(pinned);
-        if (EmptyChecks.isNotNull(selectedChannel)) {
+        if (selectedChannel != null) {
             requestedChannels.add(selectedChannel);
         }
-        if (EmptyChecks.isEmpty(Objects.requireNonNull(requestedChannels))
+        if (EmptyValues.isEmpty(Objects.requireNonNull(requestedChannels))
                 || !replayChannelsMatch(requestedChannels, selectedChannel, approvedSnapshots.keySet())) {
             throw invalidSnapshot();
         }
@@ -184,14 +183,14 @@ public class DispatchChannelSnapshotService {
         }
         validateSecretBindings(decodedSnapshots, approvedBindings);
         pinned.put(FrozenDispatchChannelSnapshot.COLLECTION_KEY, approvedSnapshots);
-        if (!EmptyChecks.isEmpty(Objects.requireNonNull(approvedBindings))) {
+        if (!EmptyValues.isEmpty(Objects.requireNonNull(approvedBindings))) {
             pinned.put(DispatchTaskKeys.SECRET_BINDINGS, approvedBindings);
         }
         return pinned;
     }
 
     private boolean replayChannelsMatch(Set<String> candidates, String selected, Set<?> snapshots) {
-        if (EmptyChecks.isNull(selected)) {
+        if (selected == null) {
             return candidates.equals(snapshots);
         }
         return snapshots.contains(selected) && candidates.containsAll(snapshots);
@@ -199,7 +198,7 @@ public class DispatchChannelSnapshotService {
 
     private Map<String, Object> withoutCallerSnapshots(Map<String, Object> effectiveParams) {
         Map<String, Object> pinned =
-                EmptyChecks.isNull(effectiveParams) ? new LinkedHashMap<>() : new LinkedHashMap<>(effectiveParams);
+                effectiveParams == null ? new LinkedHashMap<>() : new LinkedHashMap<>(effectiveParams);
         pinned.remove(FrozenDispatchChannelSnapshot.COLLECTION_KEY);
         return pinned;
     }
@@ -208,7 +207,7 @@ public class DispatchChannelSnapshotService {
         Map<String, String> snapshots = new LinkedHashMap<>();
         for (String channelCode : channelCodes) {
             String protectedSnapshot = captureLatestOne(tenantId, channelCode);
-            if (EmptyChecks.isNotBlank(protectedSnapshot)) {
+            if (EmptyValues.isNotBlank(protectedSnapshot)) {
                 snapshots.put(channelCode, protectedSnapshot);
             }
         }
@@ -217,7 +216,7 @@ public class DispatchChannelSnapshotService {
 
     private String captureLatestOne(String tenantId, String channelCode) {
         String snapshotJson = channelSnapshots.selectCurrentChannelSnapshotJson(tenantId, channelCode);
-        if (EmptyChecks.isBlank(snapshotJson)) {
+        if (EmptyValues.isBlank(snapshotJson)) {
             return null;
         }
         Map<String, Object> row = readMap(snapshotJson);
@@ -228,13 +227,13 @@ public class DispatchChannelSnapshotService {
     }
 
     private String originalSnapshot(String channelCode, Map<String, Object> originalEffectiveParams) {
-        Map<String, Object> original = EmptyChecks.isNull(originalEffectiveParams) ? Map.of() : originalEffectiveParams;
+        Map<String, Object> original = originalEffectiveParams == null ? Map.of() : originalEffectiveParams;
         Object rawSnapshots = original.get(FrozenDispatchChannelSnapshot.COLLECTION_KEY);
         if (!(rawSnapshots instanceof Map<?, ?> snapshots)) {
             throw unavailableConfiguration();
         }
         Object rawSnapshot = snapshots.get(channelCode);
-        if (!(rawSnapshot instanceof String protectedSnapshot) || EmptyChecks.isBlank(protectedSnapshot)) {
+        if (!(rawSnapshot instanceof String protectedSnapshot) || EmptyValues.isBlank(protectedSnapshot)) {
             throw unavailableConfiguration();
         }
         return protectedSnapshot;
@@ -242,13 +241,13 @@ public class DispatchChannelSnapshotService {
 
     private FrozenDispatchChannelSnapshot reveal(String protectedSnapshot, String tenantId, String channelCode) {
         try {
-            if (EmptyChecks.isBlank(protectedSnapshot)) {
+            if (EmptyValues.isBlank(protectedSnapshot)) {
                 throw invalidSnapshot();
             }
             String plaintext = secretPayloadProtector.revealEncrypted(protectedSnapshot);
             FrozenDispatchChannelSnapshot snapshot =
                     JsonUtils.fromJsonStrict(plaintext, FrozenDispatchChannelSnapshot.class);
-            if (EmptyChecks.isNull(snapshot)) {
+            if (snapshot == null) {
                 throw invalidSnapshot();
             }
             snapshot.requireIdentity(tenantId, channelCode);
@@ -268,7 +267,7 @@ public class DispatchChannelSnapshotService {
             Map<String, Object> configJson = map(configuration.get("config_json"));
             Object rawSecretRef = configJson.get("secret_ref");
             Object rawBinding = secretBindings.get(entry.getKey());
-            if (rawSecretRef instanceof String secretRef && !EmptyChecks.isBlank(secretRef)) {
+            if (rawSecretRef instanceof String secretRef && !EmptyValues.isBlank(secretRef)) {
                 Map<String, Object> binding = map(rawBinding);
                 if (!secretRef.equals(binding.get("secretRef"))) {
                     throw invalidSnapshot();
@@ -279,7 +278,7 @@ public class DispatchChannelSnapshotService {
                 if (positiveLongOrZero(binding.get("versionNo")) <= 0) {
                     throw invalidSnapshot();
                 }
-            } else if (EmptyChecks.isNotNull(rawBinding)) {
+            } else if (rawBinding != null) {
                 throw invalidSnapshot();
             }
         }
@@ -296,7 +295,7 @@ public class DispatchChannelSnapshotService {
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 String key = String.valueOf(entry.getKey());
                 Object nested = entry.getValue();
-                if (CHANNEL_KEYS.contains(key) && nested instanceof String channel && !EmptyChecks.isBlank(channel)) {
+                if (CHANNEL_KEYS.contains(key) && nested instanceof String channel && !EmptyValues.isBlank(channel)) {
                     channels.add(channel.trim());
                 }
                 collectChannels(nested, channels);
@@ -313,7 +312,7 @@ public class DispatchChannelSnapshotService {
     private Map<String, Object> readMap(String json) {
         try {
             Map<String, Object> parsed = JsonUtils.fromJson(json, new TypeReference<>() {});
-            if (EmptyChecks.isNull(parsed)) {
+            if (parsed == null) {
                 throw invalidSnapshot();
             }
             return copyStringMap(parsed);
@@ -323,7 +322,7 @@ public class DispatchChannelSnapshotService {
     }
 
     private Map<String, Object> copyStringMap(Map<?, ?> source) {
-        if (EmptyChecks.isNull(source)) {
+        if (source == null) {
             return Map.of();
         }
         Map<String, Object> copy = new LinkedHashMap<>();
@@ -360,7 +359,7 @@ public class DispatchChannelSnapshotService {
             Map<String, Object> originalEffectiveParams,
             Map<String, Object> effectiveParams) {
         if (policy == ConfigVersionPolicy.USE_ORIGINAL_CONFIG) {
-            if (EmptyChecks.isNull(originalEffectiveParams)) {
+            if (originalEffectiveParams == null) {
                 return Map.of();
             }
             return originalEffectiveParams;
@@ -388,18 +387,18 @@ public class DispatchChannelSnapshotService {
             Map<String, Object> selectedSecretBindings) {
 
         public ReplayDispatchCaptureRequest {
-            boolean dispatchCaptureContextIncomplete = EmptyChecks.isBlank(tenantId)
-                    || EmptyChecks.isBlank(jobType)
-                    || EmptyChecks.isNull(effectiveParams)
-                    || EmptyChecks.isNull(policy);
+            boolean dispatchCaptureContextIncomplete = EmptyValues.isBlank(tenantId)
+                    || EmptyValues.isBlank(jobType)
+                    || effectiveParams == null
+                    || policy == null;
             if (dispatchCaptureContextIncomplete) {
                 throw new IllegalArgumentException("invalid dispatch replay capture request");
             }
             effectiveParams = Collections.unmodifiableMap(new LinkedHashMap<>(effectiveParams));
-            originalEffectiveParams = EmptyChecks.isNull(originalEffectiveParams)
+            originalEffectiveParams = originalEffectiveParams == null
                     ? Map.of()
                     : Collections.unmodifiableMap(new LinkedHashMap<>(originalEffectiveParams));
-            selectedSecretBindings = EmptyChecks.isNull(selectedSecretBindings)
+            selectedSecretBindings = selectedSecretBindings == null
                     ? Map.of()
                     : Collections.unmodifiableMap(new LinkedHashMap<>(selectedSecretBindings));
         }

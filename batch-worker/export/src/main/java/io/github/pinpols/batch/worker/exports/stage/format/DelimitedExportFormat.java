@@ -3,7 +3,7 @@ package io.github.pinpols.batch.worker.exports.stage.format;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -32,7 +32,7 @@ public class DelimitedExportFormat extends AbstractExportFormat {
     @Override
     public long generate(ExportFormatContext ctx) throws Exception {
         Long batchIdLong;
-        if (EmptyChecks.isNull(ctx.batchId())) {
+        if (ctx.batchId() == null) {
             batchIdLong = null;
         } else {
             Object rawBatchId = ctx.batchId();
@@ -63,10 +63,8 @@ public class DelimitedExportFormat extends AbstractExportFormat {
         String amountField = trailerEnabled ? OutboundTrailerRecord.amountField(trailerTemplate) : null;
         BigDecimal resumeControlTotal =
                 trailerEnabled && resuming && amountField != null ? batchControlTotal(ctx) : null;
-        boolean missingResumeControlTotal = trailerEnabled
-                && resuming
-                && EmptyChecks.isNotNull(amountField)
-                && EmptyChecks.isNull(resumeControlTotal);
+        boolean missingResumeControlTotal =
+                trailerEnabled && resuming && amountField != null && resumeControlTotal == null;
         if (missingResumeControlTotal) {
             throw new IllegalStateException(
                     "DELIMITED trailer control total cannot resume without batch total_amount/totalAmount");
@@ -134,7 +132,7 @@ public class DelimitedExportFormat extends AbstractExportFormat {
 
     private BigDecimal batchControlTotal(ExportFormatContext ctx) {
         Map<String, Object> batch = ctx.batch();
-        if (batch == null || batch.isEmpty()) {
+        if (EmptyValues.isEmpty(batch)) {
             return null;
         }
         Object configuredControlTotal = firstNonNull(

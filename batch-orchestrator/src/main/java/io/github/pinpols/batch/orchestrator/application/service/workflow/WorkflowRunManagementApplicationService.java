@@ -10,10 +10,9 @@ import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
@@ -122,7 +121,7 @@ public class WorkflowRunManagementApplicationService {
         }
         if (!resumeIntoFreeSlot(run)) {
             WorkflowRunEntity current = workflowRunMapper.selectById(tenantId, id);
-            if (EmptyChecks.isNull(current) || !WorkflowRunStatus.PAUSED.code().equals(current.getRunStatus())) {
+            if (current == null || !WorkflowRunStatus.PAUSED.code().equals(current.getRunStatus())) {
                 throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
             }
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.resume_capacity_full");
@@ -235,7 +234,7 @@ public class WorkflowRunManagementApplicationService {
         }
         WorkflowNodeRunEntity latestNodeRun =
                 workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(id, nodeCode);
-        WorkflowNodeRunEntity nodeRun = Guard.requireFound(latestNodeRun, "node run not found: " + nodeCode);
+        WorkflowNodeRunEntity nodeRun = Preconditions.requireFound(latestNodeRun, "node run not found: " + nodeCode);
         if (!WorkflowNodeRunStatus.FAILED.code().equals(nodeRun.getNodeStatus())) {
             throw BizException.of(
                     ResultCode.STATE_CONFLICT,
@@ -290,16 +289,12 @@ public class WorkflowRunManagementApplicationService {
         extra.put("workflowDefinitionId", run.getWorkflowDefinitionId());
         extra.put("nodeCode", nodeCode);
         extra.put("nodeRunId", nodeRunId);
-        extra.put(
-                "bizDate",
-                EmptyChecks.isNull(run.getBizDate()) ? null : run.getBizDate().toString());
-        extra.put(
-                "bizDate",
-                EmptyChecks.isNull(run.getBizDate()) ? null : run.getBizDate().toString());
-        extra.put("operatorId", Texts.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM);
+        extra.put("bizDate", run.getBizDate() == null ? null : run.getBizDate().toString());
+        extra.put("bizDate", run.getBizDate() == null ? null : run.getBizDate().toString());
+        extra.put("operatorId", EmptyValues.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM);
         extra.put(
                 "operatorType",
-                Texts.hasText(operatorId)
+                EmptyValues.hasText(operatorId)
                         ? AuditLogConstants.OPERATOR_TYPE_REQUEST
                         : AuditLogConstants.OPERATOR_TYPE_SYSTEM);
         extra.put("reason", reason);
@@ -322,12 +317,10 @@ public class WorkflowRunManagementApplicationService {
         detail.put("nodeRunId", nodeRun.getId());
         detail.put(
                 "jobInstanceId",
-                EmptyChecks.isNull(nodeRun.getJobInstanceId())
+                nodeRun.getJobInstanceId() == null
                         ? null
                         : nodeRun.getJobInstanceId().toString());
-        detail.put(
-                "bizDate",
-                EmptyChecks.isNull(run.getBizDate()) ? null : run.getBizDate().toString());
+        detail.put("bizDate", run.getBizDate() == null ? null : run.getBizDate().toString());
         detail.put("operatorId", operatorId);
         AlertEmitCommand alertRequest = AlertEmitCommand.builder()
                 .tenantId(run.getTenantId())
@@ -364,16 +357,15 @@ public class WorkflowRunManagementApplicationService {
 
     /** 人工 skip 后沿可满足边推进，并持久化不会触发的分支。 */
     private void advanceDownstreamAfterSkip(WorkflowRunEntity run, String nodeCode) {
-        if (EmptyChecks.isNull(run.getWorkflowDefinitionId())) {
+        if (run.getWorkflowDefinitionId() == null) {
             log.warn("skipNode advancement skipped: workflow_run {} has no workflowDefinitionId", run.getId());
             return;
         }
         Long relatedJobInstanceId = run.getRelatedJobInstanceId();
-        JobInstanceEntity jobInstance = EmptyChecks.isNull(relatedJobInstanceId)
+        JobInstanceEntity jobInstance = relatedJobInstanceId == null
                 ? null
                 : jobMappers.jobInstanceMapper.selectById(run.getTenantId(), relatedJobInstanceId);
-        boolean relatedJobInstanceMissing =
-                EmptyChecks.isNotNull(relatedJobInstanceId) && EmptyChecks.isNull(jobInstance);
+        boolean relatedJobInstanceMissing = relatedJobInstanceId != null && jobInstance == null;
         if (relatedJobInstanceMissing) {
             log.warn(
                     "skipNode advancement skipped: jobInstance {} not found for workflow_run {}",
@@ -384,9 +376,9 @@ public class WorkflowRunManagementApplicationService {
         List<WorkflowDagService.DagNodeResolution> nextNodes =
                 workflowDagService.resolveNextNodesForRun(run, nodeCode, true, null);
         WorkflowNodeDispatchService dispatchService = null;
-        if (EmptyChecks.isNotNull(nextNodes)) {
+        if (nextNodes != null) {
             for (WorkflowDagService.DagNodeResolution next : nextNodes) {
-                if (EmptyChecks.isNull(next)) {
+                if (next == null) {
                     continue;
                 }
                 if (WorkflowNodeCode.END.code().equals(next.nodeCode())) {
@@ -399,10 +391,10 @@ public class WorkflowRunManagementApplicationService {
                 if (!workflowDagService.isNodeReadyForRunDispatch(run, next.nodeCode(), null)) {
                     continue;
                 }
-                if (EmptyChecks.isNull(dispatchService)) {
+                if (dispatchService == null) {
                     dispatchService = workflowNodeDispatchServiceProvider.getObject();
                 }
-                String traceId = EmptyChecks.isNull(jobInstance) ? run.getTraceId() : jobInstance.getTraceId();
+                String traceId = jobInstance == null ? run.getTraceId() : jobInstance.getTraceId();
                 dispatchService.dispatchNode(jobInstance, run, next, null, traceId);
             }
         }
@@ -416,6 +408,6 @@ public class WorkflowRunManagementApplicationService {
 
     private WorkflowRunEntity findRun(String tenantId, Long id) {
         WorkflowRunEntity loadedRun = workflowRunMapper.selectById(tenantId, id);
-        return Guard.requireFound(loadedRun, "workflow run not found");
+        return Preconditions.requireFound(loadedRun, "workflow run not found");
     }
 }

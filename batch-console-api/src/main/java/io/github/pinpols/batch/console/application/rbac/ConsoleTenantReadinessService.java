@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.application.rbac;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigReadinessView;
@@ -54,12 +54,12 @@ public class ConsoleTenantReadinessService {
     private final ConsoleTenantGuard tenantGuard;
 
     public TenantReadinessResponse check(String tenantId) {
-        Guard.requireText(tenantId, "tenantId is required");
+        Preconditions.requireText(tenantId, "tenantId is required");
         // SEC(跨租户越权修复):非全局角色只能对自身租户跑就绪自检,tenantId 与 JWT 不符 → FORBIDDEN;
         // 全局角色(ADMIN / AUDITOR)及内部 provision 编排(ADMIN 上下文)可查任意租户。
         tenantGuard.assertTenantAllowed(tenantId);
         TenantRow tenant = tenantMapper.selectByTenantId(tenantId);
-        Guard.requireFound(tenant, "tenant not found: " + tenantId);
+        Preconditions.requireFound(tenant, "tenant not found: " + tenantId);
 
         List<ReadinessItem> blocking = new ArrayList<>();
         List<ReadinessItem> warnings = new ArrayList<>();
@@ -78,7 +78,7 @@ public class ConsoleTenantReadinessService {
             boolean enabled = Boolean.TRUE.equals(row.enabled());
             boolean missingQuery = isBlank(row.defaultQuerySql());
             Object fieldMappings = row.fieldMappings();
-            String fieldMappingsText = EmptyChecks.isNull(fieldMappings) ? null : String.valueOf(fieldMappings);
+            String fieldMappingsText = fieldMappings == null ? null : String.valueOf(fieldMappings);
             boolean missingMappings = isBlankJson(fieldMappingsText);
             // IMPORT/EXPORT 模板必须有取数 SQL + 字段映射才能真正跑;SHARED 仅片段,不强制。
             boolean queryRelevant = "IMPORT".equals(type) || "EXPORT".equals(type);
@@ -145,7 +145,7 @@ public class ConsoleTenantReadinessService {
     }
 
     private static boolean isBlank(String v) {
-        return v == null || v.isBlank();
+        return EmptyValues.isBlank(v);
     }
 
     private static boolean isBlankJson(String v) {

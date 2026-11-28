@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Map;
 import lombok.Builder;
 
@@ -50,9 +50,9 @@ public record DispatchPayload(
             @JsonProperty("run_mode") @JsonAlias("runMode") String runMode,
             @JsonProperty("metadata") Map<String, Object> metadata) {
         this(
-                EmptyChecks.isNotNull(bundleSourceFileId) ? bundleSourceFileId : fileId,
+                bundleSourceFileId != null ? bundleSourceFileId : fileId,
                 fileCode,
-                EmptyChecks.isNotNull(bundleTargetRef)
+                bundleTargetRef != null
                         ? bundleTargetRef
                         : resolveChannelCode(channelCode, dispatchChannelCode, targetChannelCode),
                 dispatchTarget,
@@ -66,7 +66,7 @@ public record DispatchPayload(
 
     private static String resolveChannelCode(String channelCode, String dispatchChannelCode, String targetChannelCode) {
         for (String value : new String[] {channelCode, dispatchChannelCode, targetChannelCode}) {
-            if (EmptyChecks.isNotNull(value) && !value.isBlank()) { // empty-check: allow - 保留 JDK 字符串空白判定
+            if (EmptyValues.isNotBlank(value)) { // empty-check: allow - 保留 JDK 字符串空白判定
                 return value.trim();
             }
         }

@@ -10,7 +10,7 @@ import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
@@ -71,8 +71,8 @@ public class WorkflowRunReplaySnapshotResolver {
         Instant dataIntervalEnd = instant(preview.get("dataIntervalEnd"));
         boolean operationMatchesSnapshot = operation.tenantId().equals(tenantId)
                 && operation.sourceWorkflowRunId().equals(sourceWorkflowRunId)
-                && EmptyChecks.isNull(operation.fromDate())
-                && EmptyChecks.isNull(operation.throughDate())
+                && operation.fromDate() == null
+                && operation.throughDate() == null
                 && operation.calendarCode().equals(calendarCode)
                 && operation.resultPolicy().equals(resultPolicy)
                 && operation.configVersionPolicy().equals(configVersionPolicy)
@@ -81,9 +81,9 @@ public class WorkflowRunReplaySnapshotResolver {
                 && "FULL_WORKFLOW".equals(operation.scope())
                 && "REPLAY".equals(operation.executionMode());
         boolean targetRequestMatches = operationSupportsFullReplay
-                && (EmptyChecks.isNull(operation.targetRequestId())
+                && (operation.targetRequestId() == null
                         || operation.targetRequestId().equals(targetRequestId));
-        boolean snapshotHasDryRunValue = targetRequestMatches && EmptyChecks.isNotNull(dryRun);
+        boolean snapshotHasDryRunValue = targetRequestMatches && dryRun != null;
         boolean sourceExecutionDefinitionMatches = false;
         if (snapshotHasDryRunValue) {
             Long sourceWorkflowDefinitionId = positiveLong(sourceExecutionSnapshot.get("workflowDefinitionId"));
@@ -96,10 +96,10 @@ public class WorkflowRunReplaySnapshotResolver {
             }
         }
         boolean replaySnapshotIsValid = sourceExecutionDefinitionMatches
-                && !(EmptyChecks.isNotNull(dataIntervalStart)
-                        && EmptyChecks.isNotNull(dataIntervalEnd)
+                && !(dataIntervalStart != null
+                        && dataIntervalEnd != null
                         && !dataIntervalStart.isBefore(dataIntervalEnd))
-                && (EmptyChecks.isNotNull(dataIntervalStart)) == (EmptyChecks.isNotNull(dataIntervalEnd));
+                && (dataIntervalStart != null) == (dataIntervalEnd != null);
         if (!replaySnapshotIsValid) {
             throw invalidSnapshot();
         }
@@ -112,14 +112,14 @@ public class WorkflowRunReplaySnapshotResolver {
         snapshotRun.setWorkflowVersionSnapshot(workflowVersion);
         snapshotRun.setExecutionSnapshot(executionSnapshotJson);
         WorkflowRunExecutionSnapshot restoredSnapshot = WorkflowRunExecutionSnapshot.from(snapshotRun);
-        if (EmptyChecks.isNull(restoredSnapshot)) {
+        if (restoredSnapshot == null) {
             throw invalidSnapshot();
         }
 
         Map<String, Object> launchParams = new LinkedHashMap<>(rootParams);
         launchParams.put(RESULT_POLICY_PARAM, resultPolicy);
         launchParams.put(CONFIG_POLICY_PARAM, configVersionPolicy);
-        if (EmptyChecks.isNull(configVersion)) {
+        if (configVersion == null) {
             launchParams.remove(CONFIG_VERSION_PARAM);
         } else {
             launchParams.put(CONFIG_VERSION_PARAM, configVersion);
@@ -173,21 +173,21 @@ public class WorkflowRunReplaySnapshotResolver {
     }
 
     private void validateOperation(ReplayOperationEntity operation, String targetRequestId) {
-        boolean replayOperationSnapshotIsInvalid = EmptyChecks.isNull(operation)
+        boolean replayOperationSnapshotIsInvalid = operation == null
                 || !ReplayOperationType.WORKFLOW_RUN.code().equals(operation.operationType())
-                || EmptyChecks.isNull(operation.id())
-                || EmptyChecks.isBlank(operation.tenantId())
-                || EmptyChecks.isNull(operation.sourceWorkflowRunId())
-                || EmptyChecks.isNotNull(operation.fromDate())
-                || EmptyChecks.isNotNull(operation.throughDate())
-                || EmptyChecks.isBlank(operation.calendarCode())
-                || EmptyChecks.isBlank(operation.scope())
-                || EmptyChecks.isBlank(operation.executionMode())
-                || EmptyChecks.isBlank(operation.resultPolicy())
-                || EmptyChecks.isBlank(operation.configVersionPolicy())
-                || EmptyChecks.isBlank(operation.snapshotHash())
-                || EmptyChecks.isBlank(operation.snapshotPayload())
-                || EmptyChecks.isBlank(targetRequestId);
+                || operation.id() == null
+                || EmptyValues.isBlank(operation.tenantId())
+                || operation.sourceWorkflowRunId() == null
+                || operation.fromDate() != null
+                || operation.throughDate() != null
+                || EmptyValues.isBlank(operation.calendarCode())
+                || EmptyValues.isBlank(operation.scope())
+                || EmptyValues.isBlank(operation.executionMode())
+                || EmptyValues.isBlank(operation.resultPolicy())
+                || EmptyValues.isBlank(operation.configVersionPolicy())
+                || EmptyValues.isBlank(operation.snapshotHash())
+                || EmptyValues.isBlank(operation.snapshotPayload())
+                || EmptyValues.isBlank(targetRequestId);
         if (replayOperationSnapshotIsInvalid) {
             throw invalidSnapshot();
         }
@@ -214,9 +214,9 @@ public class WorkflowRunReplaySnapshotResolver {
         for (Map.Entry<String, Object> entry : selectedDefinitions.entrySet()) {
             JobDefinitionView definition = readDefinition(entry.getValue());
             boolean replayDefinitionIdentityIsInvalid = !tenantId.equals(definition.tenantId())
-                    || EmptyChecks.isNull(definition.id())
-                    || EmptyChecks.isBlank(definition.jobCode())
-                    || EmptyChecks.isBlank(definition.jobType());
+                    || definition.id() == null
+                    || EmptyValues.isBlank(definition.jobCode())
+                    || EmptyValues.isBlank(definition.jobType());
             if (replayDefinitionIdentityIsInvalid) {
                 throw invalidSnapshot();
             }
@@ -258,7 +258,7 @@ public class WorkflowRunReplaySnapshotResolver {
                 identity.put("dispatchSecretBindings", dispatchSecretBindings);
             }
             Object rawDeclaration = selectedReplayCapabilities.get(entry.getKey());
-            if (EmptyChecks.isNotNull(rawDeclaration)) {
+            if (rawDeclaration != null) {
                 ReplayCapabilityDeclaration declaration = readReplayCapability(rawDeclaration);
                 identity.put("replayExecutionGuard", new ReplayExecutionGuard(replayOperationId, declaration));
             }
@@ -277,14 +277,14 @@ public class WorkflowRunReplaySnapshotResolver {
 
     private Map<String, String> readProtectedFileTemplateSnapshots(Object rawSnapshots) {
         Map<String, Object> snapshots = readMap(rawSnapshots);
-        if (EmptyChecks.isEmpty(Objects.requireNonNull(snapshots))) {
+        if (EmptyValues.isEmpty(Objects.requireNonNull(snapshots))) {
             throw invalidSnapshot();
         }
         Map<String, String> protectedSnapshots = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : snapshots.entrySet()) {
             String templateCode = entry.getKey();
             String protectedSnapshot = requiredText(entry.getValue());
-            if (EmptyChecks.isBlank(templateCode)) {
+            if (EmptyValues.isBlank(templateCode)) {
                 throw invalidSnapshot();
             }
             protectedSnapshots.put(templateCode, protectedSnapshot);
@@ -296,7 +296,7 @@ public class WorkflowRunReplaySnapshotResolver {
         Map<String, Object> bindings = readMap(rawBindings);
         Map<String, Object> validatedBindings = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : bindings.entrySet()) {
-            if (EmptyChecks.isBlank(entry.getKey())) {
+            if (EmptyValues.isBlank(entry.getKey())) {
                 throw invalidSnapshot();
             }
             Map<String, Object> binding = readMap(entry.getValue());
@@ -313,7 +313,7 @@ public class WorkflowRunReplaySnapshotResolver {
         try {
             String json = JsonUtils.toJson(value);
             JobDefinitionView definition = JsonUtils.fromJson(json, JobDefinitionView.class);
-            if (EmptyChecks.isNull(definition)) {
+            if (definition == null) {
                 throw invalidSnapshot();
             }
             return definition;
@@ -328,7 +328,7 @@ public class WorkflowRunReplaySnapshotResolver {
         try {
             String json = JsonUtils.toJson(value);
             ReplayCapabilityDeclaration declaration = JsonUtils.fromJson(json, ReplayCapabilityDeclaration.class);
-            boolean replayDeclarationIsUnsafe = EmptyChecks.isNull(declaration)
+            boolean replayDeclarationIsUnsafe = declaration == null
                     || !declaration.isFullyDeclared()
                     || declaration.idempotencyCapability() == IdempotencyCapability.NONE;
             if (replayDeclarationIsUnsafe) {
@@ -346,7 +346,7 @@ public class WorkflowRunReplaySnapshotResolver {
         try {
             String json = value instanceof String jsonText ? jsonText : JsonUtils.toJson(value);
             Map<String, Object> map = JsonUtils.fromJson(json, new TypeReference<>() {});
-            if (EmptyChecks.isNull(map)) {
+            if (map == null) {
                 throw invalidSnapshot();
             }
             return new LinkedHashMap<>(map);
@@ -366,7 +366,7 @@ public class WorkflowRunReplaySnapshotResolver {
     }
 
     private String requiredText(Object value) {
-        if (!(value instanceof String text) || EmptyChecks.isBlank(text)) {
+        if (!(value instanceof String text) || EmptyValues.isBlank(text)) {
             throw invalidSnapshot();
         }
         return text;
@@ -374,7 +374,7 @@ public class WorkflowRunReplaySnapshotResolver {
 
     private Long positiveLong(Object value) {
         Long result = positiveLongOrNull(value);
-        if (EmptyChecks.isNull(result)) {
+        if (result == null) {
             throw invalidSnapshot();
         }
         return result;
@@ -389,7 +389,7 @@ public class WorkflowRunReplaySnapshotResolver {
 
     private Integer positiveInteger(Object value) {
         Integer result = nullableInteger(value);
-        if (EmptyChecks.isNull(result) || result <= 0) {
+        if (result == null || result <= 0) {
             throw invalidSnapshot();
         }
         return result;
@@ -415,7 +415,7 @@ public class WorkflowRunReplaySnapshotResolver {
     }
 
     private Instant instant(Object value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         if (value instanceof String || value instanceof Number) {

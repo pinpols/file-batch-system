@@ -6,9 +6,8 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.file.ExportFileNameResolver;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileTemplateApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftCommand;
 import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftResult;
@@ -92,7 +91,7 @@ public class DefaultConsoleFileTemplateApplicationService implements ConsoleFile
         String resolved = tenantGuard.resolveTenant(tenantId);
         FileTemplateConfigQueryView templateRow = mapper.selectById(resolved, id);
         FileTemplateConfigQueryView requiredTemplateRow =
-                Guard.requireFound(templateRow, "file template not found: " + id);
+                Preconditions.requireFound(templateRow, "file template not found: " + id);
         return ConsoleFileProjectionMapper.templateView(requiredTemplateRow);
     }
 
@@ -121,13 +120,13 @@ public class DefaultConsoleFileTemplateApplicationService implements ConsoleFile
     public ConsoleFileTemplateResponse update(Long id, FileTemplateUpdateRequest request) {
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
         FileTemplateConfigQueryView existing =
-                Guard.requireFound(mapper.selectById(tenantId, id), "file template not found: " + id);
+                Preconditions.requireFound(mapper.selectById(tenantId, id), "file template not found: " + id);
         String operator = requestMetadataResolver.current().operatorId();
         String templateCode = existing.templateCode();
         // #9 (adv-review 2026-07-13)：update 不得改 version —— upsert 的 on conflict 键含 version，
         // 入参携带新 version 时不命中 path id 指向的现有行，反而 INSERT 一条新 version 幽灵行(新 id)，
         // 而回读仍按旧 id 取回陈旧行。update 语义固定就地作用于现有行，忽略入参的 version 覆盖。
-        int version = EmptyChecks.isNotNull(existing.version()) ? existing.version() : 1;
+        int version = existing.version() != null ? existing.version() : 1;
         FileTemplateConfigUpsertParam param =
                 buildUpdateParam(tenantId, templateCode, version, operator, request, existing);
         validateFixedWidthMappings(param.getBasicInfo(), param.getFormat());
@@ -142,7 +141,7 @@ public class DefaultConsoleFileTemplateApplicationService implements ConsoleFile
         String resolved = tenantGuard.resolveTenant(tenantId);
         if (Boolean.TRUE.equals(enabled)) {
             FileTemplateConfigQueryView existing =
-                    Guard.requireFound(mapper.selectById(resolved, id), "file template not found: " + id);
+                    Preconditions.requireFound(mapper.selectById(resolved, id), "file template not found: " + id);
             FixedWidthMappingValidation.validate(
                     objectMapper,
                     true,
@@ -245,13 +244,10 @@ public class DefaultConsoleFileTemplateApplicationService implements ConsoleFile
                 request.getDefaultQueryCode(), request.getDefaultQuerySql(), request.getQueryParamSchemaJson()));
         // Runtime: DB 默认 streaming=true / page=1000 / fetch=1000 / chunk=500,补一致默认
         Boolean effectiveStreamingEnabled =
-                EmptyChecks.isNotNull(request.getStreamingEnabled()) ? request.getStreamingEnabled() : Boolean.TRUE;
-        Integer effectivePageSize =
-                EmptyChecks.isNotNull(request.getPageSize()) ? request.getPageSize() : DEFAULT_PAGE_SIZE;
-        Integer effectiveFetchSize =
-                EmptyChecks.isNotNull(request.getFetchSize()) ? request.getFetchSize() : DEFAULT_FETCH_SIZE;
-        Integer effectiveChunkSize =
-                EmptyChecks.isNotNull(request.getChunkSize()) ? request.getChunkSize() : DEFAULT_CHUNK_SIZE;
+                request.getStreamingEnabled() != null ? request.getStreamingEnabled() : Boolean.TRUE;
+        Integer effectivePageSize = request.getPageSize() != null ? request.getPageSize() : DEFAULT_PAGE_SIZE;
+        Integer effectiveFetchSize = request.getFetchSize() != null ? request.getFetchSize() : DEFAULT_FETCH_SIZE;
+        Integer effectiveChunkSize = request.getChunkSize() != null ? request.getChunkSize() : DEFAULT_CHUNK_SIZE;
         FileTemplateConfigUpsertParam.RuntimeOptions runtimeOptions =
                 runtimeOptions(effectiveStreamingEnabled, effectivePageSize, effectiveFetchSize, effectiveChunkSize);
         param.setRuntime(runtimeOptions);
@@ -350,7 +346,7 @@ public class DefaultConsoleFileTemplateApplicationService implements ConsoleFile
             FileTemplateUpdateRequest req, FileTemplateConfigQueryView existing) {
         String defaultQueryCode = coalesceString(req.getDefaultQueryCode(), existing.defaultQueryCode());
         String defaultQuerySql = coalesceString(req.getDefaultQuerySql(), existing.defaultQuerySql());
-        String queryParamSchema = EmptyChecks.isNotNull(req.getQueryParamSchemaJson())
+        String queryParamSchema = req.getQueryParamSchemaJson() != null
                 ? req.getQueryParamSchemaJson()
                 : stringValue(existing.queryParamSchema());
         return queryOptions(defaultQueryCode, defaultQuerySql, queryParamSchema);
@@ -404,12 +400,13 @@ public class DefaultConsoleFileTemplateApplicationService implements ConsoleFile
     }
 
     private String normalizeDirection(String direction) {
-        if (!Texts.hasText(direction)) {
+        if (!EmptyValues.hasText(direction)) {
             return "IMPORT";
         }
         String trimmedDirection = direction.trim();
         String normalized = trimmedDirection.toUpperCase(Locale.ROOT);
-        Guard.require("IMPORT".equals(normalized) || "EXPORT".equals(normalized), "direction must be IMPORT or EXPORT");
+        Preconditions.require(
+                "IMPORT".equals(normalized) || "EXPORT".equals(normalized), "direction must be IMPORT or EXPORT");
         return normalized;
     }
 
@@ -418,15 +415,15 @@ public class DefaultConsoleFileTemplateApplicationService implements ConsoleFile
     }
 
     private static String coalesceString(String preferred, String existing) {
-        return EmptyChecks.isNotNull(preferred) ? preferred : existing;
+        return preferred != null ? preferred : existing;
     }
 
     private static Boolean coalesceBoolean(Boolean preferred, Boolean existing) {
-        return EmptyChecks.isNotNull(preferred) ? preferred : existing;
+        return preferred != null ? preferred : existing;
     }
 
     private Integer coalesceInt(Integer preferred, Integer existing) {
-        return EmptyChecks.isNotNull(preferred) ? preferred : existing;
+        return preferred != null ? preferred : existing;
     }
 
     private FileTemplateConfigUpsertParam.BasicInfo basicInfo(

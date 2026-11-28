@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.processes.cleanup;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.processes.mapper.platform.ProcessInvocationFenceMapper;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +36,7 @@ public class ProcessStagingGenerationCleanupFence {
 
     private boolean isStaleUnderFence(ProcessStagingGenerationCandidate candidate) {
         Long instanceId = platformMapper.selectTaskInstanceId(candidate.getTenantId(), candidate.getTaskId());
-        if (EmptyChecks.isNull(instanceId)) {
+        if (instanceId == null) {
             return false;
         }
         platformMapper.acquireInstanceFence(candidate.getTenantId(), instanceId);
@@ -44,7 +44,7 @@ public class ProcessStagingGenerationCleanupFence {
         // 围栏内重新读取任务的当前代际；不能确认当前代际时不回收。
         String currentGeneration =
                 platformMapper.selectTaskCurrentStagingGeneration(candidate.getTenantId(), candidate.getTaskId());
-        if (EmptyChecks.isBlank(currentGeneration)) {
+        if (EmptyValues.isBlank(currentGeneration)) {
             return false;
         }
         UUID current;

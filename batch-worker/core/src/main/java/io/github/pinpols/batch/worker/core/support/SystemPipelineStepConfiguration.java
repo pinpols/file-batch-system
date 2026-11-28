@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.worker.core.support;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import java.util.ArrayList;
@@ -41,7 +40,7 @@ final class SystemPipelineStepConfiguration {
         List<PipelineStepDefinition> steps = new ArrayList<>(templates.size());
         for (PipelineStepTemplate template : templates) {
             Map<String, Object> effectiveParams = new LinkedHashMap<>();
-            if (EmptyChecks.isNotNull(template.stepParams())) {
+            if (template.stepParams() != null) {
                 effectiveParams.putAll(template.stepParams());
             }
             Object stageConfig = paramsByStage.get(template.stageCode());

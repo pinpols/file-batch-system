@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.infrastructure;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
 import io.github.pinpols.batch.console.domain.notification.service.SubscriptionRuleWebhookDispatcher;
 import io.github.pinpols.batch.console.domain.notification.service.WebhookDispatcher;
@@ -34,9 +34,9 @@ public class ConsoleWebhookDomainEventListener {
     @Async(ConsoleAsyncConfiguration.PUSH_TASK_EXECUTOR)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onDomainEvent(ConsoleRealtimeDomainEvent event) {
-        boolean eventIsMissingTenant = EmptyChecks.isNull(event)
-                || EmptyChecks.isNull(event.tenantId())
-                || EmptyChecks.isBlank(Objects.requireNonNull(event.tenantId()));
+        boolean eventIsMissingTenant = event == null
+                || event.tenantId() == null
+                || EmptyValues.isBlank(Objects.requireNonNull(event.tenantId()));
         if (eventIsMissingTenant) {
             return;
         }

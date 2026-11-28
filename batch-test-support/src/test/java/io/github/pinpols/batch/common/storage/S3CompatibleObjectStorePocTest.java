@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.config.S3StorageProperties;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URI;
@@ -273,7 +273,7 @@ class S3CompatibleObjectStorePocTest {
 
     private static String requiredEnv(String name) {
         String value = System.getenv(name);
-        if (EmptyChecks.isBlank(value)) {
+        if (EmptyValues.isBlank(value)) {
             throw new IllegalStateException("required environment variable is not set: " + name);
         }
         return value;
@@ -281,12 +281,12 @@ class S3CompatibleObjectStorePocTest {
 
     private static String env(String name, String defaultValue) {
         String value = System.getenv(name);
-        return EmptyChecks.isBlank(value) ? defaultValue : value.trim();
+        return EmptyValues.isBlank(value) ? defaultValue : value.trim();
     }
 
     private static boolean booleanEnv(String name, boolean defaultValue) {
         String value = System.getenv(name);
-        return EmptyChecks.isBlank(value) ? defaultValue : Boolean.parseBoolean(value);
+        return EmptyValues.isBlank(value) ? defaultValue : Boolean.parseBoolean(value);
     }
 
     private static int intEnv(String name, int defaultValue) {

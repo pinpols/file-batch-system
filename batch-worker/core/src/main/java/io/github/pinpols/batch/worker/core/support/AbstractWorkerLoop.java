@@ -6,8 +6,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerRegistryStartupProperties;
@@ -157,7 +156,7 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
      * 后续沿既有重试路径再次尝试，避免把配置端口当作监听成功的证据。
      */
     private int resolveWorkerPort() {
-        int port = EmptyChecks.isNull(environment)
+        int port = environment == null
                 ? -1
                 : Objects.requireNonNullElse(environment.getProperty("local.server.port", Integer.class), -1);
         if (port < 1 || port > 65535) {
@@ -285,11 +284,11 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
         stopping.set(true);
     }
 
-    // S2259 无法识别 Texts.hasText(instanceId) 已在使用前排除 null。
+    // S2259 无法识别 EmptyValues.hasText(instanceId) 已在使用前排除 null。
     @SuppressWarnings("java:S2259")
     private String buildWorkerId(String poolCode) {
-        String instanceId = EmptyChecks.isNull(identityProperties) ? null : identityProperties.getInstanceId();
-        if (!Texts.hasText(instanceId)) {
+        String instanceId = identityProperties == null ? null : identityProperties.getInstanceId();
+        if (!EmptyValues.hasText(instanceId)) {
             return poolCode;
         }
         String normalizedInstanceId = instanceId.replaceAll("[^a-zA-Z0-9._-]", "_");
@@ -306,10 +305,10 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
     }
 
     private String resolveWorkerPoolCode(WorkerConfiguration cfg) {
-        if (Texts.hasText(cfg.workerCode())) {
+        if (EmptyValues.hasText(cfg.workerCode())) {
             return cfg.workerCode();
         }
-        if (Texts.hasText(cfg.workerType())) {
+        if (EmptyValues.hasText(cfg.workerType())) {
             return cfg.workerType().toLowerCase(Locale.ROOT) + "-" + UUID.randomUUID();
         }
         return workerGroup() + "-" + UUID.randomUUID();
@@ -331,14 +330,14 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
             return "unknown";
         }
         String top = ex.getMessage();
-        if (Texts.hasText(top)) {
+        if (EmptyValues.hasText(top)) {
             Throwable root = ex;
             while (root.getCause() != null) {
                 root = root.getCause();
             }
             if (root != ex) {
                 String rm = root.getMessage();
-                String rootPart = Texts.hasText(rm)
+                String rootPart = EmptyValues.hasText(rm)
                         ? root.getClass().getSimpleName() + ": " + rm
                         : root.getClass().getSimpleName();
                 return top + " [" + rootPart + "]" + registrationFailureHint(ex);
@@ -346,19 +345,17 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
             return top + registrationFailureHint(ex);
         }
         StringBuilder sb = new StringBuilder();
-        for (Throwable t = ex;
-                EmptyChecks.isNotNull(t) && sb.length() < REGISTRATION_FAILURE_SUMMARY_MAX_LENGTH;
-                t = t.getCause()) {
-            if (EmptyChecks.isNotEmpty(sb)) {
+        for (Throwable t = ex; t != null && sb.length() < REGISTRATION_FAILURE_SUMMARY_MAX_LENGTH; t = t.getCause()) {
+            if (EmptyValues.isNotEmpty(sb)) {
                 sb.append(" <- ");
             }
             sb.append(t.getClass().getSimpleName());
             String m = t.getMessage();
-            if (Texts.hasText(m)) {
+            if (EmptyValues.hasText(m)) {
                 sb.append(": ").append(m);
             }
         }
-        String core = EmptyChecks.isNotEmpty(sb) ? sb.toString() : ex.getClass().getSimpleName();
+        String core = EmptyValues.isNotEmpty(sb) ? sb.toString() : ex.getClass().getSimpleName();
         return core + registrationFailureHint(ex);
     }
 

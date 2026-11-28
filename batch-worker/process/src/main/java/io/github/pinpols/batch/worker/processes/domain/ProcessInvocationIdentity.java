@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.processes.domain;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Objects;
 import lombok.Builder;
 
@@ -16,9 +16,9 @@ public record ProcessInvocationIdentity(
         Objects.requireNonNull(jobPartitionId, "jobPartitionId");
         Objects.requireNonNull(workerId, "workerId");
         Objects.requireNonNull(invocationId, "invocationId");
-        boolean hasCompleteClaimedIdentity = EmptyChecks.isNotBlank(tenantId)
-                && EmptyChecks.isNotBlank(workerId)
-                && EmptyChecks.isNotBlank(invocationId)
+        boolean hasCompleteClaimedIdentity = EmptyValues.isNotBlank(tenantId)
+                && EmptyValues.isNotBlank(workerId)
+                && EmptyValues.isNotBlank(invocationId)
                 && taskId > 0
                 && jobInstanceId > 0
                 && jobPartitionId > 0;

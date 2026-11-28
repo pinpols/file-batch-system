@@ -4,7 +4,6 @@ import io.github.pinpols.batch.common.enums.BatchDayReplayExecutionMode;
 import io.github.pinpols.batch.common.enums.ConfigVersionPolicy;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.CompensationService;
 import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCommand;
@@ -47,7 +46,7 @@ class BatchDayReplayEntryExecutor {
         PlanSnapshot planSnapshot =
                 entry.planSnapshot() == null ? null : JsonUtils.fromJson(entry.planSnapshot(), PlanSnapshot.class);
         boolean dryRun = BatchDayReplayExecutionMode.DRY_RUN.code().equals(session.executionMode());
-        String batchNoOverride = dryRun || EmptyChecks.isNull(entry.sourceInstanceId())
+        String batchNoOverride = dryRun || entry.sourceInstanceId() == null
                 ? "dry-run-session-" + session.id() + "-entry-" + entry.id()
                 : null;
         CompensationSubmitCommand command = CompensationSubmitCommand.builder()

@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.rbac.web;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
@@ -76,7 +76,7 @@ public class ConsoleTenantConfigInitController {
         String operator = resolveOperator(authentication);
         UUID operationId = UUID.randomUUID();
         String batchOperationId = operationId.toString();
-        if (!Texts.hasText(idempotencyKey) || request.isDryRun()) {
+        if (!EmptyValues.hasText(idempotencyKey) || request.isDryRun()) {
             return responseFactory.success(copyService.copy(request, operator, batchOperationId));
         }
         String tenantHeader = servletRequest.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);

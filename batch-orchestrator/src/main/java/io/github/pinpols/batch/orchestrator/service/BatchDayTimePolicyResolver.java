@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.service;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -115,7 +115,7 @@ public class BatchDayTimePolicyResolver {
 
     @SuppressWarnings("java:S2259")
     private String normalize(String value, String defaultValue) {
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             return defaultValue;
         }
         String trimmedValue = value.trim();

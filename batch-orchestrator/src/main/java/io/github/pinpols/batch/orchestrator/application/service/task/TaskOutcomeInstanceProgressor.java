@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -58,7 +58,7 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
     void advance(TaskOutcomeCommand command, JobTaskEntity task, JobInstanceEntity jobInstance, Instant finishedAt) {
         WorkflowRunEntity workflowRun =
                 workflowMappers.workflowRunMapper.selectByNodeJobInstanceId(command.tenantId(), jobInstance.getId());
-        boolean dagInstance = EmptyChecks.isNotNull(workflowRun);
+        boolean dagInstance = workflowRun != null;
         List<PartitionStatusRef> statusRefs = dagInstance
                 ? jobMappers.jobPartitionMapper.selectStatusRefsByInstance(command.tenantId(), task.getJobInstanceId())
                 : List.of();
@@ -81,11 +81,11 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
                 : List.of();
         NodePartitionProgressCalculator.Result nodeProgress =
                 NodePartitionProgressCalculator.calculate(statusRefs, nodeAssignments, currentNodeCode, workflowRun);
-        Set<String> activeNodes = EmptyChecks.isNull(workflowRun)
+        Set<String> activeNodes = workflowRun == null
                 ? new LinkedHashSet<>()
                 : TaskOutcomeStatePolicy.parseActiveNodes(workflowRun.getCurrentNodeCode());
 
-        if (nodeProgress.allFinished() && EmptyChecks.isNotNull(workflowRun)) {
+        if (nodeProgress.allFinished() && workflowRun != null) {
             List<JobPartitionEntity> nodeCompletionPartitions = loadPartitions(command, task);
             List<JobPartitionEntity> successfulNodePartitions = TaskOutcomeSummaryBuilder.filterPartitionsByIds(
                     nodeCompletionPartitions, nodeProgress.partitionIds());
@@ -111,7 +111,7 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
             activeNodes.addAll(resolvedActiveNodes);
         }
 
-        boolean dagContinues = EmptyChecks.isNotNull(workflowRun) && EmptyChecks.isNotEmpty(activeNodes);
+        boolean dagContinues = workflowRun != null && EmptyValues.isNotEmpty(activeNodes);
         // 节点 JobInstance 只拥有自己的分区。兄弟/后代 Workflow 节点会让
         // WorkflowRun 保持活动，但不能让此已完成的 JobInstance 继续占用准入名额。
         boolean jobFullyComplete = allPartitionsFinished;
@@ -185,7 +185,7 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
                     instanceFailureClass,
                     loadPartitions(command, task));
         }
-        if (EmptyChecks.isNotNull(workflowRun)) {
+        if (workflowRun != null) {
             workflowFinalizer.finalizeWorkflow(TaskOutcomeWorkflowFinalizer.Context.builder()
                     .command(command)
                     .workflowRun(workflowRun)
@@ -209,12 +209,12 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
     @Override
     public void advanceTimedOutWorkflowNode(String tenantId, Long jobInstanceId, Instant finishedAt) {
         JobInstanceEntity jobInstance = jobMappers.jobInstanceMapper.selectById(tenantId, jobInstanceId);
-        if (EmptyChecks.isNull(jobInstance)) {
+        if (jobInstance == null) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict");
         }
         WorkflowRunEntity workflowRun =
                 workflowMappers.workflowRunMapper.selectByNodeJobInstanceId(tenantId, jobInstanceId);
-        if (EmptyChecks.isNull(workflowRun)) {
+        if (workflowRun == null) {
             return;
         }
         WorkflowNodeRunEntity linkedNode =
@@ -222,7 +222,7 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
                         .filter(node -> jobInstanceId.equals(node.getJobInstanceId()))
                         .max(Comparator.comparing(node -> Objects.requireNonNullElse(node.getRunSeq(), 0)))
                         .orElse(null);
-        boolean linkedNodeIsMissingOrTerminal = EmptyChecks.isNull(linkedNode)
+        boolean linkedNodeIsMissingOrTerminal = linkedNode == null
                 || WorkflowNodeRunStatus.FAILED.code().equals(linkedNode.getNodeStatus())
                 || WorkflowNodeRunStatus.SUCCESS.code().equals(linkedNode.getNodeStatus())
                 || WorkflowNodeRunStatus.SKIPPED.code().equals(linkedNode.getNodeStatus());
@@ -287,7 +287,7 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
                 .workflowRun(workflowRun)
                 .failedPartitionCount(unsuccessfulCount)
                 .allPartitionsFinished(true)
-                .dagContinues(!EmptyChecks.isEmpty(Objects.requireNonNull(activeNodes)))
+                .dagContinues(!EmptyValues.isEmpty(Objects.requireNonNull(activeNodes)))
                 .jobFullyComplete(true)
                 .activeNodes(activeNodes)
                 .currentNodeCode(linkedNode.getNodeCode())
@@ -297,20 +297,20 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
 
     private String resolveCurrentNodeCode(JobTaskEntity task, WorkflowRunEntity workflowRun) {
         String nodeCode = TaskOutcomePayloadSupport.payloadStringValue(
-                EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "workflowNodeCode");
-        if (EmptyChecks.isNotBlank(nodeCode)) {
+                task == null ? null : task.getTaskPayload(), "workflowNodeCode");
+        if (EmptyValues.isNotBlank(nodeCode)) {
             return nodeCode;
         }
-        Set<String> activeNodes = EmptyChecks.isNull(workflowRun)
+        Set<String> activeNodes = workflowRun == null
                 ? Set.of()
                 : TaskOutcomeStatePolicy.parseActiveNodes(workflowRun.getCurrentNodeCode());
-        if (EmptyChecks.isNotNull(workflowRun) && activeNodes.size() > 1) {
+        if (workflowRun != null && activeNodes.size() > 1) {
             throw BizException.of(
                     ResultCode.STATE_CONFLICT,
                     "error.workflow.task_payload_missing_node_code",
-                    String.valueOf(EmptyChecks.isNull(task) ? null : task.getId()));
+                    String.valueOf(task == null ? null : task.getId()));
         }
-        if (EmptyChecks.isNotEmpty(activeNodes)) {
+        if (EmptyValues.isNotEmpty(activeNodes)) {
             return activeNodes.iterator().next();
         }
         return WorkflowNodeCode.START.code();

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.scheduler.SchedulerSnapshotResponse;
 import io.github.pinpols.batch.orchestrator.application.scheduler.TenantSchedulerSnapshotService;
@@ -55,7 +56,7 @@ public class TenantSchedulerSnapshotRecorder {
         }
         List<TenantSchedulerSnapshotEntity> rows = new ArrayList<>(tenantIds.size());
         for (String tenantId : tenantIds) {
-            if (tenantId == null || tenantId.isBlank()) {
+            if (EmptyValues.isBlank(tenantId)) {
                 continue;
             }
             // RLS Phase B：buildLive 内部走 mapper 查 quota / partition 统计；必须在绑定的租户上下文里做。

@@ -3,8 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.calendar;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.domain.entity.CalendarDependencyWaitEntity;
@@ -39,7 +38,7 @@ public class CalendarDependencyWaitGovernanceService {
     public List<CalendarDependencyWaitEntity> list(String tenantId, String calendarCode, String waitStatus, int limit) {
         requireText(tenantId, "tenantId");
         String normalizedStatus = normalizeStatus(waitStatus);
-        if (EmptyChecks.isNotNull(normalizedStatus)
+        if (normalizedStatus != null
                 && !List.of(
                                 CalendarDependencyWaitEntity.STATUS_WAITING,
                                 CalendarDependencyWaitEntity.STATUS_OPENED,
@@ -78,10 +77,10 @@ public class CalendarDependencyWaitGovernanceService {
         String normalizedCalendarCode = CodeNormalizer.toConfigFormOrNull(command.calendarCode());
         CalendarDependencyWaitEntity wait =
                 waitMapper.selectByTenantCalendarBizDate(command.tenantId(), normalizedCalendarCode, command.bizDate());
-        if (EmptyChecks.isNull(wait) || !CalendarDependencyWaitEntity.STATUS_WAITING.equals(wait.waitStatus())) {
+        if (wait == null || !CalendarDependencyWaitEntity.STATUS_WAITING.equals(wait.waitStatus())) {
             throw new OperationFailure(Kind.CONFLICT, "Calendar dependency wait is no longer actionable");
         }
-        if (EmptyChecks.isNotNull(wait.manualAction())) {
+        if (wait.manualAction() != null) {
             boolean manualWaitResolutionIsUnchanged = wait.manualAction().equals(action)
                     && wait.manualOperatorId().equals(operatorId)
                     && wait.manualReason().equals(reason);
@@ -107,19 +106,19 @@ public class CalendarDependencyWaitGovernanceService {
     }
 
     private static void validate(ManualActionCommand command) {
-        boolean manualActionCommandIsInvalid = EmptyChecks.isNull(command)
-                || !Texts.hasText(command.tenantId())
-                || !Texts.hasText(command.calendarCode())
-                || EmptyChecks.isNull(command.bizDate())
-                || !Texts.hasText(command.operatorId())
-                || !Texts.hasText(command.reason())
+        boolean manualActionCommandIsInvalid = command == null
+                || !EmptyValues.hasText(command.tenantId())
+                || !EmptyValues.hasText(command.calendarCode())
+                || command.bizDate() == null
+                || !EmptyValues.hasText(command.operatorId())
+                || !EmptyValues.hasText(command.reason())
                 || command.operatorId().trim().length() > MANUAL_OPERATOR_ID_MAX_LENGTH
                 || command.reason().trim().length() > MANUAL_REASON_MAX_LENGTH;
         if (manualActionCommandIsInvalid) {
             throw new IllegalArgumentException("tenant, calendar, bizDate, operator and reason are required");
         }
         String action = "";
-        if (EmptyChecks.isNotNull(command.action())) {
+        if (command.action() != null) {
             String trimmedAction = command.action().trim();
             action = trimmedAction.toUpperCase(Locale.ROOT);
         }
@@ -130,7 +129,7 @@ public class CalendarDependencyWaitGovernanceService {
     }
 
     private static String normalizeStatus(String value) {
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             return null;
         }
         String trimmedValue = value.trim();
@@ -138,7 +137,7 @@ public class CalendarDependencyWaitGovernanceService {
     }
 
     private static void requireText(String value, String field) {
-        if (!Texts.hasText(value)) throw new IllegalArgumentException(field + " is required");
+        if (!EmptyValues.hasText(value)) throw new IllegalArgumentException(field + " is required");
     }
 
     public record ManualActionCommand(

@@ -3,9 +3,8 @@ package io.github.pinpols.batch.worker.exports.jdbc;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.exports.config.ExportConfigValueSupport;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -49,7 +48,7 @@ public record JdbcMappedExportSpec(
         String detailFk = required(root, "detailFkColumn");
         String orderCol = required(root, "detailOrderByColumn");
         String tiebreakerCol = optional(root.get("detailTiebreakerColumn"), root.get("detail_tiebreaker_column"));
-        if (EmptyChecks.isNotNull(tiebreakerCol) && tiebreakerCol.equalsIgnoreCase(orderCol)) {
+        if (tiebreakerCol != null && tiebreakerCol.equalsIgnoreCase(orderCol)) {
             throw new IllegalArgumentException(
                     "jdbc_mapped_export.detailTiebreakerColumn must differ from detailOrderByColumn");
         }
@@ -106,16 +105,16 @@ public record JdbcMappedExportSpec(
 
     /** 是否配置了唯一排序后缀；配置后分页使用 (排序列, 后缀列) 复合游标。 */
     public boolean tiebreakerColumnIsConfigured() {
-        return EmptyChecks.isNotEmpty(detailTiebreakerColumn);
+        return EmptyValues.isNotEmpty(detailTiebreakerColumn);
     }
 
     private static String optional(Object... values) {
         for (Object value : values) {
-            if (EmptyChecks.isNull(value)) {
+            if (value == null) {
                 continue;
             }
             String rawValue = String.valueOf(value);
-            if (Texts.hasText(rawValue)) {
+            if (EmptyValues.hasText(rawValue)) {
                 return rawValue.trim();
             }
         }
@@ -124,11 +123,11 @@ public record JdbcMappedExportSpec(
 
     private static String required(Map<String, Object> root, String key) {
         Object v = root.get(key);
-        if (EmptyChecks.isNull(v)) {
+        if (v == null) {
             throw new IllegalArgumentException("jdbc_mapped_export." + key + " is required");
         }
         String presenceText = String.valueOf(v);
-        if (!Texts.hasText(presenceText)) {
+        if (!EmptyValues.hasText(presenceText)) {
             throw new IllegalArgumentException("jdbc_mapped_export." + key + " is required");
         }
         String rawValue = String.valueOf(v);
@@ -158,7 +157,7 @@ public record JdbcMappedExportSpec(
             return List.of();
         }
         return list.stream()
-                .filter(o -> o != null && Texts.hasText(String.valueOf(o)))
+                .filter(o -> o != null && EmptyValues.hasText(String.valueOf(o)))
                 .map(o -> {
                     String rawValue = String.valueOf(o);
                     return rawValue.trim();
@@ -181,7 +180,7 @@ public record JdbcMappedExportSpec(
             list = l;
         } else {
             String text = raw instanceof String s ? s : PostgresqlJsonbTexts.tryExtract(raw);
-            if (!Texts.hasText(text)) {
+            if (!EmptyValues.hasText(text)) {
                 return List.of();
             }
             try {
@@ -195,7 +194,7 @@ public record JdbcMappedExportSpec(
                 .filter(Map.class::isInstance)
                 .map(Map.class::cast)
                 .map(mapping -> mapping.get("sourceColumn"))
-                .filter(src -> src != null && Texts.hasText(String.valueOf(src)))
+                .filter(src -> src != null && EmptyValues.hasText(String.valueOf(src)))
                 .map(src -> {
                     String rawValue = String.valueOf(src);
                     return rawValue.trim();

@@ -5,8 +5,7 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.idempotency.ConsoleDurableIdempotencyStore;
 import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
 import jakarta.annotation.PostConstruct;
@@ -121,7 +120,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
 
     @PreDestroy
     void stopRenewal() {
-        if (EmptyChecks.isNotNull(renewal)) {
+        if (renewal != null) {
             renewal.cancel(false);
         }
         pendingLeases.clear();
@@ -163,7 +162,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
         }
 
         String idempotencyKey = request.getHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER);
-        if (!Texts.hasText(idempotencyKey)) {
+        if (!EmptyValues.hasText(idempotencyKey)) {
             // 标了 @Idempotent 的方法 fail-close：没 header 直接 400
             boolean handlerIsIdempotent = handler instanceof HandlerMethod hm
                     && (hm.getMethodAnnotation(Idempotent.class) != null
@@ -185,7 +184,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
                 ConsoleIdempotencyRequestIdentity.durableKey(tenantHeader, method, requestUri, idempotencyKey);
 
         String existing = readRedisState(redisKey, idempotencyKey, response);
-        if (EmptyChecks.isNull(existing) && response.getStatus() == HttpStatus.SERVICE_UNAVAILABLE.value()) {
+        if (existing == null && response.getStatus() == HttpStatus.SERVICE_UNAVAILABLE.value()) {
             return false;
         }
         if (DONE.equals(existing)) {
@@ -208,7 +207,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
         String owner = PENDING + ":" + UUID.randomUUID();
         Duration pendingTtl = streamRequest ? STREAM_PENDING_TTL : PENDING_TTL;
         Boolean isNew = reservePending(redisKey, owner, pendingTtl, response);
-        if (EmptyChecks.isNull(isNew)) {
+        if (isNew == null) {
             return false;
         }
         if (Boolean.FALSE.equals(isNew)) {
@@ -330,12 +329,12 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
         String durableKey = (String) request.getAttribute(ATTR_DURABLE_KEY);
         String tenantId = (String) request.getAttribute(ATTR_TENANT_ID);
         String owner = (String) request.getAttribute(ATTR_OWNER);
-        if (EmptyChecks.isNull(owner)) {
+        if (owner == null) {
             return;
         }
         pendingLeases.remove(owner);
         int status = response.getStatus();
-        boolean requestCompletedSuccessfully = status >= 200 && status < 300 && EmptyChecks.isNull(ex);
+        boolean requestCompletedSuccessfully = status >= 200 && status < 300 && ex == null;
         if (requestCompletedSuccessfully) {
             // 成功：升级为 DONE，长 TTL 阻止重复提交
             try {

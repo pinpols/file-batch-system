@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.domain.PulledTask;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.support.TaskClaimItem;
@@ -40,7 +40,7 @@ public class TaskDispatchExecutor {
     /** Kafka 只负责把任务送到 worker，实际执行前仍然要回 Orchestrator 做 CLAIM。 */
     public WorkerExecutionResult execute(TaskDispatchMessage message, String workerId) {
         boolean executionRequestIsIncomplete =
-                EmptyChecks.isNull(message) || EmptyChecks.isNull(message.taskId()) || EmptyChecks.isBlank(workerId);
+                message == null || message.taskId() == null || EmptyValues.isBlank(workerId);
         if (executionRequestIsIncomplete) {
             return null;
         }
@@ -80,7 +80,7 @@ public class TaskDispatchExecutor {
 
     /** 批量执行的逐项结果版本。Kafka 批量 consumer 需要知道是哪条消息失败，才能只 DLQ 毒丸消息，而不是把同 poll 的正常任务一起送进 DLQ。 */
     public List<BatchItemExecution> executeBatchDetailed(List<TaskDispatchMessage> messages, String workerId) {
-        boolean batchExecutionRequestIsIncomplete = EmptyChecks.isEmpty(messages) || EmptyChecks.isBlank(workerId);
+        boolean batchExecutionRequestIsIncomplete = EmptyValues.isEmpty(messages) || EmptyValues.isBlank(workerId);
         if (batchExecutionRequestIsIncomplete) {
             return List.of();
         }
@@ -104,9 +104,8 @@ public class TaskDispatchExecutor {
         }
         Map<Long, PulledTask> claimedTasksById = new LinkedHashMap<>();
         for (TaskDispatchMessage message : messages) {
-            boolean dispatchMessageIsMissingOrAlreadyClaimed = EmptyChecks.isNull(message)
-                    || EmptyChecks.isNull(message.taskId())
-                    || claimedTasksById.containsKey(message.taskId());
+            boolean dispatchMessageIsMissingOrAlreadyClaimed =
+                    message == null || message.taskId() == null || claimedTasksById.containsKey(message.taskId());
             if (dispatchMessageIsMissingOrAlreadyClaimed) {
                 continue;
             }
@@ -125,7 +124,7 @@ public class TaskDispatchExecutor {
         try {
             for (int messageIndex = 0; messageIndex < messages.size(); messageIndex++) {
                 TaskDispatchMessage message = messages.get(messageIndex);
-                if (EmptyChecks.isNull(message) || EmptyChecks.isNull(message.taskId())) {
+                if (message == null || message.taskId() == null) {
                     continue;
                 }
                 if (!executedTaskIds.add(message.taskId())) {
@@ -203,7 +202,7 @@ public class TaskDispatchExecutor {
     }
 
     private static boolean isClaimReadyForExecution(TaskClaimResult claim) {
-        return EmptyChecks.isNotNull(claim) && claim.claimed() && EmptyChecks.isNotNull(claim.config());
+        return claim != null && claim.claimed() && claim.config() != null;
     }
 
     private static void putExecutionMdc(TaskDispatchMessage message, String workerId) {

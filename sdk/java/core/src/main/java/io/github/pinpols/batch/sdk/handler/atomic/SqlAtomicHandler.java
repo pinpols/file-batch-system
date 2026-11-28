@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.sdk.handler.atomic;
 
 import io.github.pinpols.batch.sdk.handler.SdkAbstractAtomicHandler;
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -70,7 +70,7 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
     }
 
     private void requireStatementCountWithinLimit(List<String> statements) {
-        if (EmptyChecks.isEmpty(statements)) {
+        if (SdkEmptyValues.isEmpty(statements)) {
             throw new IllegalArgumentException("no executable SQL statement found");
         }
         if (statements.size() > config.maxStatementsPerJob()) {
@@ -104,7 +104,7 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
                 log.warn("restore autoCommit failed: {}", ExceptionLogSummary.of(restoreEx));
             }
         }
-        if (EmptyChecks.isNotNull(totals.lastResultSet)) {
+        if (totals.lastResultSet != null) {
             totals.lastResultSet.put("statementCount", statements.size());
             totals.lastResultSet.put("totalAffectedRows", totals.totalAffected);
             return totals.lastResultSet;
@@ -154,7 +154,7 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
         while (i < sql.length()) {
             char current = sql.charAt(i);
             String dollarTag = current == '$' && state.atCode() ? matchDollarTag(sql, i) : null;
-            if (EmptyChecks.isNotNull(dollarTag)) {
+            if (dollarTag != null) {
                 i = state.appendDollarQuoted(sql, i, dollarTag);
                 continue;
             }
@@ -173,7 +173,7 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
             char c = sql.charAt(j);
             if (c == '$') {
                 String tag = sql.substring(start + 1, j);
-                return EmptyChecks.isEmpty(tag) || isValidDollarTag(tag) ? sql.substring(start, j + 1) : null;
+                return SdkEmptyValues.isEmpty(tag) || isValidDollarTag(tag) ? sql.substring(start, j + 1) : null;
             }
             if (!(Character.isLetterOrDigit(c) || c == '_')) {
                 return null;
@@ -309,7 +309,7 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
             } else if (current == ';') {
                 String rawStatement = buffer.toString();
                 String statement = rawStatement.trim();
-                if (!EmptyChecks.isEmpty(statement)) statements.add(statement);
+                if (!SdkEmptyValues.isEmpty(statement)) statements.add(statement);
                 buffer.setLength(0);
             } else {
                 buffer.append(current);
@@ -332,7 +332,7 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
         private List<String> complete() {
             String rawTail = buffer.toString();
             String tail = rawTail.trim();
-            if (!EmptyChecks.isEmpty(tail)) statements.add(tail);
+            if (!SdkEmptyValues.isEmpty(tail)) statements.add(tail);
             return statements;
         }
     }

@@ -107,7 +107,7 @@ import io.github.pinpols.batch.common.enums.ShardStrategy;
 import io.github.pinpols.batch.common.enums.WorkflowEdgeType;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowType;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.ColumnGuide;
 import io.github.pinpols.batch.console.support.excel.DropdownValidationSpec;
@@ -452,7 +452,7 @@ public final class ConfigPackageSheetSpecs {
         Map<String, ColumnGuide> guides = new LinkedHashMap<>();
         for (String column : columns) {
             ColumnGuide guide = definition.guides().get(column);
-            if (EmptyChecks.isNotNull(guide)) {
+            if (guide != null) {
                 guides.put(column, guide);
             }
         }
@@ -462,11 +462,10 @@ public final class ConfigPackageSheetSpecs {
         String focusedDirection = focusedFileDirection(scenarios);
         if (FILE_TEMPLATE_SHEET.equals(definition.name()) && focusedFormats.isPresent()) {
             Set<String> formats = focusedFormats.orElseThrow();
-            Set<String> focusedTypes =
-                    EmptyChecks.isNull(focusedDirection) ? FILE_TEMPLATE_TYPES : Set.of(focusedDirection);
+            Set<String> focusedTypes = focusedDirection == null ? FILE_TEMPLATE_TYPES : Set.of(focusedDirection);
             validationApplier = (sheet, locale) -> applyFileTemplateValidations(sheet, locale, formats, focusedTypes);
             replaceGuideChoices(guides, ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE, formats);
-            if (EmptyChecks.isNotNull(focusedDirection)) {
+            if (focusedDirection != null) {
                 replaceGuideChoices(guides, ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE, focusedTypes);
             }
         }
@@ -582,7 +581,7 @@ public final class ConfigPackageSheetSpecs {
 
     private static Set<String> fileTemplateColumns(Set<String> scenarios) {
         List<ConfigPackageFileScenario> profiles = fileProfiles(scenarios);
-        boolean onlyNonWorkflowProfilesAreSelected = EmptyChecks.isNotEmpty(profiles)
+        boolean onlyNonWorkflowProfilesAreSelected = EmptyValues.isNotEmpty(profiles)
                 && !scenarios.contains(SCENARIO_IMPORT)
                 && !scenarios.contains(SCENARIO_EXPORT)
                 && !scenarios.contains(SCENARIO_WORKFLOW);
@@ -643,7 +642,7 @@ public final class ConfigPackageSheetSpecs {
                 formats.add(profile.format().code());
             }
         }
-        return EmptyChecks.isEmpty(formats) ? Optional.empty() : Optional.of(Set.copyOf(formats));
+        return EmptyValues.isEmpty(formats) ? Optional.empty() : Optional.of(Set.copyOf(formats));
     }
 
     private static String focusedFileDirection(Set<String> scenarios) {
@@ -661,7 +660,7 @@ public final class ConfigPackageSheetSpecs {
 
     private static void replaceGuideChoices(Map<String, ColumnGuide> guides, String columnName, Set<String> choices) {
         ColumnGuide guide = guides.get(columnName);
-        if (EmptyChecks.isNotNull(guide)) {
+        if (guide != null) {
             guides.put(
                     columnName,
                     new ColumnGuide(
@@ -1000,7 +999,7 @@ public final class ConfigPackageSheetSpecs {
 
     private static int columnIndex(Sheet sheet, String columnName) {
         Row header = sheet.getRow(0);
-        if (EmptyChecks.isNull(header)) {
+        if (header == null) {
             return -1;
         }
         for (int index = 0; index < header.getLastCellNum(); index++) {

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.query.PersistentWaitReadFilter;
 import io.github.pinpols.batch.orchestrator.domain.query.PersistentWaitReadQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.PersistentWaitReadRow;
@@ -23,8 +23,8 @@ public class PersistentWaitReadService {
 
     @Transactional(readOnly = true)
     public PersistentWaitPage list(PersistentWaitReadQuery query) {
-        int normalizedPageNo = Math.max(1, EmptyChecks.isNull(query.pageNo()) ? 1 : query.pageNo());
-        int requestedPageSize = EmptyChecks.isNull(query.pageSize()) ? DEFAULT_PAGE_SIZE : query.pageSize();
+        int normalizedPageNo = Math.max(1, query.pageNo() == null ? 1 : query.pageNo());
+        int requestedPageSize = query.pageSize() == null ? DEFAULT_PAGE_SIZE : query.pageSize();
         int normalizedPageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, requestedPageSize));
         long offset = ((long) normalizedPageNo - 1L) * normalizedPageSize;
         PersistentWaitReadFilter filter = new PersistentWaitReadFilter(
@@ -41,7 +41,7 @@ public class PersistentWaitReadService {
     }
 
     private static String blankToNull(String value) {
-        return EmptyChecks.isBlank(value) ? null : value;
+        return EmptyValues.isBlank(value) ? null : value;
     }
 
     public record PersistentWaitPage(List<PersistentWaitReadRow> items, int pageNo, int pageSize, long total) {}

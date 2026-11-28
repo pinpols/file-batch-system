@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.utils.CorrelationIds;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
@@ -65,15 +65,15 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
             BatchMdc.put(StructuredLogField.SERVICE, applicationNameProvider.name("batch-console-api"));
             BatchMdc.put(StructuredLogField.REQUEST_ID, requestId);
             BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
-            if (tenantId != null && !tenantId.isBlank()) {
+            if (EmptyValues.isNotBlank(tenantId)) {
                 BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
             }
             // AuditFieldsInterceptor 拦截 insert/update 时读 MDC operatorId 自动填 created_by/updated_by
-            if (operatorId != null && !operatorId.isBlank()) {
+            if (EmptyValues.isNotBlank(operatorId)) {
                 BatchMdc.put(StructuredLogField.OPERATOR_ID, operatorId);
             }
             // P1(2026-05-23 audit):XFF 仅写入 audit 日志,不参与身份绑定;按 trusted-proxy 实际部署可观察伪造。
-            if (xffHeaderValue != null && !xffHeaderValue.isBlank()) {
+            if (EmptyValues.isNotBlank(xffHeaderValue)) {
                 BatchMdc.put(StructuredLogField.XFF_HEADER_VALUE, xffHeaderValue);
             }
             filterChain.doFilter(request, response);
@@ -85,7 +85,7 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
     private static String resolveCorrelationId(
             HttpServletRequest request, HttpServletResponse response, String headerName, String fallback) {
         String existing = CorrelationIds.normalize(response.getHeader(headerName));
-        if (EmptyChecks.isNotNull(existing)) {
+        if (existing != null) {
             return existing;
         }
         String requestedCorrelationId = request.getHeader(headerName);
@@ -97,12 +97,10 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
         if (authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
             // 全局角色（ADMIN / AUDITOR / CONFIG_ADMIN）允许通过请求头指定目标租户
             if (ConsoleRoles.hasGlobalRole(principal.authorities())) {
-                return (requestedTenantId != null && !requestedTenantId.isBlank())
-                        ? requestedTenantId
-                        : principal.tenantId();
+                return (EmptyValues.isNotBlank(requestedTenantId)) ? requestedTenantId : principal.tenantId();
             }
             // 租户角色：严格匹配
-            boolean requestedTenantIsDifferent = EmptyChecks.isNotNull(requestedTenantId)
+            boolean requestedTenantIsDifferent = requestedTenantId != null
                     && !requestedTenantId.isBlank()
                     && !requestedTenantId.equals(principal.tenantId());
             if (requestedTenantIsDifferent) {

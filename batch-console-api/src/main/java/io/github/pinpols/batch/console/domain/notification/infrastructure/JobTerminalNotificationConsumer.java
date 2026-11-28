@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.service.WorkflowTerminalNotificationService;
 import java.time.Duration;
@@ -57,11 +57,11 @@ public class JobTerminalNotificationConsumer {
     }
 
     private static String requireTenant(Map<?, ?> data) {
-        if (EmptyChecks.isNull(data)) {
+        if (data == null) {
             throw new IllegalArgumentException("missing terminal notification tenant");
         }
         Object tenantValue = data.get("tenantId");
-        if (!(tenantValue instanceof String tenant) || EmptyChecks.isBlank(tenant)) {
+        if (!(tenantValue instanceof String tenant) || EmptyValues.isBlank(tenant)) {
             throw new IllegalArgumentException("missing terminal notification tenant");
         }
         return tenant;

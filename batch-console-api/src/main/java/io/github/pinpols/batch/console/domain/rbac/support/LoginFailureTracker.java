@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.LoginProtectionProperties;
 import java.util.Locale;
 import java.util.UUID;
@@ -72,7 +71,7 @@ public class LoginFailureTracker {
     }
 
     private static String normalize(String raw) {
-        if (EmptyChecks.isNull(raw)) {
+        if (raw == null) {
             return "";
         }
         String trimmedRaw = raw.trim();

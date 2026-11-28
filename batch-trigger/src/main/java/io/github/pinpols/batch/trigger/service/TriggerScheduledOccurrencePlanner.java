@@ -2,7 +2,7 @@ package io.github.pinpols.batch.trigger.service;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceRecordCoverageParam;
 import io.github.pinpols.batch.trigger.infrastructure.QuartzScheduledFireEnumerator;
 import io.github.pinpols.batch.trigger.mapper.ScheduledOccurrenceMapper;
@@ -38,15 +38,15 @@ public class TriggerScheduledOccurrencePlanner {
 
     @Transactional
     public int materialize(TriggerDescriptor descriptor, ScheduledFireTimeSource trigger, Instant now) {
-        boolean occurrenceInputIsIncomplete = EmptyChecks.isNull(descriptor)
-                || EmptyChecks.isNull(trigger)
-                || EmptyChecks.isBlank(descriptor.getTenantId())
-                || EmptyChecks.isNull(descriptor.getWorkflowDefinitionId())
-                || EmptyChecks.isBlank(descriptor.getWorkflowCode());
+        boolean occurrenceInputIsIncomplete = descriptor == null
+                || trigger == null
+                || EmptyValues.isBlank(descriptor.getTenantId())
+                || descriptor.getWorkflowDefinitionId() == null
+                || EmptyValues.isBlank(descriptor.getWorkflowCode());
         if (occurrenceInputIsIncomplete) {
             return 0;
         }
-        int scheduleVersion = EmptyChecks.isNull(descriptor.getWorkflowVersion()) ? 0 : descriptor.getWorkflowVersion();
+        int scheduleVersion = descriptor.getWorkflowVersion() == null ? 0 : descriptor.getWorkflowVersion();
         long configurationRevision = occurrenceMapper.selectTenantConfigurationRevision(descriptor.getTenantId());
         Instant configurationUpdatedAt = occurrenceMapper.selectTenantConfigurationUpdatedAt(descriptor.getTenantId());
         String calendarCode = CodeNormalizer.toConfigFormOrNull(descriptor.getCalendarCode());
@@ -54,8 +54,8 @@ public class TriggerScheduledOccurrencePlanner {
         ZoneId fallbackZone = timezoneProvider.resolveOrDefault(descriptor.getTimezone());
         ScheduledOccurrenceCoverage coverage = occurrenceMapper.selectCoverage(
                 descriptor.getTenantId(), descriptor.getWorkflowDefinitionId(), scheduleVersion, calendarCode);
-        Instant coverageFrom = EmptyChecks.isNull(coverage) ? now.minusMillis(1) : coverage.coverageFrom();
-        boolean coverageCurrent = EmptyChecks.isNotNull(coverage)
+        Instant coverageFrom = coverage == null ? now.minusMillis(1) : coverage.coverageFrom();
+        boolean coverageCurrent = coverage != null
                 && occurrenceMapper.isCoverageCurrentForTenantConfiguration(
                         descriptor.getTenantId(), descriptor.getWorkflowDefinitionId());
         Instant scanAfter;
@@ -63,7 +63,7 @@ public class TriggerScheduledOccurrencePlanner {
             scanAfter = coverage.coverageThrough().minusMillis(1);
         } else {
             Instant replanFrom = configurationUpdatedAt;
-            if (EmptyChecks.isNull(replanFrom)) {
+            if (replanFrom == null) {
                 replanFrom = now;
             }
             if (replanFrom.isBefore(coverageFrom)) {
@@ -73,7 +73,7 @@ public class TriggerScheduledOccurrencePlanner {
         }
         Instant requestedThrough = now.plus(LOOKAHEAD);
         Instant requestedCoverageThrough =
-                EmptyChecks.isNull(coverage) || coverage.coverageThrough().isBefore(requestedThrough)
+                coverage == null || coverage.coverageThrough().isBefore(requestedThrough)
                         ? requestedThrough
                         : coverage.coverageThrough();
         ScanWindow scanWindow = enumerateBoundedWindow(trigger, scanAfter, requestedCoverageThrough);
@@ -87,7 +87,7 @@ public class TriggerScheduledOccurrencePlanner {
                 batch.clear();
             }
         }
-        if (EmptyChecks.isNotEmpty(batch)) {
+        if (EmptyValues.isNotEmpty(batch)) {
             insertBatch(descriptor, scheduleVersion, calendarCode, batch);
         }
         occurrenceMapper.supersedeFuturePlanned(

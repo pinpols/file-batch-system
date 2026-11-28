@@ -2,7 +2,7 @@ package io.github.pinpols.batch.trigger.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.enums.ScheduleType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.infrastructure.QuartzMisfireRecoveryListener;
@@ -123,7 +123,7 @@ public class TriggerReconciler {
                 materializeUpcomingOccurrences(key, descriptor);
                 misfireRecoveryListener.restorePendingMisfires(descriptor, key);
             } catch (IllegalArgumentException invalidDefinition) {
-                if (EmptyChecks.isNull(key)) {
+                if (key == null) {
                     identitiesComplete = false;
                 }
                 logInvalidDefinition(descriptor, invalidDefinition);
@@ -207,7 +207,7 @@ public class TriggerReconciler {
         try {
             List<? extends Trigger> triggers = scheduler.getTriggersOfJob(key);
             Trigger primary = primaryTrigger(key, triggers);
-            if (EmptyChecks.isNull(primary)) {
+            if (primary == null) {
                 return;
             }
             occurrencePlanner.materialize(
@@ -225,28 +225,28 @@ public class TriggerReconciler {
      */
     private boolean hasScheduleDrift(JobKey key, TriggerDescriptor descriptor) {
         String type = descriptor.getScheduleType();
-        if (EmptyChecks.isBlank(type)) {
+        if (EmptyValues.isBlank(type)) {
             // descriptor 没声明 schedule_type（异常数据 / 旧测试 fixture）→ 保守不判 drift
             return false;
         }
         try {
             List<? extends Trigger> triggers = scheduler.getTriggersOfJob(key);
-            if (EmptyChecks.isEmpty(triggers)) {
+            if (EmptyValues.isEmpty(triggers)) {
                 // Quartz 里有 jobKey 但没 trigger（罕见）→ 保守不判 drift，下一轮再说
                 return false;
             }
             Trigger quartzTrigger = primaryTrigger(key, triggers);
-            if (EmptyChecks.isNull(quartzTrigger)) {
+            if (quartzTrigger == null) {
                 // 同一个 Job 可能临时挂 recovery/readiness retry Trigger。不能用第一条辅助 Trigger
                 // 判断主调度漂移，否则会 delete-and-add 整个 Job，连恢复 Trigger 一起删掉。
                 return false;
             }
             ScheduleDriftChecker checker = driftCheckers().get(type.toUpperCase(Locale.ROOT));
-            if (EmptyChecks.isNotNull(checker) && checker.hasDrift(quartzTrigger, descriptor)) {
+            if (checker != null && checker.hasDrift(quartzTrigger, descriptor)) {
                 return true;
             }
             JobDetail storedJob = scheduler.getJobDetail(key);
-            if (EmptyChecks.isNull(storedJob)) {
+            if (storedJob == null) {
                 return true;
             }
             JobDataMap expectedData = TriggerSchedulerFacade.scheduledJobData(descriptor);
@@ -287,8 +287,7 @@ public class TriggerReconciler {
         if (!Objects.equals(ct.getCronExpression(), descriptor.getScheduleExpression())) {
             return true;
         }
-        String quartzTz =
-                EmptyChecks.isNull(ct.getTimeZone()) ? null : ct.getTimeZone().getID();
+        String quartzTz = ct.getTimeZone() == null ? null : ct.getTimeZone().getID();
         return !Objects.equals(quartzTz, descriptor.getTimezone());
     }
 
@@ -316,7 +315,7 @@ public class TriggerReconciler {
     }
 
     private long parseSecondsOrMinusOne(String expression) {
-        if (EmptyChecks.isBlank(expression)) {
+        if (EmptyValues.isBlank(expression)) {
             return -1L;
         }
         try {

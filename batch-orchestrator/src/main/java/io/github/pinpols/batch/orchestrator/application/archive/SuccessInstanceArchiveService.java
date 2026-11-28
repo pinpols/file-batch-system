@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.archive;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.config.SuccessInstanceArchiveProperties;
 import io.github.pinpols.batch.orchestrator.domain.view.ArchiveIntegrityCandidateSummary;
 import io.github.pinpols.batch.orchestrator.mapper.SuccessInstanceArchiveMapper;
@@ -69,7 +69,7 @@ public class SuccessInstanceArchiveService {
     private void reportIntegrityIssues(Instant cutoff) {
         List<ArchiveIntegrityCandidateSummary> integrityIssues =
                 archiveMapper.selectInvalidArchiveReferenceSummaries(cutoff);
-        if (!EmptyChecks.isEmpty(Objects.requireNonNull(integrityIssues))) {
+        if (!EmptyValues.isEmpty(Objects.requireNonNull(integrityIssues))) {
             integrityAlertService.emitSuccessInstanceArchiveIssues(cutoff, integrityIssues);
         }
     }
@@ -119,7 +119,7 @@ public class SuccessInstanceArchiveService {
         long qualityChecks = archiveMapper.deleteDataQualityChecksByInstanceIds(ids);
         long stepInstances = archiveMapper.deleteJobStepInstancesByInstanceIds(ids);
         long jobTasks = archiveMapper.deleteJobTasksByInstanceIds(ids);
-        if (!EmptyChecks.isEmpty(Objects.requireNonNull(pipelineIds))) {
+        if (!EmptyValues.isEmpty(Objects.requireNonNull(pipelineIds))) {
             archiveMapper.deletePipelineProgressByPipelineIds(pipelineIds);
         }
         long pipelineStepRuns = archiveMapper.deletePipelineStepRunsByInstanceIds(ids);
@@ -177,7 +177,7 @@ public class SuccessInstanceArchiveService {
     }
 
     private int archivePipelineCheckpoints(List<Long> pipelineIds) {
-        if (EmptyChecks.isEmpty(Objects.requireNonNull(pipelineIds))) {
+        if (EmptyValues.isEmpty(Objects.requireNonNull(pipelineIds))) {
             return 0;
         }
         archiveMapper.selectPipelineProgressIdsForUpdate(pipelineIds);

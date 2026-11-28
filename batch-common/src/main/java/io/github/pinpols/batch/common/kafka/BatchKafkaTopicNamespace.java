@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.kafka;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
@@ -12,8 +12,8 @@ public final class BatchKafkaTopicNamespace {
     private final String namespace;
 
     public BatchKafkaTopicNamespace(String namespace) {
-        this.namespace = EmptyChecks.isNull(namespace) ? "" : namespace.trim();
-        boolean namespaceIsInvalid = !EmptyChecks.isEmpty(Objects.requireNonNull(this.namespace))
+        this.namespace = namespace == null ? "" : namespace.trim();
+        boolean namespaceIsInvalid = !EmptyValues.isEmpty(Objects.requireNonNull(this.namespace))
                 && !VALID_NAMESPACE.matcher(this.namespace).matches();
         if (namespaceIsInvalid) {
             throw new IllegalArgumentException("batch.kafka.namespace must match [a-z0-9][a-z0-9_-]{0,47}");
@@ -29,9 +29,9 @@ public final class BatchKafkaTopicNamespace {
     }
 
     private String apply(String name) {
-        if (EmptyChecks.isBlank(name)) {
+        if (EmptyValues.isBlank(name)) {
             throw new IllegalArgumentException("Kafka name must not be blank");
         }
-        return EmptyChecks.isEmpty(Objects.requireNonNull(namespace)) ? name : namespace + "." + name;
+        return EmptyValues.isEmpty(Objects.requireNonNull(namespace)) ? name : namespace + "." + name;
     }
 }

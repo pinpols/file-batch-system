@@ -7,11 +7,10 @@ import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
@@ -247,7 +246,7 @@ public class ParseStep implements ImportStageStep {
         if (resolveSpoolPath(context) != null || attrs.get(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD) != null) {
             throw new IllegalArgumentException("trailer control record is not supported for spool/binary payload");
         }
-        if (!Texts.hasText(payloadText)) {
+        if (!EmptyValues.hasText(payloadText)) {
             return payloadText;
         }
         String body = payloadText;
@@ -297,7 +296,7 @@ public class ParseStep implements ImportStageStep {
             String rawMarker = String.valueOf(marker);
             expected = rawMarker.trim();
         }
-        if (expected == null || expected.isBlank()) { // empty-check: allow - Sonar S2259
+        if (EmptyValues.isBlank(expected)) {
             return true;
         }
         String delimiter = strOr(template.get("delimiter"), ",");
@@ -334,7 +333,7 @@ public class ParseStep implements ImportStageStep {
         }
         String rawText = String.valueOf(value);
         String text = rawText.trim();
-        return Texts.hasText(text) ? text : fallback;
+        return EmptyValues.hasText(text) ? text : fallback;
     }
 
     private int intOr(Object value, int fallback) {
@@ -342,7 +341,7 @@ public class ParseStep implements ImportStageStep {
             return number.intValue();
         }
         try {
-            if (EmptyChecks.isNull(value)) {
+            if (value == null) {
                 return fallback;
             }
             String rawText = String.valueOf(value);
@@ -366,7 +365,7 @@ public class ParseStep implements ImportStageStep {
                 return result;
             }
             String jsonText = jsonText(raw);
-            if (Texts.hasText(jsonText)) {
+            if (EmptyValues.hasText(jsonText)) {
                 try {
                     return support.objectMapper().readValue(jsonText, new TypeReference<>() {});
                 } catch (Exception ignored) {
@@ -426,7 +425,7 @@ public class ParseStep implements ImportStageStep {
             throws Exception {
         Path spoolPath = resolveSpoolPath(context);
         Charset spoolCharset = resolveSpoolCharset(context);
-        String format = !EmptyChecks.isNull(spoolPath)
+        String format = spoolPath != null
                 ? resolveFormat(importPayload, templateConfig, "")
                 : resolveFormat(importPayload, templateConfig, payloadText);
         if (FileTemplateFormat.EXCEL.code().equalsIgnoreCase(format)) {
@@ -436,7 +435,7 @@ public class ParseStep implements ImportStageStep {
             FormatParser parser = parsers.getOrDefault(format.toUpperCase(), defaultParser);
             return parser.parse(context, request, writer);
         }
-        FormatParseRequest request = EmptyChecks.isNull(spoolPath)
+        FormatParseRequest request = spoolPath == null
                 ? FormatParseRequest.fromText(payloadText, importPayload, templateConfig, preserveLogicalRow)
                 : FormatParseRequest.fromSpool(
                         importPayload, templateConfig, preserveLogicalRow, spoolPath, spoolCharset);
@@ -467,16 +466,16 @@ public class ParseStep implements ImportStageStep {
     }
 
     private String resolveFormat(ImportPayload importPayload, Object templateConfigObject, String payloadText) {
-        if (importPayload != null && Texts.hasText(importPayload.fileFormatType())) {
+        if (importPayload != null && EmptyValues.hasText(importPayload.fileFormatType())) {
             return importPayload.fileFormatType();
         }
         if (templateConfigObject instanceof Map<?, ?> templateConfig) {
             Object value = templateConfig.get("file_format_type");
-            if (value != null && Texts.hasText(String.valueOf(value))) {
+            if (value != null && EmptyValues.hasText(String.valueOf(value))) {
                 return String.valueOf(value);
             }
         }
-        if (Texts.hasText(payloadText)) {
+        if (EmptyValues.hasText(payloadText)) {
             String trim = payloadText.trim();
             if (trim.startsWith("{") || trim.startsWith("[")) {
                 return FileTemplateFormat.JSON.code();
@@ -488,12 +487,12 @@ public class ParseStep implements ImportStageStep {
     private Charset resolvePayloadTextCharset(ImportPayload importPayload, Object templateConfigObject) {
         if (templateConfigObject instanceof Map<?, ?> templateConfig) {
             Object charset = templateConfig.get("charset");
-            if (charset != null && Texts.hasText(String.valueOf(charset))) {
+            if (charset != null && EmptyValues.hasText(String.valueOf(charset))) {
                 String charsetName = String.valueOf(charset);
                 return EncodingUtils.resolve(charsetName);
             }
         }
-        if (importPayload != null && Texts.hasText(importPayload.charset())) {
+        if (importPayload != null && EmptyValues.hasText(importPayload.charset())) {
             return EncodingUtils.resolve(importPayload.charset());
         }
         return StandardCharsets.UTF_8;
@@ -507,7 +506,7 @@ public class ParseStep implements ImportStageStep {
         if (direct == null) {
             direct = templateConfig.get("loadTargetRef");
         }
-        if (EmptyChecks.isNotNull(direct)) {
+        if (direct != null) {
             String rawLoadTarget = String.valueOf(direct);
             String loadTarget = rawLoadTarget.trim();
             if (WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED.equalsIgnoreCase(loadTarget)) {
@@ -540,13 +539,12 @@ public class ParseStep implements ImportStageStep {
     private long applyPartitionFilter(
             ImportJobContext context, Path stagingFile, long totalCount, Object templateConfig) throws Exception {
         // 文件束已经按来源文件分区，再对每个独立文件取模会漏掉其他分区不会读取的记录。
-        if (EmptyChecks.isNotNull(context.getAttributes().get(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID))) {
+        if (context.getAttributes().get(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID) != null) {
             return totalCount;
         }
         Integer partitionNo = intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_NO));
         Integer partitionCount = intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
-        boolean inputIsNotPartitioned =
-                EmptyChecks.isNull(partitionNo) || EmptyChecks.isNull(partitionCount) || partitionCount <= 1;
+        boolean inputIsNotPartitioned = partitionNo == null || partitionCount == null || partitionCount <= 1;
         if (inputIsNotPartitioned) {
             return totalCount;
         }
@@ -560,7 +558,7 @@ public class ParseStep implements ImportStageStep {
             if (switchVal == null) {
                 switchVal = tc.get("partitionAwareParse");
             }
-            if (EmptyChecks.isNotNull(switchVal)) {
+            if (switchVal != null) {
                 String rawSwitchValue = String.valueOf(switchVal);
                 String partitionAwareParse = rawSwitchValue.trim();
                 if ("false".equalsIgnoreCase(partitionAwareParse)) {

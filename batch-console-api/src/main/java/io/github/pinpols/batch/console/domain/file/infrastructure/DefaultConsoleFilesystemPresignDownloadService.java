@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.FilesystemPresignTokens;
 import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFilesystemPresignDownloadService;
 import java.io.InputStream;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +28,7 @@ public class DefaultConsoleFilesystemPresignDownloadService implements ConsoleFi
             throw BizException.of(ResultCode.BUSINESS_ERROR, "error.file.fs_presign_key_invalid");
         }
         String configuredPresignSecret = filesystemProperties.getPresignSecret();
-        String secret = Texts.hasText(configuredPresignSecret)
+        String secret = EmptyValues.hasText(configuredPresignSecret)
                 ? configuredPresignSecret
                 : securityProperties.getInternalSecret();
         if (!FilesystemPresignTokens.verify(bucket, key, expEpochSec, signature, secret)) {

@@ -6,10 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.SensitiveEvidenceMasking;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.ops.dto.TaskExecutionAuditResponse;
 import io.github.pinpols.batch.console.domain.ops.mapper.JobTaskMapper;
 import io.github.pinpols.batch.console.domain.ops.view.JobTaskExecutionAuditView;
@@ -53,15 +52,14 @@ public class ConsoleTaskExecutionAuditService {
     public TaskExecutionAuditResponse getExecutionAudit(String tenantId, Long taskId) {
         String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
         JobTaskExecutionAuditView task = jobTaskMapper.selectExecutionAuditByTenantAndId(resolvedTenantId, taskId);
-        if (EmptyChecks.isNull(task)) {
+        if (task == null) {
             throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), taskId);
         }
         Map<String, Object> parameters = maskParameters(parse(task.getEffectiveParameters(), taskId));
         Map<String, Object> resultSummary =
                 SensitiveEvidenceMasking.maskMetadata(parse(task.getResultSummary(), taskId));
-        String errorMessage = EmptyChecks.isNull(task.getErrorMessage())
-                ? null
-                : SensitiveEvidenceMasking.maskText(task.getErrorMessage());
+        String errorMessage =
+                task.getErrorMessage() == null ? null : SensitiveEvidenceMasking.maskText(task.getErrorMessage());
         TaskExecutionAuditResponse.Outcome outcome = new TaskExecutionAuditResponse.Outcome(
                 task.getAssignedWorkerCode(),
                 task.getStartedAt(),
@@ -74,12 +72,12 @@ public class ConsoleTaskExecutionAuditService {
     }
 
     static Map<String, Object> maskParameters(Map<String, Object> parameters) {
-        if (EmptyChecks.isNull(parameters)) {
+        if (parameters == null) {
             return null;
         }
         Map<String, Object> masked = new LinkedHashMap<>();
         parameters.forEach((key, value) -> {
-            String normalized = EmptyChecks.isNull(key) ? "" : key.toLowerCase(Locale.ROOT);
+            String normalized = key == null ? "" : key.toLowerCase(Locale.ROOT);
             if (FULLY_MASKED_KEYS.contains(normalized)) {
                 masked.put(key, SecretMasking.MASKED_VALUE);
             } else if (VALUE_MASKED_MAPS.contains(normalized) && value instanceof Map<?, ?> map) {
@@ -101,7 +99,7 @@ public class ConsoleTaskExecutionAuditService {
 
     /** JSONB 文本解析为对象；空或解析失败返回 null，避免坏数据导致 500。 */
     private Map<String, Object> parse(String raw, Long taskId) {
-        if (!Texts.hasText(raw)) {
+        if (!EmptyValues.hasText(raw)) {
             return null;
         }
         try {

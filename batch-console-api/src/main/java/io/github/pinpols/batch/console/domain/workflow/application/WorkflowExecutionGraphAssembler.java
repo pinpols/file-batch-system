@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowExecutionProgressResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowExecutionProgressResponse.Edge;
@@ -54,7 +54,7 @@ public final class WorkflowExecutionGraphAssembler {
                         .finishedAt(run.getFinishedAt())
                         .generatedAt(BatchDateTimeSupport.utcNow());
         String executionSnapshot = run.getExecutionSnapshot();
-        if (EmptyChecks.isBlank(executionSnapshot)) {
+        if (EmptyValues.isBlank(executionSnapshot)) {
             return response.snapshotAvailable(false)
                     .nodes(List.of())
                     .edges(List.of())
@@ -66,14 +66,14 @@ public final class WorkflowExecutionGraphAssembler {
         } catch (IllegalArgumentException malformed) {
             throw invalidSnapshot();
         }
-        if (EmptyChecks.isNull(snapshot)) {
+        if (snapshot == null) {
             throw invalidSnapshot();
         }
         List<FrozenNode> frozenNodes = snapshot.nodes();
         boolean snapshotIdentityIsInvalid = !Objects.equals(snapshot.schemaVersion(), 2)
                 || !Objects.equals(snapshot.workflowDefinitionId(), run.getWorkflowDefinitionId())
                 || !Objects.equals(snapshot.workflowVersion(), run.getWorkflowVersionSnapshot());
-        if (snapshotIdentityIsInvalid || EmptyChecks.isEmpty(frozenNodes) || EmptyChecks.isNull(snapshot.edges())) {
+        if (snapshotIdentityIsInvalid || EmptyValues.isEmpty(frozenNodes) || snapshot.edges() == null) {
             throw invalidSnapshot();
         }
         Map<String, WorkflowExecutionNodeView> latest = new HashMap<>();
@@ -98,7 +98,7 @@ public final class WorkflowExecutionGraphAssembler {
         for (FrozenNode frozen : frozenNodes) {
             if (Boolean.FALSE.equals(frozen.enabled())) continue;
             String nodeCode = frozen.nodeCode();
-            if (EmptyChecks.isBlank(nodeCode) || EmptyChecks.isNull(frozen.nodeType()) || !codes.add(nodeCode))
+            if (EmptyValues.isBlank(nodeCode) || frozen.nodeType() == null || !codes.add(nodeCode))
                 throw invalidSnapshot();
             WorkflowExecutionNodeView current = latest.get(nodeCode);
             NodeProgress.NodeProgressBuilder node = NodeProgress.builder()
@@ -106,7 +106,7 @@ public final class WorkflowExecutionGraphAssembler {
                     .nodeName(frozen.nodeName())
                     .nodeType(frozen.nodeType())
                     .relatedJobCode(frozen.relatedJobCode());
-            if (EmptyChecks.isNull(current)) {
+            if (current == null) {
                 nodes.add(node.nodeStatus(
                                 WorkflowRunStatus.terminalCodes().contains(run.getRunStatus())
                                         ? "NOT_EXECUTED"
@@ -116,7 +116,7 @@ public final class WorkflowExecutionGraphAssembler {
                         .finishedTasks(0L)
                         .build());
             } else {
-                Integer completed = EmptyChecks.isNull(current.getExpectedPartitions())
+                Integer completed = current.getExpectedPartitions() == null
                         ? null
                         : zero(current.getSuccessPartitions())
                                 + zero(current.getFailedPartitions())
@@ -124,7 +124,7 @@ public final class WorkflowExecutionGraphAssembler {
                                 + zero(current.getTerminatedPartitions());
                 String activeStepText = current.getActiveSteps();
                 List<String> activeSteps =
-                        EmptyChecks.isBlank(activeStepText) ? List.of() : Arrays.asList(activeStepText.split(","));
+                        EmptyValues.isBlank(activeStepText) ? List.of() : Arrays.asList(activeStepText.split(","));
                 nodes.add(node.nodeStatus(current.getNodeStatus())
                         .nodeRunId(current.getId())
                         .runSeq(current.getRunSeq())
@@ -163,7 +163,7 @@ public final class WorkflowExecutionGraphAssembler {
     }
 
     private static int zero(Integer value) {
-        return EmptyChecks.isNull(value) ? 0 : value;
+        return value == null ? 0 : value;
     }
 
     private static BizException invalidSnapshot() {

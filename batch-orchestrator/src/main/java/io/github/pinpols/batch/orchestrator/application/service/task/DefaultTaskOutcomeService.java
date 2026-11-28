@@ -9,7 +9,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService;
 import io.github.pinpols.batch.orchestrator.application.engine.VerifierFailureOutboxService;
 import io.github.pinpols.batch.orchestrator.application.scheduler.WaitingCapacityReleasedEvent;
@@ -133,12 +133,12 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             description = "worker REPORT → orchestrator 状态机推进的端到端延时(含 lookup + 重试入队 + 父级 join)")
     public JobTaskEntity applyTaskOutcome(TaskOutcomeCommand command) {
         // 入口语义：worker report → orchestrator 在单事务内完成"任务完成 +（可选）重试入队 + 状态机推进"。
-        if (EmptyChecks.isNull(command)) {
+        if (command == null) {
             return null;
         }
         TaskOutcomePersistenceContext persistenceContext =
                 jobMappers.jobTaskMapper.selectOutcomePersistenceContext(command.tenantId(), command.taskId());
-        if (EmptyChecks.isNull(persistenceContext) || EmptyChecks.isNull(persistenceContext.getTask())) {
+        if (persistenceContext == null || persistenceContext.getTask() == null) {
             return null;
         }
         JobTaskEntity task = persistenceContext.getTask();
@@ -150,7 +150,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         // 同一实例的状态写入必须统一遵循 instance advisory lock -> task -> partition 的锁序。
         // 锁前只允许做无锁读取和参数校验；否则并发 outcome 会各自持有 task 行再等待同一实例锁，
         // 持锁线程收敛实例子状态时又可能等待这些 task 行，形成 advisory/row-lock 环形死锁。
-        if (EmptyChecks.isNotNull(task.getJobInstanceId())) {
+        if (task.getJobInstanceId() != null) {
             Long jobInstanceId = task.getJobInstanceId();
             advisoryLockWaitTimer.record(() -> {
                 jobMappers.jobInstanceMapper.acquireInstanceAdvisoryLock(command.tenantId(), jobInstanceId);
@@ -162,7 +162,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         // Task/分区状态，再决定是否允许重放。
         persistenceContext =
                 jobMappers.jobTaskMapper.selectOutcomePersistenceContext(command.tenantId(), command.taskId());
-        if (EmptyChecks.isNull(persistenceContext) || EmptyChecks.isNull(persistenceContext.getTask())) {
+        if (persistenceContext == null || persistenceContext.getTask() == null) {
             return null;
         }
         task = persistenceContext.getTask();
@@ -184,7 +184,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         TaskOutcomeCommand outcomeCommand = command;
         TaskExecutionResult result = outcomeCommand.executionResult();
         TaskExecutionResult.Failure failure = result instanceof TaskExecutionResult.Failure failed ? failed : null;
-        if (EmptyChecks.isNotNull(failure) && EmptyChecks.isNotNull(task.getNonIdempotentStartedAt())) {
+        if (failure != null && task.getNonIdempotentStartedAt() != null) {
             outcomeCommand = command.toBuilder()
                     .errorCode(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN)
                     .errorMessage(UNKNOWN_NON_IDEMPOTENT_OUTCOME_MESSAGE)
@@ -196,19 +196,18 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             failure = (TaskExecutionResult.Failure) result;
         }
         boolean cancellationOutcome = isCancellationOutcome(task, outcomeCommand, failure);
-        JobInstanceEntity retryContextInstance =
-                !cancellationOutcome && EmptyChecks.isNotNull(failure) && EmptyChecks.isNotNull(partition)
-                        ? jobMappers.jobInstanceMapper.selectById(command.tenantId(), task.getJobInstanceId())
-                        : null;
+        JobInstanceEntity retryContextInstance = !cancellationOutcome && failure != null && partition != null
+                ? jobMappers.jobInstanceMapper.selectById(command.tenantId(), task.getJobInstanceId())
+                : null;
         // 失败时是否进入重试：由治理层统一决策（NONE/预算耗尽 → dead-letter；否则写 retry_schedule）。
         boolean retryScheduled = !cancellationOutcome
-                && EmptyChecks.isNotNull(failure)
-                && EmptyChecks.isNotNull(partition)
-                && EmptyChecks.isNotNull(retryContextInstance)
+                && failure != null
+                && partition != null
+                && retryContextInstance != null
                 && retryGovernanceService.scheduleRetryIfNecessary(
                         task, partition, retryContextInstance, failure.errorCode(), failure.errorMessage());
         FailureDisposition disposition = FailureDisposition.of(cancellationOutcome, retryScheduled);
-        String resolvedFailureClass = EmptyChecks.isNull(failure) || cancellationOutcome
+        String resolvedFailureClass = failure == null || cancellationOutcome
                 ? null
                 : failureClassifier.classify(failure.failureClass(), null).code();
         FinishTaskParam.FinishTaskParamBuilder finishTaskParamBuilder =
@@ -225,7 +224,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 .failureClass(resolvedFailureClass)
                 .expectedVersion(task.getVersion())
                 .build());
-        if (EmptyChecks.isNull(finishedTask)) {
+        if (finishedTask == null) {
             throw BizException.of(
                     ResultCode.STATE_CONFLICT,
                     ResultCode.STATE_CONFLICT.detailKey(),
@@ -245,7 +244,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         } else {
             transitionedInstance = applyFailureOutcome(outcomeCommand, partition, retryScheduled, outputSummary);
         }
-        if (EmptyChecks.isNotNull(partition) && disposition == FailureDisposition.RETRY_SCHEDULED) {
+        if (partition != null && disposition == FailureDisposition.RETRY_SCHEDULED) {
             // RETRYING 使用独立状态更新；保留 invocation fence，防止迟到报告覆盖下一次执行的输出。
             // SUCCESS/最终 FAILED 已把摘要合并进 markStatus，同一 CAS 原子落库，避免每个终态多一次 UPDATE/WAL。
             jobMappers.jobPartitionMapper.updateOutputSummary(
@@ -258,10 +257,10 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         updateStepInstanceProgress(outcomeCommand, task, disposition, finishedAt, outputSummary);
         // 终态 CTE 会同步递增 job_instance 的分区计数和 version，并直接返回权威快照；虚拟任务、重试路径
         // 或 CAS 未命中时才回读。两条路径都位于 instance advisory lock 保护范围内。
-        JobInstanceEntity jobInstance = EmptyChecks.isNotNull(transitionedInstance)
+        JobInstanceEntity jobInstance = transitionedInstance != null
                 ? transitionedInstance
                 : jobMappers.jobInstanceMapper.selectById(command.tenantId(), task.getJobInstanceId());
-        if (EmptyChecks.isNotNull(jobInstance)) {
+        if (jobInstance != null) {
             instanceProgressor.advance(outcomeCommand, task, jobInstance, finishedAt);
         }
         if (!retryScheduled) {
@@ -274,9 +273,9 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     /** 只在成功回报内推进水位，保持原 CAS 和迟到分区保护。 */
     private void requireCurrentInvocation(
             TaskOutcomeCommand command, JobTaskEntity task, JobPartitionEntity partition) {
-        boolean reportInvocationDoesNotMatchPartition = EmptyChecks.isNotNull(task.getJobPartitionId())
-                && EmptyChecks.isNotNull(partition)
-                && EmptyChecks.isNotNull(partition.getCurrentInvocationId())
+        boolean reportInvocationDoesNotMatchPartition = task.getJobPartitionId() != null
+                && partition != null
+                && partition.getCurrentInvocationId() != null
                 && !partition.getCurrentInvocationId().equals(command.partitionInvocationId());
         if (reportInvocationDoesNotMatchPartition) {
             throw BizException.of(ResultCode.CONFLICT, "error.task.invocation_mismatch");
@@ -284,14 +283,14 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     }
 
     private void requireAssignedWorker(TaskOutcomeCommand command, JobTaskEntity task) {
-        if (EmptyChecks.isNotNull(command.workerId()) && !command.workerId().equals(task.getAssignedWorkerCode())) {
+        if (command.workerId() != null && !command.workerId().equals(task.getAssignedWorkerCode())) {
             throw BizException.of(ResultCode.FORBIDDEN, "error.worker.not_owner");
         }
     }
 
     private void advanceHighWaterMark(
             TaskOutcomeCommand outcomeCommand, JobTaskEntity task, TaskExecutionResult.Success success) {
-        if (EmptyChecks.isNotBlank(success.highWaterMarkOut())) {
+        if (EmptyValues.isNotBlank(success.highWaterMarkOut())) {
             int wmUpdated = jobMappers.jobInstanceMapper.updateHighWaterMarkOut(
                     outcomeCommand.tenantId(), task.getJobInstanceId(), success.highWaterMarkOut());
             if (wmUpdated <= 0) {
@@ -309,7 +308,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
     private static boolean isCancellationOutcome(
             JobTaskEntity task, TaskOutcomeCommand command, TaskExecutionResult.Failure failure) {
-        return EmptyChecks.isNotNull(failure)
+        return failure != null
                 && Boolean.TRUE.equals(task.getCancelRequested())
                 && CANCELLED_ERROR_CODE.equals(command.errorCode());
     }
@@ -332,7 +331,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     /** 处理成功路径：将分区标记为 SUCCESS。 */
     private JobInstanceEntity applySuccessOutcome(
             TaskOutcomeCommand command, JobPartitionEntity partition, String outputSummary) {
-        if (EmptyChecks.isNull(partition)) {
+        if (partition == null) {
             return null;
         }
         // C-8: null 表示并发更新已推进分区状态；回读 instance 继续沿用原有幂等兜底。
@@ -349,15 +348,14 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                         .outputSummary(outputSummary)
                         .expectedVersion(partition.getVersion())
                         .build());
-        warnIfCasMiss(
-                EmptyChecks.isNull(transitionedInstance) ? 0 : 1, "partition markStatus(SUCCESS)", partition.getId());
+        warnIfCasMiss(transitionedInstance == null ? 0 : 1, "partition markStatus(SUCCESS)", partition.getId());
         return transitionedInstance;
     }
 
     /** 处理失败/重试路径：根据是否安排重试，将分区标记为 RETRYING 或 FAILED。 */
     private JobInstanceEntity applyFailureOutcome(
             TaskOutcomeCommand command, JobPartitionEntity partition, boolean retryScheduled, String outputSummary) {
-        if (EmptyChecks.isNull(partition)) {
+        if (partition == null) {
             return null;
         }
         if (retryScheduled) {
@@ -392,8 +390,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                         .outputSummary(outputSummary)
                         .expectedVersion(partition.getVersion())
                         .build());
-        warnIfCasMiss(
-                EmptyChecks.isNull(transitionedInstance) ? 0 : 1, "partition markStatus(FAILED)", partition.getId());
+        warnIfCasMiss(transitionedInstance == null ? 0 : 1, "partition markStatus(FAILED)", partition.getId());
         return transitionedInstance;
     }
 
@@ -403,12 +400,12 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             FailureDisposition disposition,
             Instant finishedAt,
             String outputSummary) {
-        if (EmptyChecks.isNull(command) || EmptyChecks.isNull(task)) {
+        if (command == null || task == null) {
             return;
         }
         JobStepInstanceEntity stepInstance =
                 jobMappers.jobStepInstanceMapper.selectByJobTaskId(command.tenantId(), task.getId());
-        if (EmptyChecks.isNull(stepInstance)) {
+        if (stepInstance == null) {
             return;
         }
         boolean retryScheduled = disposition == FailureDisposition.RETRY_SCHEDULED;

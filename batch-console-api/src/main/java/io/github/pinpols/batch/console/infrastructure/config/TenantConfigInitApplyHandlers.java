@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.infrastructure.config;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.AlertRoutingSpec;
@@ -164,7 +164,7 @@ public class TenantConfigInitApplyHandlers {
 
     private <T, E> ItemStats applySpecs(
             List<T> specs, ApplyContext ctx, SpecHandler<T, E> handler, Consumer<T> validate) {
-        if (specs == null || specs.isEmpty()) {
+        if (EmptyValues.isEmpty(specs)) {
             return ItemStats.empty();
         }
         TransactionTemplate nested = new TransactionTemplate(transactionManager);
@@ -236,7 +236,7 @@ public class TenantConfigInitApplyHandlers {
                         (c, s, existing) -> jobDefinitionSupport.updateJobDefinition(existing, s, c.operator())),
                 spec -> {
                     String code = spec.getJobCode();
-                    if (EmptyChecks.isNull(code) || !code.matches(ValidResourceCode.REGEX)) {
+                    if (code == null || !code.matches(ValidResourceCode.REGEX)) {
                         throw new IllegalArgumentException("error.common.invalid_argument");
                     }
                 });
@@ -255,14 +255,14 @@ public class TenantConfigInitApplyHandlers {
                         (c, s, existing) -> workflowDefinitionSupport.upsertWorkflowDefinition(
                                 c.tenantId(), existing.getId(), s, c.operator())),
                 spec -> {
-                    if (EmptyChecks.isNotNull(spec.getNodes())) {
+                    if (spec.getNodes() != null) {
                         for (WorkflowDefinitionSpec.NodeSpec node : spec.getNodes()) {
-                            if (EmptyChecks.isNull(node.getNodeName())
+                            if (node.getNodeName() == null
                                     || WorkflowTextLimits.exceeds(node.getNodeName(), WorkflowTextLimits.NODE_NAME)) {
                                 throw new IllegalArgumentException("error.common.invalid_argument");
                             }
                         }
-                        if (EmptyChecks.isNotNull(spec.getEdges())) {
+                        if (spec.getEdges() != null) {
                             for (WorkflowDefinitionSpec.EdgeSpec edge : spec.getEdges()) {
                                 if (WorkflowTextLimits.exceeds(
                                         edge.getConditionExpr(), WorkflowTextLimits.CONDITION_EXPR)) {

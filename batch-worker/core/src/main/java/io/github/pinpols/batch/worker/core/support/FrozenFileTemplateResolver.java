@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.enums.ReplayOperationType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
@@ -30,7 +30,7 @@ public class FrozenFileTemplateResolver {
 
     public Map<String, Object> resolve(FileTemplateConfigRequest request) {
         Map<String, Object> payload = parsePayload(request.rawPayload());
-        Map<String, Object> attributes = EmptyChecks.isNull(request.attributes()) ? Map.of() : request.attributes();
+        Map<String, Object> attributes = request.attributes() == null ? Map.of() : request.attributes();
         if (payload.containsKey(FrozenFileTemplateSnapshot.PAYLOAD_KEY)) {
             return reveal(payload.get(FrozenFileTemplateSnapshot.PAYLOAD_KEY), request);
         }
@@ -43,7 +43,7 @@ public class FrozenFileTemplateResolver {
             throw invalidSnapshot();
         }
         Object existing = attributes.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
-        if (existing instanceof Map<?, ?> configuration && EmptyChecks.isNotEmpty(configuration)) {
+        if (existing instanceof Map<?, ?> configuration && EmptyValues.isNotEmpty(configuration)) {
             Map<String, Object> copy = new LinkedHashMap<>();
             configuration.forEach((key, value) -> {
                 if (!(key instanceof String text)) {
@@ -53,22 +53,22 @@ public class FrozenFileTemplateResolver {
             });
             return copy;
         }
-        if (EmptyChecks.isBlank(request.tenantId()) || EmptyChecks.isBlank(request.templateCode())) {
+        if (EmptyValues.isBlank(request.tenantId()) || EmptyValues.isBlank(request.templateCode())) {
             return Map.of();
         }
         Map<String, Object> configuration = definitions.loadLatestTemplateConfig(
                 request.tenantId(), request.templateCode(), request.templateType());
-        return EmptyChecks.isNull(configuration) ? Map.of() : configuration;
+        return configuration == null ? Map.of() : configuration;
     }
 
     private Map<String, Object> reveal(Object protectedValue, FileTemplateConfigRequest request) {
         try {
-            if (!(protectedValue instanceof String ciphertext) || EmptyChecks.isBlank(ciphertext)) {
+            if (!(protectedValue instanceof String ciphertext) || EmptyValues.isBlank(ciphertext)) {
                 throw invalidSnapshot();
             }
             String plaintext = secretPayloadProtector.revealEncrypted(ciphertext);
             FrozenFileTemplateSnapshot snapshot = JsonUtils.fromJsonStrict(plaintext, FrozenFileTemplateSnapshot.class);
-            if (EmptyChecks.isNull(snapshot)) {
+            if (snapshot == null) {
                 throw invalidSnapshot();
             }
             snapshot.requireIdentity(request.tenantId(), request.templateCode(), request.templateType());
@@ -84,7 +84,7 @@ public class FrozenFileTemplateResolver {
     }
 
     private Map<String, Object> parsePayload(String rawPayload) {
-        if (EmptyChecks.isBlank(rawPayload)) {
+        if (EmptyValues.isBlank(rawPayload)) {
             return Map.of();
         }
         Map<String, Object> selectedFields = new LinkedHashMap<>();
@@ -111,12 +111,12 @@ public class FrozenFileTemplateResolver {
                 // 内联文件内容可能很大，不应重复物化无关值。
                 parser.skipChildren();
             }
-            if (EmptyChecks.isNotNull(parser.nextToken())) {
+            if (parser.nextToken() != null) {
                 throw invalidSnapshot();
             }
             return selectedFields;
         } catch (IOException invalidRawPayload) {
-            if (EmptyChecks.isNotEmpty(selectedFields)) {
+            if (EmptyValues.isNotEmpty(selectedFields)) {
                 throw invalidSnapshot();
             }
             // 缺少原始 JSON 时，既有类型化阶段上下文可提供自身载荷。

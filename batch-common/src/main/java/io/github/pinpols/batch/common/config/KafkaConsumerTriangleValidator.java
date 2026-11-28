@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import jakarta.annotation.PostConstruct;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
@@ -55,7 +54,7 @@ public class KafkaConsumerTriangleValidator {
 
     private static int integerProperty(Map<String, String> properties, String key, int fallback) {
         String value = properties.get(key);
-        return EmptyChecks.isNull(value) ? fallback : Integer.parseInt(value);
+        return value == null ? fallback : Integer.parseInt(value);
     }
 
     @PostConstruct

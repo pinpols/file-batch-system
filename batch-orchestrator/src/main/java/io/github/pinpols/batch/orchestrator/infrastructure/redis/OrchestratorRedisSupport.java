@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -46,11 +46,11 @@ public class OrchestratorRedisSupport {
         String wildcardKey = BatchRedisKeys.configInvalidationKeyRevision(tenantId, type, "*");
         String exactKey = BatchRedisKeys.configInvalidationKeyRevision(tenantId, type, code);
         Long wildcardRevision = configRevision(wildcardKey);
-        if (EmptyChecks.isNull(wildcardRevision)) {
+        if (wildcardRevision == null) {
             return null;
         }
         Long exactRevision = configRevision(exactKey);
-        if (EmptyChecks.isNull(exactRevision)) {
+        if (exactRevision == null) {
             return null;
         }
         return wildcardRevision + ":" + exactRevision;
@@ -59,7 +59,7 @@ public class OrchestratorRedisSupport {
     private Long configRevision(String key) {
         try {
             String value = redisTemplate.opsForValue().get(key);
-            if (EmptyChecks.isNull(value)) {
+            if (value == null) {
                 return 0L;
             }
             long revision = Long.parseLong(value);
@@ -88,7 +88,7 @@ public class OrchestratorRedisSupport {
 
     public <T> T getJson(String key, Class<T> type) {
         String raw = getStringCache(key);
-        if (raw == null || raw.isBlank()) {
+        if (EmptyValues.isBlank(raw)) {
             return null;
         }
         try {
@@ -164,7 +164,7 @@ public class OrchestratorRedisSupport {
 
     public void putHashAll(String key, Map<String, String> fields, Duration ttl) {
         cacheWrite(key, () -> {
-            if (fields == null || fields.isEmpty()) {
+            if (EmptyValues.isEmpty(fields)) {
                 return;
             }
             List<String> args = new ArrayList<>(fields.size() * 2 + 1);

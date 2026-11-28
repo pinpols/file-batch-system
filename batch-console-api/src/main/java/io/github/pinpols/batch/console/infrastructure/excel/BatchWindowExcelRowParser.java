@@ -11,7 +11,7 @@ import io.github.pinpols.batch.common.enums.BatchWindowEndStrategy;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.OutOfWindowAction;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.job.param.BatchWindowUpsertParam;
 import java.util.List;
 import java.util.Map;
@@ -96,7 +96,7 @@ public final class BatchWindowExcelRowParser {
 
     private static String requireTime(Map<String, String> values, String key, List<String> issues) {
         String normalized = normalize(values.get(key));
-        if (!Texts.hasText(normalized)) {
+        if (!EmptyValues.hasText(normalized)) {
             issues.add(key + " is required");
             return null;
         }

@@ -5,7 +5,7 @@ import static io.github.pinpols.batch.console.domain.workflow.infrastructure.exc
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -25,12 +25,12 @@ public final class WorkflowExcelTextUtils {
     }
 
     static boolean hasText(String value) {
-        return Texts.hasText(normalize(value));
+        return EmptyValues.hasText(normalize(value));
     }
 
     static String tenantOrDefault(String value, String tenantId) {
         String normalized = normalize(value);
-        return Texts.hasText(normalized) ? normalized : tenantId;
+        return EmptyValues.hasText(normalized) ? normalized : tenantId;
     }
 
     /**
@@ -39,7 +39,7 @@ public final class WorkflowExcelTextUtils {
      */
     static String normalizeEnum(String value, Set<String> allowed) {
         String normalized = normalize(value);
-        if (!Texts.hasText(normalized)) {
+        if (!EmptyValues.hasText(normalized)) {
             return null;
         }
         return normalized.toUpperCase(Locale.ROOT);
@@ -47,7 +47,7 @@ public final class WorkflowExcelTextUtils {
 
     static Integer parseInteger(String value) {
         String normalized = normalize(value);
-        if (!Texts.hasText(normalized)) {
+        if (!EmptyValues.hasText(normalized)) {
             return null;
         }
         try {
@@ -60,7 +60,7 @@ public final class WorkflowExcelTextUtils {
 
     static Boolean parseBoolean(String value, Boolean defaultValue) {
         String normalized = normalize(value);
-        if (!Texts.hasText(normalized)) {
+        if (!EmptyValues.hasText(normalized)) {
             return defaultValue;
         }
         String upper = normalized.toUpperCase(Locale.ROOT);

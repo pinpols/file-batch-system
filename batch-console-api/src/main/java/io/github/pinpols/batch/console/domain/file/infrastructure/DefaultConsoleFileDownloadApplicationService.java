@@ -7,8 +7,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileDownloadApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.FileDownloadArtifact;
 import io.github.pinpols.batch.console.domain.file.entity.FileErrorRecordEntity;
@@ -70,37 +69,36 @@ public class DefaultConsoleFileDownloadApplicationService implements ConsoleFile
             throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
         }
         String templateCode = fileRecordMapper.selectTemplateCodeByFileId(effectiveTenant, fileId);
-        FileTemplateSecurityFlagsView security = Texts.hasText(templateCode)
+        FileTemplateSecurityFlagsView security = EmptyValues.hasText(templateCode)
                 ? fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode(effectiveTenant, templateCode)
                 : null;
         boolean downloadApprovalRequired = requiresDownloadApproval(security)
-                && !Texts.hasText(approvalId)
+                && !EmptyValues.hasText(approvalId)
                 && !batchSecurityProperties.isBypassMode();
         if (downloadApprovalRequired) {
             throw BizException.of(ResultCode.BUSINESS_ERROR, "error.approval.id_required_for_download");
         }
-        if (Texts.hasText(approvalId)) {
+        if (EmptyValues.hasText(approvalId)) {
             approvalClient.requireApprovedApproval(effectiveTenant, approvalId, ApprovalTargetBinding.file(fileId));
         }
         String bucket = fileRecord.storageBucket();
-        if (!Texts.hasText(bucket)) {
+        if (!EmptyValues.hasText(bucket)) {
             bucket = s3StorageProperties.getBucket();
         }
         String objectName = fileRecord.storagePath();
-        if (!Texts.hasText(objectName)) {
+        if (!EmptyValues.hasText(objectName)) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.storage_path_missing");
         }
         String fileName = fileRecord.fileName();
         String contentType = fileRecord.mimeType();
-        if (!Texts.hasText(contentType)) {
+        if (!EmptyValues.hasText(contentType)) {
             contentType = "application/octet-stream";
         }
         try {
             InputStream inputStream = objectStore.get(bucket, objectName);
             InputStream payload =
                     batchSecurityProperties.isBypassMode() ? inputStream : cryptoService.decryptIfNeeded(inputStream);
-            return new FileDownloadArtifact(
-                    payload, EmptyChecks.isNull(fileName) ? objectName : fileName, contentType, true);
+            return new FileDownloadArtifact(payload, fileName == null ? objectName : fileName, contentType, true);
         } catch (ObjectNotFoundException exception) {
             // 存储中对象不存在(NoSuchKey,常见于 ingress 导入文件处理后已被消费)→ 404 优雅提示,
             // 不是 500 系统错误(操作员点下载得到的应是"内容已失效"而非崩溃)。
@@ -181,7 +179,7 @@ public class DefaultConsoleFileDownloadApplicationService implements ConsoleFile
     }
 
     private boolean requiresDownloadApproval(FileTemplateSecurityFlagsView security) {
-        boolean downloadApprovalIsNotRequired = batchSecurityProperties.isBypassMode() || EmptyChecks.isNull(security);
+        boolean downloadApprovalIsNotRequired = batchSecurityProperties.isBypassMode() || security == null;
         if (downloadApprovalIsNotRequired) {
             return false;
         }

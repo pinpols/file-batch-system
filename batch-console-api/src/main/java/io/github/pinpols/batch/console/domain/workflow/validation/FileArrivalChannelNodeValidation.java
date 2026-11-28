@@ -2,9 +2,8 @@ package io.github.pinpols.batch.console.domain.workflow.validation;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.common.validation.FileArrivalChannelCode;
 import java.util.Map;
 
@@ -13,7 +12,7 @@ public final class FileArrivalChannelNodeValidation {
     private FileArrivalChannelNodeValidation() {}
 
     public static void validate(String nodeType, String nodeParams) {
-        if (!"WAIT".equalsIgnoreCase(nodeType) || !Texts.hasText(nodeParams)) {
+        if (!"WAIT".equalsIgnoreCase(nodeType) || !EmptyValues.hasText(nodeParams)) {
             return;
         }
         Map<?, ?> params;
@@ -23,7 +22,7 @@ public final class FileArrivalChannelNodeValidation {
             // 原有节点 JSON 的校验和错误处理由对应写入入口负责。
             return;
         }
-        if (EmptyChecks.isNull(params)
+        if (params == null
                 || !"FILE_ARRIVAL".equals(params.get("sensor_type"))
                 || !(params.get("sensor_spec") instanceof Map<?, ?> spec)) {
             return;

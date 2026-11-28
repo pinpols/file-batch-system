@@ -4,9 +4,8 @@ import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.config.OpenLineageProperties;
 import io.github.pinpols.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
@@ -76,7 +75,7 @@ public class WorkflowTerminalLineageConsumer {
     @SuppressWarnings("unchecked")
     static TerminalSnapshot parse(String payload) {
         Map<String, Object> data = JsonUtils.fromJson(payload, Map.class);
-        if (EmptyChecks.isNull(data)) {
+        if (data == null) {
             throw new IllegalArgumentException("payload is null");
         }
         if (!"v2".equals(text(data.get("schemaVersion")))) {
@@ -85,9 +84,8 @@ public class WorkflowTerminalLineageConsumer {
         String tenantId = text(data.get("tenantId"));
         Long runId = number(data.get("workflowRunId"));
         String status = text(data.get("runStatus"));
-        boolean workflowTerminalEventIsInvalid = !Texts.hasText(tenantId)
-                || EmptyChecks.isNull(runId)
-                || !WorkflowTerminalOutboxService.isTerminal(status);
+        boolean workflowTerminalEventIsInvalid =
+                !EmptyValues.hasText(tenantId) || runId == null || !WorkflowTerminalOutboxService.isTerminal(status);
         if (workflowTerminalEventIsInvalid) {
             throw new IllegalArgumentException("tenantId, workflowRunId or terminal status is invalid");
         }
@@ -105,14 +103,14 @@ public class WorkflowTerminalLineageConsumer {
     }
 
     private static String text(Object value) {
-        return EmptyChecks.isNull(value) ? null : String.valueOf(value);
+        return value == null ? null : String.valueOf(value);
     }
 
     private static Long number(Object value) {
         if (value instanceof Number number) {
             return number.longValue();
         }
-        if (value instanceof String text && EmptyChecks.isNotBlank(text)) {
+        if (value instanceof String text && EmptyValues.isNotBlank(text)) {
             try {
                 return Long.valueOf(text);
             } catch (NumberFormatException ignored) {
@@ -124,12 +122,12 @@ public class WorkflowTerminalLineageConsumer {
 
     private static Instant instant(Object value) {
         String text = text(value);
-        return Texts.hasText(text) ? Instant.parse(text) : null;
+        return EmptyValues.hasText(text) ? Instant.parse(text) : null;
     }
 
     private static LocalDate localDate(Object value) {
         String text = text(value);
-        return Texts.hasText(text) ? LocalDate.parse(text) : null;
+        return EmptyValues.hasText(text) ? LocalDate.parse(text) : null;
     }
 
     record TerminalSnapshot(WorkflowRunEntity run, String terminalStatus, Instant finishedAt) {}

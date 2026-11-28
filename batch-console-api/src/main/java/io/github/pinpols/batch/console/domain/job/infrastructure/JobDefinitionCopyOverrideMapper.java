@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.domain.job.infrastructure;
 
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDefinitionCopyRequest;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
@@ -20,21 +19,21 @@ final class JobDefinitionCopyOverrideMapper {
         param.setDependsOnJobCode(copied.getDependsOnJobCode());
         param.setJobName(Nullables.coalesce(request.getJobName(), copied.getJobName()));
         param.setQueueCode(
-                EmptyChecks.isNotNull(request.getQueueCode())
+                request.getQueueCode() != null
                         ? CodeNormalizer.toConfigFormOrNull(request.getQueueCode())
                         : copied.getQueueCode());
         param.setWorkerGroup(
-                EmptyChecks.isNotNull(request.getWorkerGroup())
+                request.getWorkerGroup() != null
                         ? CodeNormalizer.toUpperOrNull(request.getWorkerGroup())
                         : copied.getWorkerGroup());
         param.setScheduleExpr(Nullables.coalesce(request.getScheduleExpr(), copied.getScheduleExpr()));
         param.setTriggerMode(copied.getTriggerMode());
         param.setCalendarCode(
-                EmptyChecks.isNotNull(request.getCalendarCode())
+                request.getCalendarCode() != null
                         ? CodeNormalizer.toConfigFormOrNull(request.getCalendarCode())
                         : copied.getCalendarCode());
         param.setWindowCode(
-                EmptyChecks.isNotNull(request.getWindowCode())
+                request.getWindowCode() != null
                         ? CodeNormalizer.toConfigFormOrNull(request.getWindowCode())
                         : copied.getWindowCode());
         param.setRetryPolicy(Nullables.coalesce(request.getRetryPolicy(), copied.getRetryPolicy()));

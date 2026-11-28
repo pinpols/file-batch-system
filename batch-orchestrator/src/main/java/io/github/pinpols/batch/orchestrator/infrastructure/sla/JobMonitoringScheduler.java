@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sla;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService.Violation;
 import io.github.pinpols.batch.orchestrator.config.SlaGovernanceProperties;
@@ -99,7 +99,7 @@ public class JobMonitoringScheduler {
                 scanSignals.get(violation).recordSuccess();
                 meterRegistry
                         .summary("batch.job.monitoring.scan.candidates", VIOLATION_TYPE_TAG, violation.name())
-                        .record(EmptyChecks.isNull(candidates) ? 0 : candidates.size());
+                        .record(candidates == null ? 0 : candidates.size());
                 boolean alertPersistenceSucceeded = scanCandidates(candidates, violation);
                 if (alertPersistenceSucceeded) {
                     alertSignals.get(violation).recordSuccess();
@@ -117,15 +117,14 @@ public class JobMonitoringScheduler {
     }
 
     private boolean scanCandidates(List<JobMonitoringAlertCandidate> candidates, Violation violation) {
-        if (EmptyChecks.isEmpty(candidates)) {
+        if (EmptyValues.isEmpty(candidates)) {
             return true;
         }
         boolean allAlertsPersisted = true;
         for (JobMonitoringAlertCandidate candidate : candidates) {
-            if (EmptyChecks.isNull(candidate)
-                    || EmptyChecks.isNull(candidate.tenantId())
-                    || (EmptyChecks.isNull(candidate.jobInstanceId())
-                            && EmptyChecks.isNull(candidate.triggerRequestId()))) {
+            if (candidate == null
+                    || candidate.tenantId() == null
+                    || (candidate.jobInstanceId() == null && candidate.triggerRequestId() == null)) {
                 continue;
             }
             try {

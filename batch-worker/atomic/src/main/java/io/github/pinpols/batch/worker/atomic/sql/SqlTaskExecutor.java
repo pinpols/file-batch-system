@@ -9,7 +9,7 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicConnectionManager;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
@@ -132,8 +132,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
                     LogSanitizer.value(ctx.jobCode()),
                     SwallowedExceptionLogger.summary(ex));
             String exceptionMessage = ex.getMessage();
-            String failureMessage =
-                    EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : ex.getMessage();
+            String failureMessage = exceptionMessage == null ? ex.getClass().getSimpleName() : ex.getMessage();
             return AtomicErrorCode.fail(AtomicErrorCode.EXECUTION_FAILED, failureMessage, ex);
         }
     }
@@ -167,7 +166,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
         Map<String, Object> params = ctx.parameters();
 
         Object sqlObj = params.get(PARAM_SQL);
-        if (!(sqlObj instanceof String sqlString) || EmptyChecks.isBlank(sqlString)) {
+        if (!(sqlObj instanceof String sqlString) || EmptyValues.isBlank(sqlString)) {
             throw new SqlValidationException("parameters.sql required (non-blank string)");
         }
         String sql = sqlString.trim();
@@ -195,9 +194,9 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
         // timeout(只能缩短)
         int timeoutSec = (int) props.getDefaultStatementTimeout().toSeconds();
         Object t = params.get(PARAM_STMT_TIMEOUT);
-        if (EmptyChecks.isNotNull(t)) {
+        if (t != null) {
             Long requested = AtomicParameterNumbers.positiveLong(t);
-            if (EmptyChecks.isNull(requested)) {
+            if (requested == null) {
                 throw new SqlValidationException("statementTimeoutSeconds must be positive integer");
             }
             if (requested < timeoutSec) {
@@ -226,9 +225,9 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     String resolveDataSourceBeanName(Map<String, Object> params) {
         String configured = props.getDataSourceBeanName();
         Object v = params.get(PARAM_DS_BEAN);
-        String paramBean = v instanceof String string && EmptyChecks.isNotBlank(string) ? string.trim() : null;
+        String paramBean = v instanceof String string && EmptyValues.isNotBlank(string) ? string.trim() : null;
 
-        if (EmptyChecks.isNull(paramBean) || paramBean.equals(configured)) {
+        if (paramBean == null || paramBean.equals(configured)) {
             return configured;
         }
         if (!props.getAllowedDataSourceBeans().contains(paramBean)) {
@@ -483,7 +482,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
         String type = md.getColumnTypeName(index);
         if ("json".equalsIgnoreCase(type) || "jsonb".equalsIgnoreCase(type)) {
             String json = rs.getString(index);
-            return EmptyChecks.isNull(json) ? null : JsonUtils.fromJson(json, Object.class);
+            return json == null ? null : JsonUtils.fromJson(json, Object.class);
         }
         Object value = rs.getObject(index);
         if (value instanceof Array sqlArray) {

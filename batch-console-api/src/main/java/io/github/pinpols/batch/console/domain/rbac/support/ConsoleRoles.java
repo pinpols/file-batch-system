@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Collection;
 import java.util.Set;
 
@@ -29,7 +29,7 @@ public final class ConsoleRoles {
 
     /** 角色集合非空且全部属于四类正式角色。 */
     public static boolean isFormalRoleSet(Collection<String> authorities) {
-        return EmptyChecks.isNotEmpty(authorities) && ALL.containsAll(authorities);
+        return EmptyValues.isNotEmpty(authorities) && ALL.containsAll(authorities);
     }
 
     /** 判断给定权限集合是否包含全局(跨租户)角色。 */

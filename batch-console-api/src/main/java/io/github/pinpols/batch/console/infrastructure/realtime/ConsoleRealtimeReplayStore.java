@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.infrastructure.realtime;
 
 import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.ConsoleRealtimeProperties;
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeMetrics;
@@ -31,10 +31,10 @@ public class ConsoleRealtimeReplayStore implements RealtimeReplayStore {
 
     @Override
     public void append(ConsoleRealtimeStreamEnvelope envelope) {
-        boolean envelopeIsIncomplete = EmptyChecks.isNull(envelope)
+        boolean envelopeIsIncomplete = envelope == null
                 || envelope.tenantId() == null
                 || envelope.stream() == null
-                || EmptyChecks.isNull(envelope.cursor());
+                || envelope.cursor() == null;
         if (envelopeIsIncomplete) {
             return;
         }
@@ -62,12 +62,12 @@ public class ConsoleRealtimeReplayStore implements RealtimeReplayStore {
 
     @Override
     public ReplayBatch replay(String tenantId, String stream, String afterCursor, String eventType) {
-        boolean replayRequestIsIncomplete = EmptyChecks.isNull(tenantId)
+        boolean replayRequestIsIncomplete = tenantId == null
                 || tenantId.isBlank()
                 || stream == null
                 || stream.isBlank()
                 || afterCursor == null
-                || EmptyChecks.isBlank(afterCursor);
+                || EmptyValues.isBlank(afterCursor);
         if (replayRequestIsIncomplete) {
             return new ReplayBatch(List.of(), true);
         }
@@ -76,7 +76,7 @@ public class ConsoleRealtimeReplayStore implements RealtimeReplayStore {
         long maxEntries = realtimeProperties.getReplayMaxEntries();
         long endIndex = maxEntries > 0 ? maxEntries - 1 : -1L;
         List<String> rawEntries = redisTemplate.opsForList().range(bufferKey(tenantId, stream), 0, endIndex);
-        if (rawEntries == null || rawEntries.isEmpty()) {
+        if (EmptyValues.isEmpty(rawEntries)) {
             return new ReplayBatch(List.of(), false);
         }
         List<ConsoleRealtimeStreamEnvelope> envelopes = new ArrayList<>(rawEntries.size());
@@ -111,7 +111,7 @@ public class ConsoleRealtimeReplayStore implements RealtimeReplayStore {
         for (int index = startIndex; index < envelopes.size(); index++) {
             ConsoleRealtimeStreamEnvelope envelope = envelopes.get(index);
             boolean eventTypeDoesNotMatchFilter =
-                    EmptyChecks.isNotBlank(eventType) && !eventType.equals(envelope.eventType());
+                    EmptyValues.isNotBlank(eventType) && !eventType.equals(envelope.eventType());
             if (eventTypeDoesNotMatchFilter) {
                 continue;
             }

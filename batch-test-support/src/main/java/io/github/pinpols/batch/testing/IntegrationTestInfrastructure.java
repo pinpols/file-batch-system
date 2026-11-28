@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.testing;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -106,7 +105,7 @@ final class IntegrationTestInfrastructure {
             registry.add("batch.storage.backend-guard.cutover-id", () -> "test-fs-" + UUID.randomUUID());
             return;
         }
-        if (EmptyChecks.isNull(objectStore)) {
+        if (objectStore == null) {
             throw new IllegalStateException("S3-compatible test object store endpoint is not configured");
         }
         registry.add("batch.storage.backend", () -> BACKEND_S3);

@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.security.SecretComparator;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.web.ServletRequestPaths;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyCandidate;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyVerifier;
@@ -105,7 +105,7 @@ public class InternalAuthFilter extends OncePerRequestFilter {
         // Path 1: API Key (ADR-035 P2 租户自托管 worker)
         String apiKey = request.getHeader(HEADER_API_KEY);
         String tenantHeader = request.getHeader(HEADER_TENANT);
-        if (EmptyChecks.isNotBlank(apiKey)) {
+        if (EmptyValues.isNotBlank(apiKey)) {
             // 租户 API-Key 只允许自托管 worker 的执行/查询端点，以及显式 worker.ops scope 的运维变更端点；
             // 其它内部治理接口仍必须走 X-Internal-Secret，避免 per-tenant key 横向触达平台级内部能力。
             Optional<ApiKeyCandidate> rec = resolveApiKeyCandidate(request.getMethod(), path, apiKey, tenantHeader);
@@ -148,11 +148,11 @@ public class InternalAuthFilter extends OncePerRequestFilter {
                             apiKey, tenantHeader, ApiKeyVerifier.SCOPE_WORKER_READ, ApiKeyVerifier.SCOPE_WORKER_EXECUTE)
                     : apiKeyVerifier.verifyWithScope(apiKey, tenantHeader, ApiKeyVerifier.SCOPE_WORKER_EXECUTE);
         }
-        if (EmptyChecks.isNotNull(path) && WORKER_READ_PATH.matcher(path).matches()) {
+        if (path != null && WORKER_READ_PATH.matcher(path).matches()) {
             return apiKeyVerifier.verifyWithAnyScope(
                     apiKey, tenantHeader, ApiKeyVerifier.SCOPE_WORKER_READ, ApiKeyVerifier.SCOPE_WORKER_EXECUTE);
         }
-        if (EmptyChecks.isNotNull(path) && OPS_MUTATION_PATH.matcher(path).matches()) {
+        if (path != null && OPS_MUTATION_PATH.matcher(path).matches()) {
             return apiKeyVerifier.verifyWithScope(apiKey, tenantHeader, ApiKeyVerifier.SCOPE_WORKER_OPS);
         }
         // 未知 workers/tasks 路径不得由租户 key 触达，未来的新端点也不会被前缀自动放行。
@@ -160,7 +160,7 @@ public class InternalAuthFilter extends OncePerRequestFilter {
     }
 
     private static boolean isWorkerExecutionUri(String path) {
-        if (EmptyChecks.isNull(path)) {
+        if (path == null) {
             return false;
         }
         return WORKER_EXECUTION_PATHS.contains(path)
@@ -170,7 +170,7 @@ public class InternalAuthFilter extends OncePerRequestFilter {
     }
 
     private static boolean isInternalPath(String path) {
-        return "/internal".equals(path) || (EmptyChecks.isNotNull(path) && path.startsWith("/internal/"));
+        return "/internal".equals(path) || (path != null && path.startsWith("/internal/"));
     }
 
     private static void writeUnauthorized(HttpServletResponse response) throws IOException {

@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService.NodeRunFinishCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService.NodeRunKey;
@@ -96,7 +96,7 @@ final class TaskOutcomeDagProgressor {
         List<WorkflowDagService.DagNodeResolution> nextNodes = workflowDagService.resolveNextNodesForRun(
                 ctx.workflowRun(), ctx.currentNodeCode(), ctx.nodeProgress().unsuccessfulCount() == 0, sourcePayload);
         for (WorkflowDagService.DagNodeResolution nextNode : nextNodes) {
-            if (EmptyChecks.isNull(nextNode)) {
+            if (nextNode == null) {
                 continue;
             }
             if (WorkflowNodeCode.END.code().equals(nextNode.nodeCode())) {
@@ -126,8 +126,8 @@ final class TaskOutcomeDagProgressor {
     private String resolveSourcePayload(Context ctx) {
         WorkflowNodeRunEntity nodeRun = workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
                 ctx.workflowRun().getId(), ctx.currentNodeCode());
-        String protectedPayload = EmptyChecks.isNull(nodeRun) ? null : nodeRun.getSourcePayloadProtected();
-        if (EmptyChecks.isNotBlank(protectedPayload)) {
+        String protectedPayload = nodeRun == null ? null : nodeRun.getSourcePayloadProtected();
+        if (EmptyValues.isNotBlank(protectedPayload)) {
             return secretPayloadProtector.reveal(protectedPayload);
         }
         return null;
@@ -140,8 +140,7 @@ final class TaskOutcomeDagProgressor {
         }
         WorkflowNodeRunEntity existingEnd = workflowMappers.workflowNodeRunMapper.selectLatestForUpdate(
                 ctx.workflowRun().getId(), nextNode.nodeCode());
-        if (EmptyChecks.isNotNull(existingEnd)
-                && WorkflowNodeRunStatus.SUCCESS.code().equals(existingEnd.getNodeStatus())) {
+        if (existingEnd != null && WorkflowNodeRunStatus.SUCCESS.code().equals(existingEnd.getNodeStatus())) {
             return;
         }
         nodeRunRecorder.recordStart(
@@ -170,7 +169,7 @@ final class TaskOutcomeDagProgressor {
     private boolean isActiveNode(Long workflowRunId, String nodeCode) {
         WorkflowNodeRunEntity latestNodeRun =
                 workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, nodeCode);
-        if (EmptyChecks.isNull(latestNodeRun)) {
+        if (latestNodeRun == null) {
             return false;
         }
         return WorkflowNodeRunStatus.READY.code().equals(latestNodeRun.getNodeStatus())
@@ -179,8 +178,8 @@ final class TaskOutcomeDagProgressor {
 
     private String resolveCurrentNodeType(JobTaskEntity task) {
         String nodeType = TaskOutcomePayloadSupport.payloadStringValue(
-                EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "workflowNodeType");
-        return EmptyChecks.isBlank(nodeType) ? WorkflowNodeType.TASK.code() : nodeType;
+                task == null ? null : task.getTaskPayload(), "workflowNodeType");
+        return EmptyValues.isBlank(nodeType) ? WorkflowNodeType.TASK.code() : nodeType;
     }
 
     @Builder

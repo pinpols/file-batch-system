@@ -4,8 +4,8 @@ import io.github.pinpols.batch.common.enums.AlertStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
-import io.github.pinpols.batch.common.utils.Guard;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.application.contract.request.ops.AlertActionRequest;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertApplicationService;
@@ -51,7 +51,7 @@ public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplic
             Long alertId, AlertActionRequest request, String nextStatus, String action) {
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
         AlertEventEntity entity = alertEventMapper.selectById(tenantId, alertId);
-        Guard.requireFound(entity, "alert event not found");
+        Preconditions.requireFound(entity, "alert event not found");
         String currentStatus = normalizeStatus(entity.getStatus());
         if (nextStatus.equals(currentStatus)) {
             return new ConsoleAlertActionResponse(alertId, tenantId, action, currentStatus);
@@ -97,6 +97,6 @@ public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplic
     }
 
     private String normalizeStatus(String status) {
-        return Texts.hasText(status) ? status.toUpperCase() : AlertStatus.OPEN.code();
+        return EmptyValues.hasText(status) ? status.toUpperCase() : AlertStatus.OPEN.code();
     }
 }

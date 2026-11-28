@@ -2,7 +2,7 @@ package io.github.pinpols.batch.common.config;
 
 import com.zaxxer.hikari.HikariConfig;
 import io.github.pinpols.batch.common.config.BatchPgSessionProperties.PoolTimeouts;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 将 {@link BatchPgSessionProperties} 应用到 Hikari 配置：PG {@code ApplicationName} 与 {@code
@@ -39,15 +39,15 @@ public final class HikariPgSessionSupport {
         if (!props.isEnabled()) {
             return;
         }
-        if (Texts.hasText(pgApplicationName)) {
+        if (EmptyValues.hasText(pgApplicationName)) {
             cfg.addDataSourceProperty(
                     PG_APPLICATION_NAME_KEY, truncate(pgApplicationName, PG_APPLICATION_NAME_MAX_LEN));
         }
         String sessionSql = buildSessionInitSql(timeouts);
-        if (!Texts.hasText(sessionSql)) {
+        if (!EmptyValues.hasText(sessionSql)) {
             return;
         }
-        if (props.isMergeConnectionInitSql() && Texts.hasText(cfg.getConnectionInitSql())) {
+        if (props.isMergeConnectionInitSql() && EmptyValues.hasText(cfg.getConnectionInitSql())) {
             String existingConnectionInitSql = cfg.getConnectionInitSql().trim();
             String mergedConnectionInitSql = sessionSql + " " + existingConnectionInitSql;
             cfg.setConnectionInitSql(mergedConnectionInitSql);

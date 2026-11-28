@@ -7,8 +7,7 @@ import io.github.pinpols.batch.common.enums.FileReceiptStatus;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchReceiptPollProperties;
 import io.github.pinpols.batch.worker.dispatchs.domain.PendingReceiptPollRow;
@@ -216,7 +215,7 @@ public class DispatchReceiptPollScheduler {
         String channelCode = row.channelCode();
         String externalRequestId = row.externalRequestId();
         boolean receiptPollIdentityIsIncomplete =
-                EmptyChecks.isNull(fileId) || !Texts.hasText(channelCode) || !Texts.hasText(externalRequestId);
+                fileId == null || !EmptyValues.hasText(channelCode) || !EmptyValues.hasText(externalRequestId);
         if (receiptPollIdentityIsIncomplete) {
             return;
         }
@@ -226,8 +225,8 @@ public class DispatchReceiptPollScheduler {
         }
         Map<String, Object> channel = ChannelConfigMerge.merge(channelRow, objectMapper);
         Object pollUrlValue = channel.get("receipt_poll_url");
-        String pollUrl = EmptyChecks.isNull(pollUrlValue) ? null : String.valueOf(pollUrlValue);
-        if (!Texts.hasText(pollUrl)) {
+        String pollUrl = pollUrlValue == null ? null : String.valueOf(pollUrlValue);
+        if (!EmptyValues.hasText(pollUrl)) {
             return;
         }
         String sep = pollUrl.contains("?") ? "&" : "?";
@@ -238,7 +237,7 @@ public class DispatchReceiptPollScheduler {
             DnsResolveGuard.resolveAllAndValidate(request.url().host());
         }
         try (Response response = httpClient.newCall(request).execute()) {
-            boolean responseIsUnsuccessfulOrBodyless = !response.isSuccessful() || EmptyChecks.isNull(response.body());
+            boolean responseIsUnsuccessfulOrBodyless = !response.isSuccessful() || response.body() == null;
             if (responseIsUnsuccessfulOrBodyless) {
                 // P2:之前静默吞,排障时只能看到 metric 计数无原因。补 warn + 失败计数,
                 // 上游 404/5xx 立即能在 dashboard 关联到失败率上扬。
@@ -267,7 +266,7 @@ public class DispatchReceiptPollScheduler {
                 return;
             }
             String receiptCode = root.path(DispatchRuntimeKeys.RECEIPT_CODE).asText(null);
-            if (!Texts.hasText(receiptCode)) {
+            if (!EmptyValues.hasText(receiptCode)) {
                 receiptCode = externalRequestId;
             }
             int n = fileDispatchRepository.markAcked(tenantId, fileId, channelCode, receiptCode);

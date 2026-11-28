@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.plan;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -46,8 +46,7 @@ public final class BundlePlanParams {
     @SuppressWarnings("unchecked")
     public static List<BundleFile> extract(Map<String, Object> params, JobType bundleType) {
         List<BundleFile> result = new ArrayList<>();
-        boolean bundleParametersAreUnavailable =
-                EmptyChecks.isNull(params) || EmptyChecks.isNull(bundleType) || !bundleType.isBundle();
+        boolean bundleParametersAreUnavailable = params == null || bundleType == null || !bundleType.isBundle();
         if (bundleParametersAreUnavailable) {
             return result;
         }
@@ -73,11 +72,11 @@ public final class BundlePlanParams {
 
     /** 校验束作业的 launch 参数；在 T1 创建实例前调用，避免永久无效请求进入 CREATED 恢复队列。 */
     public static void validate(Map<String, Object> params, JobType bundleType) {
-        if (EmptyChecks.isNull(bundleType) || !bundleType.isBundle()) {
+        if (bundleType == null || !bundleType.isBundle()) {
             return;
         }
         List<BundleFile> bundleFiles = extract(params, bundleType);
-        if (EmptyChecks.isEmpty(bundleFiles)) {
+        if (EmptyValues.isEmpty(bundleFiles)) {
             throw invalidBundle("bundleFiles must contain usable bindings for " + bundleType);
         }
         if (bundleFiles.size() > MAX_BUNDLE_FILES) {
@@ -102,9 +101,9 @@ public final class BundlePlanParams {
     /** 按绑定 profile 校验必填绑定字段是否齐备。 */
     private static boolean hasRequiredBinding(JobType bundleType, Long fileId, String templateCode, String targetRef) {
         return switch (bundleType) {
-            case BUNDLE_IMPORT -> EmptyChecks.isNotNull(fileId) && EmptyChecks.isNotNull(templateCode);
-            case BUNDLE_EXPORT -> EmptyChecks.isNotNull(templateCode);
-            case BUNDLE_DISPATCH -> EmptyChecks.isNotNull(fileId) && EmptyChecks.isNotNull(targetRef);
+            case BUNDLE_IMPORT -> fileId != null && templateCode != null;
+            case BUNDLE_EXPORT -> templateCode != null;
+            case BUNDLE_DISPATCH -> fileId != null && targetRef != null;
             default -> false;
         };
     }
@@ -121,7 +120,7 @@ public final class BundlePlanParams {
                 return null;
             }
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         try {
@@ -134,11 +133,11 @@ public final class BundlePlanParams {
     }
 
     private static String toStr(Object value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String rawValue = String.valueOf(value);
         String trimmedValue = rawValue.trim();
-        return EmptyChecks.isEmpty(Objects.requireNonNull(trimmedValue)) ? null : trimmedValue;
+        return EmptyValues.isEmpty(Objects.requireNonNull(trimmedValue)) ? null : trimmedValue;
     }
 }

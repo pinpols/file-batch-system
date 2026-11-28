@@ -3,7 +3,6 @@ package io.github.pinpols.batch.worker.exports.stage.format;
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 
 public interface ExportFormatStrategy {
 
@@ -22,7 +21,7 @@ public interface ExportFormatStrategy {
     /** 须与 {@code ExportFileNameResolver} 的默认文件名后缀一致，由 {@code ExportFormatStrategySuffixTest} 守护。 */
     static String fileSuffixFor(String formatType) {
         FileTemplateFormat format = parseFormat(formatType);
-        if (EmptyChecks.isNull(format)) {
+        if (format == null) {
             return BatchFileConstants.JSON_SUFFIX;
         }
         return switch (format) {
@@ -36,7 +35,7 @@ public interface ExportFormatStrategy {
 
     static String contentTypeFor(String formatType) {
         FileTemplateFormat format = parseFormat(formatType);
-        if (EmptyChecks.isNull(format)) {
+        if (format == null) {
             return BatchFileConstants.CONTENT_TYPE_JSON;
         }
         return switch (format) {

@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.dto.ReplayExecutionGuard;
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.config.WorkerCoreAsyncConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
@@ -151,7 +151,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
         if (meterRegistry == null) {
             return null;
         }
-        String tag = workerType == null || workerType.isBlank() ? "unknown" : workerType;
+        String tag = EmptyValues.isBlank(workerType) ? "unknown" : workerType;
         return executionTimerByType.computeIfAbsent(
                 tag,
                 t -> Timer.builder("worker.task.execution.duration")
@@ -179,7 +179,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
         if (claimed.isPresent()) {
             EffectiveTaskConfig config = claimed.get();
             activeTaskLeaseRegistry.registerClaimedAt(
-                    EmptyChecks.isNull(taskId) ? null : taskId.toString(),
+                    taskId == null ? null : taskId.toString(),
                     tenantId,
                     workerId,
                     config.partitionInvocationId(),
@@ -192,26 +192,24 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     public List<TaskClaimResult> claimBatch(List<TaskClaimItem> items) {
         long claimStartedAtNanos = activeTaskLeaseRegistry.currentNanos();
         List<TaskClaimResult> results = taskExecutionClient.claimBatch(items);
-        boolean claimBatchHasNoTrackableItems = EmptyChecks.isEmpty(results) || EmptyChecks.isEmpty(items);
+        boolean claimBatchHasNoTrackableItems = EmptyValues.isEmpty(results) || EmptyValues.isEmpty(items);
         if (claimBatchHasNoTrackableItems) {
             return results;
         }
         Map<Long, TaskClaimItem> submittedByTaskId = new LinkedHashMap<>();
         for (TaskClaimItem item : items) {
-            if (EmptyChecks.isNotNull(item) && EmptyChecks.isNotNull(item.taskId())) {
+            if (item != null && item.taskId() != null) {
                 submittedByTaskId.putIfAbsent(item.taskId(), item);
             }
         }
         for (TaskClaimResult result : results) {
-            boolean claimedTaskConfigurationIsIncomplete = EmptyChecks.isNull(result)
-                    || !result.claimed()
-                    || EmptyChecks.isNull(result.taskId())
-                    || EmptyChecks.isNull(result.config());
+            boolean claimedTaskConfigurationIsIncomplete =
+                    result == null || !result.claimed() || result.taskId() == null || result.config() == null;
             if (claimedTaskConfigurationIsIncomplete) {
                 continue;
             }
             TaskClaimItem submitted = submittedByTaskId.get(result.taskId());
-            if (EmptyChecks.isNotNull(submitted)) {
+            if (submitted != null) {
                 activeTaskLeaseRegistry.registerClaimedAt(
                         result.taskId().toString(),
                         submitted.tenantId(),
@@ -225,11 +223,11 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
 
     @Override
     public void registerClaimedBatch(List<PulledTask> tasks) {
-        if (EmptyChecks.isEmpty(tasks)) {
+        if (EmptyValues.isEmpty(tasks)) {
             return;
         }
         for (PulledTask task : tasks) {
-            if (EmptyChecks.isNotNull(task)) {
+            if (task != null) {
                 activeTaskLeaseRegistry.registerClaimed(
                         task.getTaskId(), task.getTenantId(), task.getWorkerId(), task.getPartitionInvocationId());
             }
@@ -238,9 +236,9 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
 
     @Override
     public void releaseUnexecutedClaims(List<PulledTask> tasks) {
-        if (EmptyChecks.isNull(tasks)) return;
+        if (tasks == null) return;
         for (PulledTask task : tasks) {
-            if (EmptyChecks.isNotNull(task)) {
+            if (task != null) {
                 activeTaskLeaseRegistry.removeQueuedClaim(
                         task.getTaskId(), task.getTenantId(), task.getWorkerId(), task.getPartitionInvocationId());
             }
@@ -250,10 +248,10 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     @Override
     @Observed(name = "worker.task.execute", contextualName = "worker.task.execute")
     public WorkerExecutionResult execute(PulledTask task) {
-        if (EmptyChecks.isNull(task)
+        if (task == null
                 || !activeTaskLeaseRegistry.beginExecution(
                         task.getTaskId(), task.getTenantId(), task.getWorkerId(), task.getPartitionInvocationId())) {
-            String taskId = EmptyChecks.isNull(task) ? null : task.getTaskId();
+            String taskId = task == null ? null : task.getTaskId();
             log.warn("task execution start rejected: lease already active or owner changed, taskId={}", taskId);
             return new WorkerExecutionResult(taskId, false, "task lease is not available for execution");
         }
@@ -306,7 +304,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     /** 执行前按认领任务的精确配置重新解析重放能力。 */
     private boolean replayCapabilityAllowsExecution(PulledTask task, StepExecutionRequest request) {
         ReplayExecutionGuard guard = task.getReplayExecutionGuard();
-        if (EmptyChecks.isNull(guard)) {
+        if (guard == null) {
             if (isWorkflowReplayPayload(task.getPayload())) {
                 log.warn(
                         "workflow replay claim is missing capability guard; refusing execution:"
@@ -329,7 +327,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
                     task.getTaskId(),
                     guard.replayOperationId(),
                     guard.declaration().pluginId(),
-                    EmptyChecks.isNull(actual) ? null : actual.pluginId());
+                    actual == null ? null : actual.pluginId());
             return false;
         } catch (RuntimeException ex) {
             log.warn(
@@ -344,7 +342,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     }
 
     private boolean isWorkflowReplayPayload(String payload) {
-        if (EmptyChecks.isBlank(payload)) {
+        if (EmptyValues.isBlank(payload)) {
             return false;
         }
         try {
@@ -397,13 +395,13 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
         try {
             Map<Long, TaskLeaseRenewResult> resultByTaskId = taskExecutionClient.renewLeasesBatch(List.of(renewalItem));
             TaskLeaseRenewResult result;
-            if (EmptyChecks.isNull(resultByTaskId)) {
+            if (resultByTaskId == null) {
                 result = null;
             } else {
                 Long lookupTaskId = Long.valueOf(task.getTaskId());
                 result = resultByTaskId.get(lookupTaskId);
             }
-            if (EmptyChecks.isNull(result) || !result.renewed()) {
+            if (result == null || !result.renewed()) {
                 activeTaskLeaseRegistry.markLost(task.getTaskId());
                 log.warn(
                         "task lease confirmation rejected before execution: tenantId={}, taskId={}, workerId={}",
@@ -493,7 +491,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
             return new StepExecutionResponse(false, CANCELLED_ERROR_CODE, message);
         } catch (ExecutionException ex) {
             // 处理适配器未转换的执行异常；JVM 级故障继续抛出，其余异常转换为执行错误结果。
-            Throwable cause = EmptyChecks.isNull(ex.getCause()) ? ex : ex.getCause();
+            Throwable cause = ex.getCause() == null ? ex : ex.getCause();
             rethrowFatal(cause);
             log.error(
                     "task execution adapter threw: tenantId={}, taskId={}",
@@ -501,7 +499,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
                     task.getTaskId(),
                     cause);
             String executionErrorMessage =
-                    EmptyChecks.isNull(cause.getMessage()) ? cause.getClass().getSimpleName() : cause.getMessage();
+                    cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
             return new StepExecutionResponse(false, "WORKER_EXECUTION_ERROR", executionErrorMessage);
         } catch (InterruptedException ex) {
             future.cancel(true);
@@ -526,7 +524,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
         long graceSeconds = Math.max(1L, timeoutProperties.getCancelGraceSeconds());
         Runnable watchdogTask = () -> {
             if (executing.get()) {
-                if (EmptyChecks.isNotNull(threadLeakedCounter)) {
+                if (threadLeakedCounter != null) {
                     threadLeakedCounter.increment();
                 }
                 log.error(
@@ -566,8 +564,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
         executionContext.put(PipelineRuntimeKeys.TASK_ID, task.getTaskId());
         executionContext.put("workerId", task.getWorkerId());
         executionContext.put(
-                PipelineRuntimeKeys.JOB_CODE,
-                EmptyChecks.isNull(task.getJobCode()) ? task.getTaskType() : task.getJobCode());
+                PipelineRuntimeKeys.JOB_CODE, task.getJobCode() == null ? task.getTaskType() : task.getJobCode());
         executionContext.put("businessKey", task.getBusinessKey() == null ? "" : task.getBusinessKey());
         if (task.getBizDate() != null) {
             executionContext.put(PipelineRuntimeKeys.BIZ_DATE, task.getBizDate().toString());
@@ -575,11 +572,10 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
         executionContext.put(PipelineRuntimeKeys.TRACE_ID, task.getTraceId() == null ? "" : task.getTraceId());
         executionContext.put(PipelineRuntimeKeys.JOB_INSTANCE_ID, task.getJobInstanceId());
         executionContext.put(PipelineRuntimeKeys.JOB_PARTITION_ID, task.getJobPartitionId());
-        if (EmptyChecks.isNotNull(task.getPartitionInvocationId())) {
+        if (task.getPartitionInvocationId() != null) {
             executionContext.put(PipelineRuntimeKeys.PARTITION_INVOCATION_ID, task.getPartitionInvocationId());
         }
-        if (EmptyChecks.isNotNull(task.getDependencyResultSnapshot())
-                && EmptyChecks.isNotEmpty(task.getDependencyResultSnapshot())) {
+        if (task.getDependencyResultSnapshot() != null && EmptyValues.isNotEmpty(task.getDependencyResultSnapshot())) {
             executionContext.put(PipelineRuntimeKeys.DEPENDENCY_RESULT_SNAPSHOT, task.getDependencyResultSnapshot());
         }
         executionContext.put("taskSeq", task.getTaskSeq());
@@ -699,7 +695,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     }
 
     private String resolveFailureClass(String errorCode) {
-        if (errorCode == null || errorCode.isBlank()) {
+        if (EmptyValues.isBlank(errorCode)) {
             return null;
         }
         return FAILURE_CLASS_BY_CODE.get(errorCode);
@@ -707,7 +703,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
 
     @SuppressWarnings("unchecked")
     private String resolveRunMode(String payload) {
-        if (payload == null || payload.isBlank()) {
+        if (EmptyValues.isBlank(payload)) {
             return null;
         }
         try {
@@ -725,7 +721,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
 
     @SuppressWarnings("unchecked")
     private Object resolveBundleSourceFileId(String payload) {
-        if (payload == null || payload.isBlank()) {
+        if (EmptyValues.isBlank(payload)) {
             return null;
         }
         try {

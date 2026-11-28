@@ -2,8 +2,7 @@ package io.github.pinpols.batch.worker.exports.sql;
 
 import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
 import io.github.pinpols.batch.common.sql.SelectSqlAstValidator.SchemaViolation;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.exports.config.SqlTemplateExportSecurityProperties;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -40,7 +39,7 @@ public class SqlTemplateExportSqlValidator {
     /** 验证并返回规范化（trim）后的 SQL；任一检查失败则抛出 {@link IllegalArgumentException}。 */
     public String validate(String raw) {
         String sql = raw == null ? "" : raw.trim();
-        if (!Texts.hasText(sql)) {
+        if (!EmptyValues.hasText(sql)) {
             throw new IllegalArgumentException("default_query_sql is blank");
         }
 
@@ -60,13 +59,13 @@ public class SqlTemplateExportSqlValidator {
             checkNoSelectStar(select);
         }
 
-        List<String> allowedSchemas = EmptyChecks.isNull(security) ? null : security.getAllowedSchemas();
-        if (EmptyChecks.isNotEmpty(allowedSchemas)) {
+        List<String> allowedSchemas = security == null ? null : security.getAllowedSchemas();
+        if (EmptyValues.isNotEmpty(allowedSchemas)) {
             checkAllowedSchemas(statement, allowedSchemas);
         }
 
-        List<String> forbiddenFunctions = EmptyChecks.isNull(security) ? null : security.getForbiddenFunctions();
-        if (EmptyChecks.isNotEmpty(forbiddenFunctions)) {
+        List<String> forbiddenFunctions = security == null ? null : security.getForbiddenFunctions();
+        if (EmptyValues.isNotEmpty(forbiddenFunctions)) {
             checkNoForbiddenFunctions(statement, forbiddenFunctions);
         }
 
@@ -123,7 +122,7 @@ public class SqlTemplateExportSqlValidator {
         List<String> required = security == null ? List.of("tenantId", "batchNo") : security.getRequiredParams();
         Set<String> referenced = extractNamedParameters(sql);
         for (String param : required) {
-            if (!Texts.hasText(param)) {
+            if (!EmptyValues.hasText(param)) {
                 continue;
             }
             if (!referenced.contains(param)) {

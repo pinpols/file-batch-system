@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.service.failure;
 import io.github.pinpols.batch.common.enums.FailureClass;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.failure.TechnicalFailureClassificationPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,7 +41,7 @@ public class FailureClassifier {
      */
     public FailureClass classify(String reportedClassCode, Throwable throwable) {
         // 1) worker 显式上报优先(用 fromCodeOrUnknown 安全变体,避免 fromCode 抛 BizException 中断分类)
-        if (Texts.hasText(reportedClassCode)) {
+        if (EmptyValues.hasText(reportedClassCode)) {
             FailureClass reported = FailureClass.fromCodeOrUnknown(reportedClassCode);
             if (reported != FailureClass.UNKNOWN
                     || FailureClass.UNKNOWN.code().equalsIgnoreCase(reportedClassCode.trim())) {

@@ -3,8 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.dryrun;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanCommand;
@@ -56,7 +55,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     @Override
     public DryRunPlanResult plan(DryRunPlanRequest request) {
         requireRequest(request);
-        DryRunLevel level = EmptyChecks.isNull(request.level()) ? DryRunLevel.CONFIG_VALIDATE : request.level();
+        DryRunLevel level = request.level() == null ? DryRunLevel.CONFIG_VALIDATE : request.level();
         return switch (level) {
             case CONFIG_VALIDATE -> validateConfig(request);
             case SCHEDULE_PLAN -> planSchedule(request);
@@ -71,7 +70,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
         JobDefinitionView jobDef = loadJobDefinition(request, findings);
         summary.put("validationScope", "JOB");
         summary.put("workflowValidated", false);
-        if (EmptyChecks.isNull(jobDef)) {
+        if (jobDef == null) {
             return DryRunPlanResult.of(DryRunLevel.CONFIG_VALIDATE, findings, summary);
         }
         // Job 与 Workflow 的编码空间独立；日程和 DAG 只能在明确的 Workflow 目标下校验。
@@ -83,9 +82,8 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
 
     private void validateJobParams(JobDefinitionView job, DryRunPlanRequest request, List<DryRunFinding> findings) {
         Map<String, Object> schema = job.paramSchema();
-        Map<String, Object> provided =
-                EmptyChecks.isNull(request.params()) ? Map.of() : new LinkedHashMap<>(request.params());
-        if (EmptyChecks.isEmpty(schema)) {
+        Map<String, Object> provided = request.params() == null ? Map.of() : new LinkedHashMap<>(request.params());
+        if (EmptyValues.isEmpty(schema)) {
             findings.add(DryRunFinding.pass("JOB_PARAMS_NO_SCHEMA", SCOPE_JOB, "no paramSchema defined; skip"));
             return;
         }
@@ -101,7 +99,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
                 missing.add(name);
             }
         }
-        if (EmptyChecks.isEmpty(missing)) {
+        if (EmptyValues.isEmpty(missing)) {
             findings.add(DryRunFinding.pass("JOB_PARAMS_OK", SCOPE_JOB, "all required params present"));
         } else {
             findings.add(DryRunFinding.error("JOB_PARAMS_MISSING", SCOPE_JOB, "missing required params", missing));
@@ -109,26 +107,26 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     }
 
     private boolean defaultParamsHas(JobDefinitionView job, String name) {
-        return EmptyChecks.isNotNull(job.defaultParams()) && job.defaultParams().containsKey(name);
+        return job.defaultParams() != null && job.defaultParams().containsKey(name);
     }
 
     // ── L2 ──────────────────────────────────────────────────────────────────
     private DryRunPlanResult planSchedule(DryRunPlanRequest request) {
         List<DryRunFinding> findings = new ArrayList<>();
         Map<String, Object> summary = new LinkedHashMap<>();
-        if (EmptyChecks.isNull(request.bizDate())) {
+        if (request.bizDate() == null) {
             findings.add(DryRunFinding.error("BIZDATE_MISSING", "schedule", "bizDate is required for L2", null));
             return DryRunPlanResult.of(DryRunLevel.SCHEDULE_PLAN, findings, summary);
         }
         JobDefinitionView jobDef = loadJobDefinition(request, findings);
-        if (EmptyChecks.isNull(jobDef)) {
+        if (jobDef == null) {
             return DryRunPlanResult.of(DryRunLevel.SCHEDULE_PLAN, findings, summary);
         }
         SchedulePlanCommand planCommand = new SchedulePlanCommand(
                 request.tenantId(),
                 request.jobCode(),
                 request.bizDate().toString(),
-                EmptyChecks.isNull(request.params()) ? Map.of() : request.params(),
+                request.params() == null ? Map.of() : request.params(),
                 jobDef);
         SchedulePlan plan;
         try {
@@ -163,7 +161,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
         }
         List<DryRunFinding> findings = new ArrayList<>(schedule.findings());
         Map<String, Object> summary = new LinkedHashMap<>(schedule.summary());
-        Map<String, Object> params = EmptyChecks.isNull(request.params()) ? Map.of() : request.params();
+        Map<String, Object> params = request.params() == null ? Map.of() : request.params();
 
         int sqlProbed = sqlProbe.probe(params, findings);
         int s3Probed = objectStorageProbe.probe(params, findings);
@@ -183,7 +181,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     // ── helpers ─────────────────────────────────────────────────────────────
     private JobDefinitionView loadJobDefinition(DryRunPlanRequest request, List<DryRunFinding> findings) {
         JobDefinitionView jobDef = configCacheService.findEnabledJobDefinition(request.tenantId(), request.jobCode());
-        if (EmptyChecks.isNull(jobDef)) {
+        if (jobDef == null) {
             findings.add(DryRunFinding.error(
                     "JOB_DEFINITION_NOT_FOUND", SCOPE_JOB, "job_definition not found or disabled", request.jobCode()));
         }
@@ -191,10 +189,10 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     }
 
     private void requireRequest(DryRunPlanRequest request) {
-        if (EmptyChecks.isNull(request) || !Texts.hasText(request.tenantId())) {
+        if (request == null || !EmptyValues.hasText(request.tenantId())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.dryrun.tenant_required");
         }
-        if (!Texts.hasText(request.jobCode())) {
+        if (!EmptyValues.hasText(request.jobCode())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.dryrun.job_code_required");
         }
     }

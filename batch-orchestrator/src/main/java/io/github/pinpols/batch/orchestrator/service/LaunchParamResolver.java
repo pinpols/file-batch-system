@@ -9,7 +9,7 @@ import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.entity.CustomTaskTypeRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
@@ -83,11 +83,11 @@ public class LaunchParamResolver {
         }
         CustomTaskTypeRegistryEntity entity =
                 customTaskTypeRegistryMapper.selectByTenantAndCode(jobDefinition.tenantId(), jobDefinition.jobType());
-        if (EmptyChecks.isNull(entity)) {
+        if (entity == null) {
             return;
         }
         String descriptorJson = entity.descriptor();
-        if (EmptyChecks.isBlank(descriptorJson)) {
+        if (EmptyValues.isBlank(descriptorJson)) {
             return;
         }
         Map<String, Object> defaults = parseDescriptorDefaults(descriptorJson);
@@ -148,7 +148,7 @@ public class LaunchParamResolver {
         StringBuilder sb = new StringBuilder();
         while (matcher.find()) {
             String replacement = variables.get(matcher.group(1));
-            String replacementText = EmptyChecks.isNotNull(replacement) ? replacement : matcher.group();
+            String replacementText = replacement != null ? replacement : matcher.group();
             String quotedReplacement = Matcher.quoteReplacement(replacementText);
             matcher.appendReplacement(sb, quotedReplacement);
         }
@@ -158,9 +158,9 @@ public class LaunchParamResolver {
 
     String resolveBatchNo(LocalDate bizDate, Map<String, Object> params) {
         Object v = firstNonNull(params.get("batchNo"), params.get("batch_no"), params.get("batchCode"));
-        if (EmptyChecks.isNotNull(v)) {
+        if (v != null) {
             String checkedText = String.valueOf(v);
-            if (!EmptyChecks.isBlank(Objects.requireNonNull(checkedText))) {
+            if (!EmptyValues.isBlank(Objects.requireNonNull(checkedText))) {
                 String returnedText = String.valueOf(v);
                 return returnedText.trim();
             }
@@ -170,7 +170,7 @@ public class LaunchParamResolver {
 
     static String resolveOperatorId(Map<String, Object> params) {
         Object v = firstNonNull(params.get("operatorId"), params.get("operator"), params.get("userId"));
-        if (EmptyChecks.isNull(v)) {
+        if (v == null) {
             return null;
         }
         String rawText = String.valueOf(v);
@@ -221,7 +221,7 @@ public class LaunchParamResolver {
 
     String resolveRerunReason(Map<String, Object> params) {
         Object v = firstNonNull(params.get("rerunReason"), params.get("reason"));
-        if (EmptyChecks.isNull(v)) {
+        if (v == null) {
             return null;
         }
         String rawText = String.valueOf(v);
@@ -254,14 +254,14 @@ public class LaunchParamResolver {
     }
 
     Instant resolveJobDeadlineAt(Instant createdAt, JobDefinitionView jobDefinition) {
-        if (EmptyChecks.isNull(createdAt)) {
+        if (createdAt == null) {
             return null;
         }
-        if (EmptyChecks.isNull(jobDefinition)) {
+        if (jobDefinition == null) {
             return null;
         }
         Integer timeoutSeconds = jobDefinition.timeoutSeconds();
-        if (EmptyChecks.isNull(timeoutSeconds) || timeoutSeconds <= 0) {
+        if (timeoutSeconds == null || timeoutSeconds <= 0) {
             return null;
         }
         return createdAt.plusSeconds(timeoutSeconds);
@@ -276,9 +276,9 @@ public class LaunchParamResolver {
         if (explicitValue != null) {
             return explicitValue;
         }
-        if (EmptyChecks.isNotNull(jobDefinition)) {
+        if (jobDefinition != null) {
             Integer timeoutSeconds = jobDefinition.timeoutSeconds();
-            if (EmptyChecks.isNotNull(timeoutSeconds) && timeoutSeconds > 0) {
+            if (timeoutSeconds != null && timeoutSeconds > 0) {
                 return timeoutSeconds;
             }
         }
@@ -311,10 +311,10 @@ public class LaunchParamResolver {
                         : jobDefinition.defaultParams());
         snapshot.put("requestParams", request.params() == null ? Map.of() : request.params());
         snapshot.put("effectiveParams", effectiveParams == null ? Map.of() : effectiveParams);
-        if (EmptyChecks.isNotEmpty(request.dependencyResultSnapshot())) {
+        if (EmptyValues.isNotEmpty(request.dependencyResultSnapshot())) {
             snapshot.put("dependencyResultSnapshot", request.dependencyResultSnapshot());
         }
-        if (EmptyChecks.isNotNull(replayExecutionGuard)) {
+        if (replayExecutionGuard != null) {
             snapshot.put("replayExecutionGuard", replayExecutionGuard);
         }
         return JsonUtils.toJson(snapshot);
@@ -334,7 +334,7 @@ public class LaunchParamResolver {
     }
 
     String buildPayloadJson(Map<String, Object> params) {
-        Map<String, Object> resolvedParams = EmptyChecks.isNull(params) ? Map.of() : params;
+        Map<String, Object> resolvedParams = params == null ? Map.of() : params;
         return JsonUtils.toJson(resolvedParams);
     }
 

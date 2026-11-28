@@ -8,10 +8,9 @@ import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.service.DryRunGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
@@ -86,7 +85,7 @@ public class StoreStep implements ExportStageStep {
             return executeDryRun(context);
         }
         Object generatedFilePath = attribute(context, PipelineRuntimeKeys.GENERATED_FILE_PATH);
-        if (!(generatedFilePath instanceof String pathText) || !Texts.hasText(pathText)) {
+        if (!(generatedFilePath instanceof String pathText) || !EmptyValues.hasText(pathText)) {
             return ExportStageResult.failure(
                     stage(),
                     ERROR_CODE_STORE_INVALID,
@@ -112,7 +111,7 @@ public class StoreStep implements ExportStageStep {
             }
 
             ExportStageResult committed = reuseRegisteredArtifact(context, objectName, generatedFile);
-            if (EmptyChecks.isNotNull(committed)) {
+            if (committed != null) {
                 return committed;
             }
 
@@ -152,7 +151,7 @@ public class StoreStep implements ExportStageStep {
                     fallbackMessage,
                     ERROR_OBJECT_MAPPER);
         } finally {
-            if (EmptyChecks.isNotNull(encryption)) {
+            if (encryption != null) {
                 closeEncryptedTempFile(encryption.temporaryFile());
             }
         }
@@ -161,12 +160,12 @@ public class StoreStep implements ExportStageStep {
     /** 重领只复用同一 Job 已登记且校验通过的产物，禁止新运行丢弃本次生成内容并借用旧对象。 */
     private ExportStageResult reuseRegisteredArtifact(ExportJobContext context, String objectName, Path generatedFile)
             throws IOException {
-        if (EmptyChecks.isNull(fileRecords) || EmptyChecks.isNull(storageProperties)) {
+        if (fileRecords == null || storageProperties == null) {
             return null;
         }
         Map<String, Object> record = fileRecords.loadFileRecordByStoragePath(
                 context.getTenantId(), storageProperties.getBucket(), objectName);
-        if (EmptyChecks.isEmpty(record)) {
+        if (EmptyValues.isEmpty(record)) {
             return null;
         }
         if (!ExportArtifactIdentity.belongsToJob(context, record)) {
@@ -174,7 +173,7 @@ public class StoreStep implements ExportStageStep {
         }
         String recordedChecksum = text(record.get("checksum_value"));
         String checksumType = text(record.get("checksum_type"));
-        if (!FileChecksumType.SHA_256.code().equalsIgnoreCase(checksumType) || !Texts.hasText(recordedChecksum)) {
+        if (!FileChecksumType.SHA_256.code().equalsIgnoreCase(checksumType) || !EmptyValues.hasText(recordedChecksum)) {
             return artifactConflict("registered artifact has no SHA-256 checksum");
         }
         String storedChecksum = s3ExportStorage.sha256Hex(objectName);
@@ -207,11 +206,11 @@ public class StoreStep implements ExportStageStep {
     }
 
     private String text(Object value) {
-        return EmptyChecks.isNull(value) ? null : String.valueOf(value);
+        return value == null ? null : String.valueOf(value);
     }
 
     private void closeEncryptedTempFile(PrivateTempFiles.LockedTempFile file) {
-        if (EmptyChecks.isNull(file)) {
+        if (file == null) {
             return;
         }
         try {
@@ -227,7 +226,7 @@ public class StoreStep implements ExportStageStep {
         // 改为基于 jobInstanceId + taskId 的确定性名称：同一个 (instance, task) 重试得到相同 objectName，
         // 重试时直接覆盖旧 .part 文件，不留孤儿。jobInstanceId / taskId 缺失时回退 UUID 保留兼容。
         Object existing = context.getAttributes().get(PipelineRuntimeKeys.OBJECT_NAME);
-        if (existing instanceof String s && Texts.hasText(s)) {
+        if (existing instanceof String s && EmptyValues.hasText(s)) {
             return s;
         }
         Object jobInstanceId = context.getAttributes().get(PipelineRuntimeKeys.JOB_INSTANCE_ID);
@@ -256,7 +255,7 @@ public class StoreStep implements ExportStageStep {
     private String resolveContentType(ExportJobContext context) {
         String fileFormatType = String.valueOf(context.getAttributes()
                 .getOrDefault(PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, FileTemplateFormat.JSON.code()));
-        if (EmptyChecks.isNull(formatStrategyRegistry)) {
+        if (formatStrategyRegistry == null) {
             return ExportFormatStrategy.contentTypeFor(fileFormatType);
         }
         return formatStrategyRegistry.resolve(fileFormatType).contentType();
@@ -338,7 +337,7 @@ public class StoreStep implements ExportStageStep {
     /** ADR-026 dry-run：本地计算 sha256，不上传，让 attributes 完整给下游验收。 */
     private ExportStageResult executeDryRun(ExportJobContext context) {
         Object generatedFilePath = attribute(context, PipelineRuntimeKeys.GENERATED_FILE_PATH);
-        if (generatedFilePath instanceof String pathText && Texts.hasText(pathText)) {
+        if (generatedFilePath instanceof String pathText && EmptyValues.hasText(pathText)) {
             try {
                 Path generatedFile = Path.of(pathText);
                 if (Files.exists(generatedFile)) {
@@ -396,7 +395,7 @@ public class StoreStep implements ExportStageStep {
             return fallback;
         }
         String text = String.valueOf(value);
-        return Texts.hasText(text) && !"null".equalsIgnoreCase(text) ? text : fallback;
+        return EmptyValues.hasText(text) && !"null".equalsIgnoreCase(text) ? text : fallback;
     }
 
     private String sha256Hex(Path path) throws NoSuchAlgorithmException, IOException {

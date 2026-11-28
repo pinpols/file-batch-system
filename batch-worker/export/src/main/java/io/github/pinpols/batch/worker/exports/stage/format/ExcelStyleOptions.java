@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -31,7 +31,7 @@ record ExcelStyleOptions(
     }
 
     static ExcelStyleOptions from(Map<String, Object> templateConfig, AbstractExportFormat helper) {
-        if (templateConfig == null || templateConfig.isEmpty()) {
+        if (EmptyValues.isEmpty(templateConfig)) {
             return NONE;
         }
         Map<String, Object> style = helper.toMap(
@@ -61,7 +61,7 @@ record ExcelStyleOptions(
             Integer from = helper.integerValue(helper.firstNonNull(map.get("from"), map.get("fromColumn")));
             Integer to = helper.integerValue(helper.firstNonNull(map.get("to"), map.get("toColumn")));
             String title = helper.textValue(helper.firstNonNull(map.get("title"), map.get("label")));
-            boolean excelColumnRangeIsInvalid = EmptyChecks.isNull(from) || EmptyChecks.isNull(to) || to < from;
+            boolean excelColumnRangeIsInvalid = from == null || to == null || to < from;
             if (excelColumnRangeIsInvalid) {
                 continue;
             }
@@ -91,7 +91,7 @@ record ExcelStyleOptions(
         if (value instanceof Boolean b) {
             return b;
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return false;
         }
         String rawText = String.valueOf(value);

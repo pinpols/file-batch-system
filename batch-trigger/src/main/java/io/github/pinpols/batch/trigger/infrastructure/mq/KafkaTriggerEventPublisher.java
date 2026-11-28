@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.mq.MqMessage;
 import io.github.pinpols.batch.common.mq.MqMessagePublisher;
 import io.github.pinpols.batch.common.mq.MqPublishResult;
 import io.github.pinpols.batch.common.observability.OtelTracePropagation;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.trigger.application.TriggerEventPublisher;
 import io.github.pinpols.batch.trigger.config.TriggerKafkaProperties;
@@ -51,11 +51,11 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
     @Override
     public CompletableFuture<PublishResult> publishAsync(
             String topic, String messageKey, LaunchEnvelope envelope, String traceId) {
-        if (EmptyChecks.isNull(envelope)) {
+        if (envelope == null) {
             return CompletableFuture.completedFuture(PublishResult.fail("envelope or launchRequest is null"));
         }
         LaunchRequest launchRequest = envelope.launchRequest();
-        if (EmptyChecks.isNull(launchRequest)) {
+        if (launchRequest == null) {
             return CompletableFuture.completedFuture(PublishResult.fail("envelope or launchRequest is null"));
         }
         String payload;
@@ -72,10 +72,10 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
             return CompletableFuture.completedFuture(failure);
         }
         Map<String, String> headers = new LinkedHashMap<>();
-        if (EmptyChecks.isNotBlank(traceId)) {
+        if (EmptyValues.isNotBlank(traceId)) {
             headers.put(HEADER_TRACE_ID, traceId);
         }
-        if (EmptyChecks.isNotNull(launchRequest.tenantId())) {
+        if (launchRequest.tenantId() != null) {
             headers.put(HEADER_TENANT_ID, launchRequest.tenantId());
         }
         headers.put(HEADER_ENVELOPE_VERSION, String.valueOf(envelope.envelopeVersion()));
@@ -109,7 +109,7 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
 
     private PublishResult toPublishResult(
             String topic, String messageKey, MqPublishResult result, Throwable throwable) {
-        if (EmptyChecks.isNull(throwable)) {
+        if (throwable == null) {
             log.debug(
                     "KafkaTriggerEventPublisher published successfully: topic={} key={} partition={} offset={}",
                     topic,
@@ -127,7 +127,7 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
     }
 
     private static Throwable unwrapCompletionException(Throwable throwable) {
-        if (throwable instanceof CompletionException && EmptyChecks.isNotNull(throwable.getCause())) {
+        if (throwable instanceof CompletionException && throwable.getCause() != null) {
             return throwable.getCause();
         }
         return throwable;

@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.infrastructure.rbac;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import jakarta.servlet.http.Cookie;
@@ -52,7 +52,7 @@ public class RedisOidcAuthorizationRequestRepository
             return null;
         }
         String browserBinding = browserBinding(request, state);
-        if (EmptyChecks.isNull(browserBinding)) {
+        if (browserBinding == null) {
             return null;
         }
         String redisKey = key(state, browserBinding);
@@ -63,7 +63,7 @@ public class RedisOidcAuthorizationRequestRepository
     @Override
     public void saveAuthorizationRequest(
             OAuth2AuthorizationRequest authorizationRequest, HttpServletRequest request, HttpServletResponse response) {
-        if (EmptyChecks.isNull(authorizationRequest)) {
+        if (authorizationRequest == null) {
             removeByState(request, response, request.getParameter("state"));
             return;
         }
@@ -90,7 +90,7 @@ public class RedisOidcAuthorizationRequestRepository
             return null;
         }
         String browserBinding = browserBinding(request, state);
-        if (EmptyChecks.isNull(browserBinding)) {
+        if (browserBinding == null) {
             return null;
         }
         String redisKey = key(state, browserBinding);
@@ -106,7 +106,7 @@ public class RedisOidcAuthorizationRequestRepository
             return;
         }
         String browserBinding = browserBinding(request, state);
-        if (EmptyChecks.isNull(browserBinding)) {
+        if (browserBinding == null) {
             return;
         }
         redis.delete(key(state, browserBinding));
@@ -124,7 +124,7 @@ public class RedisOidcAuthorizationRequestRepository
 
     private String browserBinding(HttpServletRequest request, String state) {
         String cookieName = cookieName(state);
-        if (EmptyChecks.isNull(request.getCookies())) {
+        if (request.getCookies() == null) {
             return null;
         }
         for (Cookie cookie : request.getCookies()) {
@@ -150,7 +150,7 @@ public class RedisOidcAuthorizationRequestRepository
     }
 
     private OAuth2AuthorizationRequest read(String json) {
-        if (EmptyChecks.isNull(json)) {
+        if (json == null) {
             return null;
         }
         try {
@@ -171,11 +171,11 @@ public class RedisOidcAuthorizationRequestRepository
     }
 
     private static boolean validState(String state) {
-        return EmptyChecks.isNotBlank(state) && state.length() <= MAX_STATE_LENGTH;
+        return EmptyValues.isNotBlank(state) && state.length() <= MAX_STATE_LENGTH;
     }
 
     private static boolean validBrowserBinding(String value) {
-        return EmptyChecks.isNotNull(value) && value.matches("[A-Za-z0-9_-]{43}");
+        return value != null && value.matches("[A-Za-z0-9_-]{43}");
     }
 
     private static String key(String state, String browserBinding) {

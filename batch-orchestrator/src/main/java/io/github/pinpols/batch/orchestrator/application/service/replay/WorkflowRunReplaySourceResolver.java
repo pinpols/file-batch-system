@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
@@ -42,29 +42,29 @@ public class WorkflowRunReplaySourceResolver {
     @Transactional(readOnly = true)
     public Source resolve(String tenantId, Long workflowRunId) {
         boolean replaySourceIdentityIsInvalid =
-                EmptyChecks.isBlank(tenantId) || EmptyChecks.isNull(workflowRunId) || workflowRunId <= 0;
+                EmptyValues.isBlank(tenantId) || workflowRunId == null || workflowRunId <= 0;
         if (replaySourceIdentityIsInvalid) {
             throw invalidSource();
         }
         WorkflowRunEntity sourceRun = workflowRunMapper.selectById(tenantId, workflowRunId);
-        boolean sourceRunIsNotEligibleForReplay = EmptyChecks.isNull(sourceRun)
+        boolean sourceRunIsNotEligibleForReplay = sourceRun == null
                 || !tenantId.equals(sourceRun.getTenantId())
                 || !WorkflowRunStatus.terminalCodes().contains(sourceRun.getRunStatus());
         if (sourceRunIsNotEligibleForReplay) {
             throw invalidSource();
         }
         WorkflowRunExecutionSnapshot executionSnapshot = WorkflowRunExecutionSnapshot.from(sourceRun);
-        if (EmptyChecks.isNull(executionSnapshot)) {
+        if (executionSnapshot == null) {
             throw invalidSource();
         }
         WorkflowNodeRunEntity startNode = workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
                 workflowRunId, WorkflowNodeType.START.code());
-        boolean startNodeIsNotValidReplaySource = EmptyChecks.isNull(startNode)
+        boolean startNodeIsNotValidReplaySource = startNode == null
                 || !workflowRunId.equals(startNode.getWorkflowRunId())
                 || !WorkflowNodeType.START.code().equals(startNode.getNodeType())
                 || !WorkflowNodeRunStatus.SUCCESS.code().equals(startNode.getNodeStatus())
-                || EmptyChecks.isNull(startNode.getSourcePayloadProtected())
-                || EmptyChecks.isBlank(Objects.requireNonNull(startNode.getSourcePayloadProtected()));
+                || startNode.getSourcePayloadProtected() == null
+                || EmptyValues.isBlank(Objects.requireNonNull(startNode.getSourcePayloadProtected()));
         if (startNodeIsNotValidReplaySource) {
             throw invalidSource();
         }

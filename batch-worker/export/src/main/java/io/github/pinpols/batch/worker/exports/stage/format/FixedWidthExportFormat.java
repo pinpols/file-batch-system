@@ -3,7 +3,6 @@ package io.github.pinpols.batch.worker.exports.stage.format;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.util.List;
@@ -29,7 +28,7 @@ public class FixedWidthExportFormat extends AbstractExportFormat {
     @Override
     public long generate(ExportFormatContext ctx) throws Exception {
         Long batchIdLong;
-        if (EmptyChecks.isNull(ctx.batchId())) {
+        if (ctx.batchId() == null) {
             batchIdLong = null;
         } else {
             Object rawBatchId = ctx.batchId();

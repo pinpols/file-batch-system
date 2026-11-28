@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
 import io.github.pinpols.batch.common.enums.ScheduleType;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchInput;
@@ -86,8 +86,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
     private LaunchRequest buildScheduledRequest(ScheduledTriggerCommand command, LocalDate bizDate, ZoneId zoneId) {
         TriggerDescriptor descriptor = command.descriptor();
         // triggerType 为 null 时说明来自普通 Quartz 触发，catchUp 触发会被显式设置为 CATCH_UP
-        TriggerType triggerType =
-                EmptyChecks.isNull(command.triggerType()) ? TriggerType.SCHEDULED : command.triggerType();
+        TriggerType triggerType = command.triggerType() == null ? TriggerType.SCHEDULED : command.triggerType();
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("scheduleType", descriptor.getScheduleType());
         params.put("scheduleExpression", descriptor.getScheduleExpression());
@@ -95,13 +94,13 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
         params.put("calendarCode", descriptor.getCalendarCode());
         params.put("catchUpPolicy", descriptor.getCatchUpPolicy());
         params.put("scheduledAt", command.fireTime().toString());
-        if (EmptyChecks.isNotNull(descriptor.getWorkflowDefinitionId())) {
+        if (descriptor.getWorkflowDefinitionId() != null) {
             params.put("workflowDefinitionId", descriptor.getWorkflowDefinitionId());
         }
-        if (EmptyChecks.isNotNull(descriptor.getWorkflowCode())) {
+        if (descriptor.getWorkflowCode() != null) {
             params.put("workflowCode", descriptor.getWorkflowCode());
         }
-        if (EmptyChecks.isNotNull(descriptor.getWorkflowVersion())) {
+        if (descriptor.getWorkflowVersion() != null) {
             params.put("workflowVersion", descriptor.getWorkflowVersion());
         }
         // catchUp / catchUpApprovalRequired 写入 params 供 Orchestrator 决策 catch-up 审批流程
@@ -131,14 +130,14 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
      * NULL data_interval, 由 worker 走 bizDate 回退; 不阻断 launch.
      */
     private Instant resolveNextFireAt(String scheduleType, String scheduleExpression, ZoneId zoneId, Instant fireAt) {
-        if (EmptyChecks.isNull(scheduleType) || EmptyChecks.isBlank(scheduleExpression)) {
+        if (scheduleType == null || EmptyValues.isBlank(scheduleExpression)) {
             return null;
         }
         String trimmedScheduleType = scheduleType.trim();
         String type = trimmedScheduleType.toUpperCase(Locale.ROOT);
         try {
             NextFireCalculator calculator = nextFireCalculators().get(type);
-            return EmptyChecks.isNull(calculator) ? null : calculator.next(scheduleExpression, zoneId, fireAt);
+            return calculator == null ? null : calculator.next(scheduleExpression, zoneId, fireAt);
         } catch (RuntimeException ex) {
             log.warn(
                     "data_interval next-fire computation failed: scheduleType={}, expr={}, error={}",
@@ -154,7 +153,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
                 ScheduleType.CRON.code(), cronAdapter::next, ScheduleType.FIXED_RATE.code(), (expr, zone, fireAt) -> {
                     // FIXED_RATE 表达式格式:纯数字秒(如 "60")或 ISO duration(如 "PT5M")。
                     Duration interval = parseFixedRateInterval(expr);
-                    return EmptyChecks.isNull(interval) ? null : fireAt.plus(interval);
+                    return interval == null ? null : fireAt.plus(interval);
                 });
     }
 
@@ -165,7 +164,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
 
     private static Duration parseFixedRateInterval(String expr) {
         String trimmed = expr.trim();
-        if (EmptyChecks.isEmpty(trimmed)) {
+        if (EmptyValues.isEmpty(trimmed)) {
             return null;
         }
         // 纯数字 → 秒
@@ -188,7 +187,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
     @Override
     public TriggerType resolveTriggerType(TriggerLaunchCommand command) {
         // API 触发不要求调用方传 triggerType，null 时默认 API 以简化客户端接入
-        return EmptyChecks.isNull(command.request().triggerType())
+        return command.request().triggerType() == null
                 ? TriggerType.API
                 : command.request().triggerType();
     }

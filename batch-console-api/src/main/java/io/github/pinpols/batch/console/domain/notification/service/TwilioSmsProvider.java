@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.SmsProperties;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import java.io.IOException;
@@ -72,16 +72,16 @@ public class TwilioSmsProvider implements SmsProvider {
         String authToken = properties.getTwilioAuthToken();
         String fromNumber = properties.getTwilioFromNumber();
 
-        if (accountSid == null || accountSid.isBlank()) {
+        if (EmptyValues.isBlank(accountSid)) {
             return WebhookDeliveryResult.failure(null, "missing twilio accountSid");
         }
-        if (authToken == null || authToken.isBlank()) {
+        if (EmptyValues.isBlank(authToken)) {
             return WebhookDeliveryResult.failure(null, "missing twilio authToken");
         }
-        if (fromNumber == null || fromNumber.isBlank()) {
+        if (EmptyValues.isBlank(fromNumber)) {
             return WebhookDeliveryResult.failure(null, "missing twilio fromNumber");
         }
-        if (phoneNumbers == null || phoneNumbers.isEmpty()) {
+        if (EmptyValues.isEmpty(phoneNumbers)) {
             return WebhookDeliveryResult.failure(null, "missing twilio phoneNumbers");
         }
 
@@ -93,7 +93,7 @@ public class TwilioSmsProvider implements SmsProvider {
         try {
             URI apiBaseUri = URI.create(apiBase);
             String apiBaseHost = apiBaseUri.getHost();
-            if (EmptyChecks.isNull(apiBaseHost)) {
+            if (apiBaseHost == null) {
                 return WebhookDeliveryResult.failure(null, "invalid twilio apiBase");
             }
         } catch (RuntimeException e) {
@@ -101,7 +101,7 @@ public class TwilioSmsProvider implements SmsProvider {
         }
 
         for (String phone : phoneNumbers) {
-            if (phone == null || phone.isBlank()) {
+            if (EmptyValues.isBlank(phone)) {
                 continue;
             }
             String encodedPhone = urlEncode(phone);
@@ -150,7 +150,7 @@ public class TwilioSmsProvider implements SmsProvider {
     /** 末尾斜杠归一化，避免拼出 {@code //2010-04-01}。 */
     private String resolveApiBase() {
         String base = properties.getTwilioApiBase();
-        if (base == null || base.isBlank()) {
+        if (EmptyValues.isBlank(base)) {
             base = "https://api.twilio.com";
         }
         while (base.endsWith("/")) {

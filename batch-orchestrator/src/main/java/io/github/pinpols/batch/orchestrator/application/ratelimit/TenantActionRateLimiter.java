@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.ratelimit;
 
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.config.RateLimitProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.micrometer.core.instrument.Counter;
@@ -65,7 +66,7 @@ public class TenantActionRateLimiter {
         if (!governance.rateLimit().isEnabled()) {
             return true;
         }
-        if (tenantId == null || tenantId.isBlank()) {
+        if (EmptyValues.isBlank(tenantId)) {
             return true;
         }
         long max = LIMIT_RESOLVERS.getOrDefault(action, props -> 0L).applyAsLong(governance.rateLimit());

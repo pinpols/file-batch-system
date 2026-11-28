@@ -360,12 +360,14 @@ PR 划分：Task 1–3 合成 PR-1（低风险）；PR-1 合入后，Task 4–8 
 - Modify：`scripts/ci/check-empty-checks.py`（门禁改为 §1.8 的拆分规则，随第一个 Task 18 PR 一起改）
 - Modify：各模块生产代码，拆成 2–3 个 PR
 
-- [ ] **Step 1：写规则。** §1.8：对象引用判空用 `x == null` / `x != null`；字符串在“空白也算空”时用 `EmptyChecks.isBlank`，只在 null 或长度为 0 时才算空的用 `EmptyChecks.isEmpty`；集合、Map、数组用 `EmptyChecks.isEmpty`；Stream 里用 `Objects::nonNull` / `Objects::isNull`。`EmptyChecks.isNull` / `isNotNull` 保留 API，不再在新代码里使用。写明 `trim().isEmpty()` 与 `isBlank` 结论不同，不能互换。
-- [ ] **Step 2：机械替换对象判空。** 按模块执行：`EmptyChecks.isNull(expr)` → `expr == null`，`EmptyChecks.isNotNull(expr)` → `expr != null`，`EmptyChecks::isNotNull` → `Objects::nonNull`。`expr` 不是简单标识符或方法调用时，给替换结果加括号，并检查周围运算的优先级。替换后删掉不再使用的 import。
-- [ ] **Step 3：替换组合判空。** 只替换静态类型确认是 `String` / `CharSequence` / `Collection` / `Map` / 数组的：`x == null || x.isBlank()` → `EmptyChecks.isBlank(x)`，`x == null || x.isEmpty()` → `EmptyChecks.isEmpty(x)`，对应的 `!=` / `&&` 取反形式同理。`x == null || x.trim().isEmpty()` 不替换。
-- [ ] **Step 4：每个模块跑完整测试和 Spotless。** `./mvnw -o -ntp -pl <模块> -am test`，再跑 `spotless:check`，预期都是 clean。另外跑 `ServiceEntryGuardArchTest`，预期 PASS。
-- [ ] **Step 5：检查有没有漏掉的。** `grep -rn 'EmptyChecks\.is\(Not\)\?Null(' --include='*.java' <模块>/src/main`，预期没有输出。
-- [ ] **Step 6：提交**（每个模块一个提交、一个 PR）`refactor(<模块>): use native null checks per conventions §1.8`。**门禁先行：** 在第一个 Task 18 PR 中，把 `scripts/ci/check-empty-checks.py` 改成 §1.8 的拆分规则，并与 conventions §1.8 一起提交，必须早于任何 `EmptyChecks.isNull` → `== null` 的替换。阶段 9 内为通过旧门禁而写入、Task 18 必须回头处理的位置：`WorkerTaskLeaseRenewer.java` ~:245、`ConsoleMetaQueryService.java:172`、`ConsoleOidcAuthenticationSuccessHandler` 中 Optional 的 allow 注释、`WorkflowGraphs` 里的 `EmptyChecks.isNotEmpty`。
+- [x] **Step 1：写规则。** §1.8：对象引用判空用 `x == null` / `x != null`；字符串在“空白也算空”时用 `EmptyChecks.isBlank`，只在 null 或长度为 0 时才算空的用 `EmptyChecks.isEmpty`；集合、Map、数组用 `EmptyChecks.isEmpty`；Stream 里用 `Objects::nonNull` / `Objects::isNull`。`EmptyChecks.isNull` / `isNotNull` 保留 API，不再在新代码里使用。写明 `trim().isEmpty()` 与 `isBlank` 结论不同，不能互换。
+- [x] **Step 2：机械替换对象判空。** 按模块执行：`EmptyChecks.isNull(expr)` → `expr == null`，`EmptyChecks.isNotNull(expr)` → `expr != null`，`EmptyChecks::isNotNull` → `Objects::nonNull`。`expr` 不是简单标识符或方法调用时，给替换结果加括号，并检查周围运算的优先级。替换后删掉不再使用的 import。
+- [x] **Step 3：替换组合判空。** 只替换静态类型确认是 `String` / `CharSequence` / `Collection` / `Map` / 数组的：`x == null || x.isBlank()` → `EmptyChecks.isBlank(x)`，`x == null || x.isEmpty()` → `EmptyChecks.isEmpty(x)`，对应的 `!=` / `&&` 取反形式同理。`x == null || x.trim().isEmpty()` 不替换。
+- [x] **Step 4：每个模块跑完整测试和 Spotless。** `./mvnw -o -ntp -pl <模块> -am test`，再跑 `spotless:check`，预期都是 clean。另外跑 `ServiceEntryGuardArchTest`，预期 PASS。
+- [x] **Step 5：检查有没有漏掉的。** `grep -rn 'EmptyChecks\.is\(Not\)\?Null(' --include='*.java' <模块>/src/main`，预期没有输出。
+- [x] **Step 6：提交**（每个模块一个提交、一个 PR）`refactor(<模块>): use native null checks per conventions §1.8`。**门禁先行：** 在第一个 Task 18 PR 中，把 `scripts/ci/check-empty-checks.py` 改成 §1.8 的拆分规则，并与 conventions §1.8 一起提交，必须早于任何 `EmptyChecks.isNull` → `== null` 的替换。阶段 9 内为通过旧门禁而写入、Task 18 必须回头处理的位置：`WorkerTaskLeaseRenewer.java` ~:245、`ConsoleMetaQueryService.java:172`、`ConsoleOidcAuthenticationSuccessHandler` 中 Optional 的 allow 注释、`WorkflowGraphs` 里的 `EmptyChecks.isNotEmpty`。
+
+**执行记录（2026-11-27）**：§1.8 与门禁拆分先行；生产代码机械替换 3,716 处 `isNull/isNotNull`、7 处方法引用与 399 处组合判空（3 处 `MultipartFile.isEmpty()` 因无对应重载保留原生写法），执行时 `EmptyChecks` 更名为 `EmptyValues`、`Texts.hasText` 合并、`Guard` 更名为 `Preconditions`；`isNull/isNotNull` 在迁移完成后移除（偏离原计划“保留 API”的保守选项）。验证：全 reactor `test-compile`、`batch-common` 单测、`ServiceEntryGuardArchTest`、门禁自测与 `spotless:check` 通过；模块完整测试由 PR CI 覆盖。本轮以一个分支交付并保留模块级提交，未按“每个模块一个 PR”拆分。
 
 ### Task 19：超长 builder 先命名，私有薄壳改直接调用（R17、R19）
 

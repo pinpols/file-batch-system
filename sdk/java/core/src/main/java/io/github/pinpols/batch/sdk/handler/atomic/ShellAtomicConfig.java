@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.sdk.handler.atomic;
 
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.util.Set;
 
 /**
@@ -16,7 +17,7 @@ public record ShellAtomicConfig(
         String taskType, Set<String> allowedCommands, int timeoutSeconds, int maxOutputBytes, boolean cleanupWorkdir) {
 
     public ShellAtomicConfig {
-        if (taskType == null || taskType.isBlank()) {
+        if (SdkEmptyValues.isBlank(taskType)) {
             throw new IllegalArgumentException("taskType must not be blank");
         }
         allowedCommands = allowedCommands == null ? Set.of() : Set.copyOf(allowedCommands);

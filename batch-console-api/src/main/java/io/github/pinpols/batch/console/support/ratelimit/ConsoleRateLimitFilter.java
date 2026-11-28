@@ -3,8 +3,7 @@ package io.github.pinpols.batch.console.support.ratelimit;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.web.ServletRequestPaths;
 import io.github.pinpols.batch.console.config.ConsoleRateLimitProperties;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
@@ -103,7 +102,7 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
         // ── 2. 敏感操作接口：用户限流 ─────────────────────────────────────────
         if (HttpMethod.POST.matches(method) && path.startsWith(TRIGGER_PATH_PREFIX)) {
             String username = resolveUsername();
-            if (Texts.hasText(username)) {
+            if (EmptyValues.hasText(username)) {
                 String key = "sensitive:user:" + username;
                 if (!tryAcquireFailOpen(key, properties.getSensitiveOpUserLimitPerMinute(), "sensitive", username)) {
                     String sanitizedUsername = LogSanitizer.value(username);
@@ -126,7 +125,7 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
         // ── 3. 昂贵接口（导出/导入/Excel/报表）：用户限流（任意方法，更严阈值）────────────────
         if (isExpensivePath(path)) {
             String username = resolveUsername();
-            if (Texts.hasText(username)) {
+            if (EmptyValues.hasText(username)) {
                 String key = "expensive:user:" + username;
                 if (!tryAcquireFailOpen(key, properties.getExpensiveOpUserLimitPerMinute(), "expensive", username)) {
                     String sanitizedUsername = LogSanitizer.value(username);
@@ -149,7 +148,7 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
         // ── 4. 文件操作接口（下载/错误导出/归档/重派/到达组）：用户限流（任意方法，高水位）──────────
         if (matchesAnyPrefix(path, properties.getFileOpPathPrefixes())) {
             String username = resolveUsername();
-            if (Texts.hasText(username)) {
+            if (EmptyValues.hasText(username)) {
                 String key = "fileop:user:" + username;
                 if (!tryAcquireFailOpen(key, properties.getFileOpUserLimitPerMinute(), "fileop", username)) {
                     String sanitizedUsername = LogSanitizer.value(username);
@@ -208,7 +207,7 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
 
     private String resolveUsername() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (EmptyChecks.isNull(auth) || !auth.isAuthenticated()) {
+        if (auth == null || !auth.isAuthenticated()) {
             return null;
         }
         if (auth.getPrincipal() instanceof ConsolePrincipal principal) {

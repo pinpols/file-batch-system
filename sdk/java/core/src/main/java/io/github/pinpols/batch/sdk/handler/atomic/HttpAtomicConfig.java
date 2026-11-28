@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.sdk.handler.atomic;
 
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.util.Objects;
 import java.util.Set;
 
@@ -26,8 +27,7 @@ public record HttpAtomicConfig(
     public HttpAtomicConfig {
         Objects.requireNonNull(taskType, "taskType");
         blockedHostPatterns = blockedHostPatterns == null ? Set.of() : Set.copyOf(blockedHostPatterns);
-        allowedMethods =
-                allowedMethods == null || allowedMethods.isEmpty() ? DEFAULT_METHODS : Set.copyOf(allowedMethods);
+        allowedMethods = SdkEmptyValues.isEmpty(allowedMethods) ? DEFAULT_METHODS : Set.copyOf(allowedMethods);
         if (timeoutSeconds <= 0) {
             throw new IllegalArgumentException("timeoutSeconds must be > 0");
         }

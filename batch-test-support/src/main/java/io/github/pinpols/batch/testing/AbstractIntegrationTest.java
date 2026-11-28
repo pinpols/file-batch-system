@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.testing;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -263,13 +262,13 @@ public abstract class AbstractIntegrationTest {
             container.start();
             return;
         }
-        if (EmptyChecks.isNotNull(OBJECT_STORE)) {
+        if (OBJECT_STORE != null) {
             OBJECT_STORE.ensureBucketExists(OBJECT_STORE.getDefaultBucket());
         }
     }
 
     private static TestObjectStoreEndpoint requireObjectStore() {
-        if (EmptyChecks.isNull(OBJECT_STORE)) {
+        if (OBJECT_STORE == null) {
             throw new IllegalStateException("S3-compatible test object store is not configured");
         }
         return OBJECT_STORE;

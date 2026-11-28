@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.application.ops.query;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -27,9 +26,8 @@ public record ConsoleWaitRelationshipQuery(
         @Min(1) @Max(100) Integer pageSize) {
     @AssertTrue(message = "cursor type and positive 64-bit cursor ID must be supplied together")
     public boolean isCursorValid() {
-        if (EmptyChecks.isNull(cursorType) && EmptyChecks.isNull(cursorId)) return true;
-        if (EmptyChecks.isNull(cursorType) || EmptyChecks.isNull(cursorId) || !cursorId.matches("[1-9][0-9]{0,18}"))
-            return false;
+        if (cursorType == null && cursorId == null) return true;
+        if (cursorType == null || cursorId == null || !cursorId.matches("[1-9][0-9]{0,18}")) return false;
         try {
             return Long.parseLong(cursorId) > 0;
         } catch (NumberFormatException ignored) {

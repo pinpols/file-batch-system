@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.sdk.dispatcher;
 
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.util.List;
 import java.util.Map;
 
@@ -30,12 +30,12 @@ public record HeartbeatDirective(
 
     /** 仅供同包契约测试构造旧平台回包；生产 transport 直接反序列化为本 record。 */
     static HeartbeatDirective fromResponse(Map<String, Object> response) {
-        if (EmptyChecks.isEmpty(response)) {
+        if (SdkEmptyValues.isEmpty(response)) {
             return new HeartbeatDirective(STATUS_NORMAL, null, false, List.of(), null);
         }
         Object paused = response.get("pausedTaskTypes");
         Object platformStatusForDefaultCheck = response.get("platformStatus");
-        String platformStatus = EmptyChecks.isNull(platformStatusForDefaultCheck)
+        String platformStatus = platformStatusForDefaultCheck == null
                 ? STATUS_NORMAL
                 : response.get("platformStatus").toString();
         Integer desiredMaxConcurrent = integerValue(response.get("desiredMaxConcurrent"));

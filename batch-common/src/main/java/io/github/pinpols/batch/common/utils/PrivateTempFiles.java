@@ -131,7 +131,7 @@ public final class PrivateTempFiles {
                 try (FileChannel channel =
                                 FileChannel.open(lockPath, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
                         FileLock lock = channel.tryLock()) {
-                    if (EmptyChecks.isNull(lock)) {
+                    if (lock == null) {
                         return false;
                     }
                 }
@@ -158,7 +158,7 @@ public final class PrivateTempFiles {
         }
         try (FileChannel channel = FileChannel.open(lockPath, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
                 FileLock lock = channel.tryLock()) {
-            if (EmptyChecks.isNull(lock)) {
+            if (lock == null) {
                 return false;
             }
         }

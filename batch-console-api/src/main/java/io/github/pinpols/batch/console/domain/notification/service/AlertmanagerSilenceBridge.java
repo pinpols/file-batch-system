@@ -8,9 +8,9 @@ import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.utils.AlertLabels;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import io.micrometer.core.instrument.Counter;
@@ -73,7 +73,7 @@ public class AlertmanagerSilenceBridge {
         this.props = properties.getSilence();
         this.meterRegistryProvider = meterRegistryProvider;
         this.httpTransport = httpTransport;
-        if (props.isEnabled() && Texts.hasText(props.getApiBaseUrl())) {
+        if (props.isEnabled() && EmptyValues.hasText(props.getApiBaseUrl())) {
             ThreadPoolExecutor pool = new ThreadPoolExecutor(
                     1,
                     1,
@@ -98,7 +98,7 @@ public class AlertmanagerSilenceBridge {
 
     /** console silence → AM silence(disabled / null → no-op)。durationMinutes null 用默认。 */
     public void silence(AlertEventEntity alert, Integer durationMinutes) {
-        if (executor == null || alert == null || !Texts.hasText(alert.getAlertType())) {
+        if (executor == null || alert == null || !EmptyValues.hasText(alert.getAlertType())) {
             return;
         }
         submit(() -> sendSilence(alert, durationMinutes), "silence");
@@ -106,7 +106,7 @@ public class AlertmanagerSilenceBridge {
 
     /** console close → AM resolved(disabled / null → no-op)。 */
     public void resolve(AlertEventEntity alert) {
-        if (executor == null || alert == null || !Texts.hasText(alert.getAlertType())) {
+        if (executor == null || alert == null || !EmptyValues.hasText(alert.getAlertType())) {
             return;
         }
         submit(() -> sendResolved(alert), "resolve");
@@ -146,10 +146,10 @@ public class AlertmanagerSilenceBridge {
         Instant now = Instant.now();
         List<Map<String, Object>> matchers = new ArrayList<>();
         matchers.add(matcher("alertname", alert.getAlertType()));
-        if (Texts.hasText(alert.getTenantId())) {
+        if (EmptyValues.hasText(alert.getTenantId())) {
             matchers.add(matcher("tenant", alert.getTenantId()));
         }
-        if (Texts.hasText(alert.getDedupFingerprint())) {
+        if (EmptyValues.hasText(alert.getDedupFingerprint())) {
             matchers.add(matcher("fingerprint", alert.getDedupFingerprint()));
         }
         Map<String, Object> silence = new LinkedHashMap<>();

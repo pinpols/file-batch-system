@@ -2,8 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.lineage;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse;
 import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.DispatchRecord;
 import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.FileRecord;
@@ -48,11 +47,11 @@ public class LineageEvidenceService {
     public LineageEvidenceResponse evidenceForResultVersion(String tenantId, Long resultVersionId) {
         ResultVersionEntity version = resultVersionMapper.selectById(tenantId, resultVersionId);
         String resultVersionSource = HOT;
-        if (EmptyChecks.isNull(version)) {
+        if (version == null) {
             version = resultVersionMapper.selectArchivedById(tenantId, resultVersionId);
             resultVersionSource = ARCHIVE;
         }
-        if (EmptyChecks.isNull(version)) {
+        if (version == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.result_version.not_found");
         }
         return buildEvidence(version, resultVersionSource);
@@ -69,14 +68,14 @@ public class LineageEvidenceService {
         Long payloadFileId = payloadFileId(version);
         JobInstance jobInstance = lineageEvidenceMapper.selectJobInstance(version.tenantId(), version.jobInstanceId());
         String jobInstanceSource = HOT;
-        if (EmptyChecks.isNull(jobInstance)) {
+        if (jobInstance == null) {
             jobInstance = lineageEvidenceMapper.selectArchivedJobInstance(version.tenantId(), version.jobInstanceId());
             jobInstanceSource = ARCHIVE;
         }
         List<PipelineInstance> pipelines =
                 lineageEvidenceMapper.selectPipelineInstances(version.tenantId(), version.jobInstanceId());
         String pipelineSource = HOT;
-        if (EmptyChecks.isEmpty(pipelines)) {
+        if (EmptyValues.isEmpty(pipelines)) {
             pipelines =
                     lineageEvidenceMapper.selectArchivedPipelineInstances(version.tenantId(), version.jobInstanceId());
             pipelineSource = ARCHIVE;
@@ -88,7 +87,7 @@ public class LineageEvidenceService {
                 version.tenantId(), version.jobInstanceId(), payloadFileId);
         List<FileRecord> archivedFiles = nullToEmpty(archivedFileRows);
         TreeMap<Long, FileRecord> filesById = new TreeMap<>();
-        boolean archivedJob = EmptyChecks.isNotNull(jobInstance) && ARCHIVE.equals(jobInstanceSource);
+        boolean archivedJob = jobInstance != null && ARCHIVE.equals(jobInstanceSource);
         List<FileRecord> preferredFiles = archivedJob ? archivedFiles : hotFiles;
         List<FileRecord> otherFiles = archivedJob ? hotFiles : archivedFiles;
         preferredFiles.forEach(file -> filesById.put(file.id(), file));
@@ -157,8 +156,8 @@ public class LineageEvidenceService {
 
     private static LineageCoverage coverage(EvidenceCoverageInput input) {
         List<String> knownGaps = new ArrayList<>();
-        boolean jobFound = EmptyChecks.isNotNull(input.jobInstance());
-        boolean payloadResolved = EmptyChecks.isNull(input.payloadFileId())
+        boolean jobFound = input.jobInstance() != null;
+        boolean payloadResolved = input.payloadFileId() == null
                 || input.fileRecords().stream()
                         .anyMatch(row -> input.payloadFileId().equals(row.id()));
         if (!jobFound) {
@@ -167,23 +166,23 @@ public class LineageEvidenceService {
         if (!payloadResolved) {
             knownGaps.add("payload_ref file_record not found in hot or archive tables");
         }
-        if (EmptyChecks.isEmpty(input.fileRecords())) {
+        if (EmptyValues.isEmpty(input.fileRecords())) {
             knownGaps.add("no related file_record found in hot or archive tables");
         }
-        if (EmptyChecks.isEmpty(input.dispatchRecords())) {
+        if (EmptyValues.isEmpty(input.dispatchRecords())) {
             knownGaps.add("no dispatch receipt found in hot or archive tables");
         }
         boolean archiveUsed = ARCHIVE.equals(input.resultVersionSource())
                 || (jobFound && ARCHIVE.equals(input.jobInstanceSource()))
-                || (!EmptyChecks.isEmpty(input.pipelineInstances()) && ARCHIVE.equals(input.pipelineSource()))
-                || (!EmptyChecks.isEmpty(input.fileRecords())
+                || (!EmptyValues.isEmpty(input.pipelineInstances()) && ARCHIVE.equals(input.pipelineSource()))
+                || (!EmptyValues.isEmpty(input.fileRecords())
                         && (ARCHIVE.equals(input.fileSource()) || HOT_AND_ARCHIVE.equals(input.fileSource())))
-                || (!EmptyChecks.isEmpty(input.dispatchRecords())
+                || (!EmptyValues.isEmpty(input.dispatchRecords())
                         && (ARCHIVE.equals(input.dispatchSource()) || HOT_AND_ARCHIVE.equals(input.dispatchSource())));
         String jobSource = jobFound ? input.jobInstanceSource() : NONE;
-        String pipelineSource = EmptyChecks.isEmpty(input.pipelineInstances()) ? NONE : input.pipelineSource();
-        String fileSource = EmptyChecks.isEmpty(input.fileRecords()) ? NONE : input.fileSource();
-        String dispatchSource = EmptyChecks.isEmpty(input.dispatchRecords()) ? NONE : input.dispatchSource();
+        String pipelineSource = EmptyValues.isEmpty(input.pipelineInstances()) ? NONE : input.pipelineSource();
+        String fileSource = EmptyValues.isEmpty(input.fileRecords()) ? NONE : input.fileSource();
+        String dispatchSource = EmptyValues.isEmpty(input.dispatchRecords()) ? NONE : input.dispatchSource();
         LineageSources sources =
                 new LineageSources(input.resultVersionSource(), jobSource, pipelineSource, fileSource, dispatchSource);
         return new LineageCoverage(
@@ -221,9 +220,9 @@ public class LineageEvidenceService {
     }
 
     private static Long payloadFileId(ResultVersionEntity version) {
-        boolean resultVersionHasNoFileRecordReference = EmptyChecks.isNull(version)
+        boolean resultVersionHasNoFileRecordReference = version == null
                 || !"FILE_RECORD".equals(version.payloadStorage())
-                || !Texts.hasText(version.payloadRef())
+                || !EmptyValues.hasText(version.payloadRef())
                 || !version.payloadRef().startsWith(FILE_RECORD_REF_PREFIX);
         if (resultVersionHasNoFileRecordReference) {
             return null;
@@ -238,7 +237,7 @@ public class LineageEvidenceService {
     }
 
     private static <T> List<T> nullToEmpty(List<T> rows) {
-        return EmptyChecks.isNull(rows) ? List.of() : rows;
+        return rows == null ? List.of() : rows;
     }
 
     @Builder

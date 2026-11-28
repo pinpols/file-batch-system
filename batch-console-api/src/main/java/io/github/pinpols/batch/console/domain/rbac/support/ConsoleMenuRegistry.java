@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleMenuProperties;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -84,14 +84,14 @@ public class ConsoleMenuRegistry {
         List<MenuGroup> result = new ArrayList<>();
         for (MenuGroup group : allGroups) {
             Set<String> requiredGroupAuthorities = groupAuthorities.get(group.key());
-            if (EmptyChecks.isNotEmpty(requiredGroupAuthorities)
+            if (EmptyValues.isNotEmpty(requiredGroupAuthorities)
                     && !hasAnyAuthority(authorities, requiredGroupAuthorities)) {
                 continue;
             }
             List<MenuItem> visibleItems = group.children().stream()
                     .filter(item -> isAllowed(authorities, roleLevel, item.minRole(), itemAuthorities.get(item.path())))
                     .toList();
-            if (EmptyChecks.isNotEmpty(visibleItems)) {
+            if (EmptyValues.isNotEmpty(visibleItems)) {
                 result.add(new MenuGroup(group.key(), group.title(), group.icon(), group.minRole(), visibleItems));
             }
         }
@@ -99,7 +99,7 @@ public class ConsoleMenuRegistry {
     }
 
     private static String normalizeRole(String role) {
-        if (EmptyChecks.isNull(role)) {
+        if (role == null) {
             return ACCESS_ADMIN;
         }
         String trimmedRole = role.trim();
@@ -107,11 +107,11 @@ public class ConsoleMenuRegistry {
     }
 
     private static Set<String> normalizeAuthorities(List<String> authorities) {
-        if (EmptyChecks.isEmpty(authorities)) {
+        if (EmptyValues.isEmpty(authorities)) {
             return Set.of();
         }
         Set<String> normalized = authorities.stream()
-                .filter(EmptyChecks::isNotBlank)
+                .filter(EmptyValues::isNotBlank)
                 .map(authority -> {
                     String trimmedAuthority = authority.trim();
                     return trimmedAuthority.toUpperCase(Locale.ROOT);
@@ -125,7 +125,7 @@ public class ConsoleMenuRegistry {
 
     private static boolean isAllowed(
             Set<String> userAuthorities, int roleLevel, String minRole, Set<String> requiredAuthorities) {
-        if (EmptyChecks.isNotEmpty(requiredAuthorities)) {
+        if (EmptyValues.isNotEmpty(requiredAuthorities)) {
             return hasAnyAuthority(userAuthorities, requiredAuthorities);
         }
         return roleLevel >= roleLevel(minRole);

@@ -4,9 +4,8 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import io.github.pinpols.batch.orchestrator.config.WorkerDrainProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -48,7 +47,7 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
     @Transactional
     public WorkerRegistryEntity startDrain(String tenantId, String workerCode, Integer timeoutSeconds) {
         validateTenant(tenantId);
-        Guard.requireText(workerCode, "workerCode is required");
+        Preconditions.requireText(workerCode, "workerCode is required");
         WorkerRegistryEntity registry = requireRegistry(tenantId, workerCode);
         if (WorkerRegistryStatus.DECOMMISSIONED.code().equals(registry.status())) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.decommissioned");
@@ -105,7 +104,7 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
     @Transactional
     public WorkerRegistryEntity resume(String tenantId, String workerCode) {
         validateTenant(tenantId);
-        Guard.requireText(workerCode, "workerCode is required");
+        Preconditions.requireText(workerCode, "workerCode is required");
         WorkerRegistryEntity registry = requireRegistry(tenantId, workerCode);
         String current = registry.status();
         if (WorkerRegistryStatus.ONLINE.code().equals(current)) {
@@ -115,7 +114,7 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.resume_unsupported", current);
         }
         if (WorkerRegistryStatus.DRAINING.code().equals(current)
-                && EmptyChecks.isNotEmpty(jobTaskMapper.selectActiveByAssignedWorker(tenantId, workerCode))) {
+                && EmptyValues.isNotEmpty(jobTaskMapper.selectActiveByAssignedWorker(tenantId, workerCode))) {
             // 还有在途任务：保持排空语义，等它跑完（或由 takeover 接管）后再恢复。
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.drain_in_progress");
         }
@@ -135,13 +134,13 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
     @Transactional(readOnly = true)
     public List<JobTaskEntity> listClaimedTasks(String tenantId, String workerCode) {
         validateTenant(tenantId);
-        Guard.requireText(workerCode, "workerCode is required");
+        Preconditions.requireText(workerCode, "workerCode is required");
         return jobTaskMapper.selectActiveByAssignedWorker(tenantId, workerCode);
     }
 
     @Override
     public void takeoverAfterDrainTimeout(String tenantId, String workerCode) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(workerCode)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(workerCode)) {
             return;
         }
         WorkerRegistryEntity registry = workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
@@ -179,11 +178,11 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
 
     private WorkerRegistryEntity requireRegistry(String tenantId, String workerCode) {
         WorkerRegistryEntity loadedWorker = workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
-        return Guard.requireFound(loadedWorker, "worker not registered");
+        return Preconditions.requireFound(loadedWorker, "worker not registered");
     }
 
     private void validateTenant(String tenantId) {
-        Guard.requireText(tenantId, "tenantId is required");
+        Preconditions.requireText(tenantId, "tenantId is required");
     }
 
     private void rejectConcurrentUpdate(int updated) {

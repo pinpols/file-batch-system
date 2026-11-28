@@ -7,10 +7,9 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.ResultVersionPolicy;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.governance.WorkflowNodeReplayTargetResolver;
 import io.github.pinpols.batch.orchestrator.application.service.governance.WorkflowNodeReplayTargetResolver.WorkflowNodeReplayTarget;
 import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCommand;
@@ -131,7 +130,7 @@ public class WorkflowNodeReplayOperationService {
         String requestHash = requestHash(replayCommand);
         ReplayOperationEntity existing = operationMapper.selectByIdentity(
                 command.tenantId(), command.operationKey().toString());
-        if (EmptyChecks.isNotNull(existing)) {
+        if (existing != null) {
             boolean existingOperationMatchesPendingRequest = requestHash.equals(existing.requestHash())
                     && ReplayOperationStatus.PENDING_APPROVAL.code().equals(existing.status());
             if (existingOperationMatchesPendingRequest) {
@@ -147,17 +146,17 @@ public class WorkflowNodeReplayOperationService {
         } catch (PessimisticLockingFailureException concurrentConsumption) {
             throw invalidPreview();
         }
-        boolean previewTokenDoesNotMatchSubmittedRequest = EmptyChecks.isNull(token)
+        boolean previewTokenDoesNotMatchSubmittedRequest = token == null
                 || !command.operationKey().toString().equals(token.operationKey())
                 || !requestHash.equals(token.requestHash());
         if (previewTokenDoesNotMatchSubmittedRequest) {
             throw invalidPreview();
         }
-        if (EmptyChecks.isNotNull(token.consumedAt())) {
-            ReplayOperationEntity consumedOperation = EmptyChecks.isNull(token.operationId())
+        if (token.consumedAt() != null) {
+            ReplayOperationEntity consumedOperation = token.operationId() == null
                     ? null
                     : operationMapper.selectById(command.tenantId(), token.operationId());
-            boolean consumedOperationMatchesPendingRequest = EmptyChecks.isNotNull(consumedOperation)
+            boolean consumedOperationMatchesPendingRequest = consumedOperation != null
                     && requestHash.equals(consumedOperation.requestHash())
                     && ReplayOperationStatus.PENDING_APPROVAL.code().equals(consumedOperation.status());
             if (consumedOperationMatchesPendingRequest) {
@@ -219,8 +218,8 @@ public class WorkflowNodeReplayOperationService {
         operationMapper.insert(operation);
         ReplayOperationEntity persisted = operationMapper.selectByIdentity(
                 command.tenantId(), command.operationKey().toString());
-        boolean operationWasNotPersistedOrTokenLinkFailed = EmptyChecks.isNull(persisted)
-                || EmptyChecks.isNull(persisted.id())
+        boolean operationWasNotPersistedOrTokenLinkFailed = persisted == null
+                || persisted.id() == null
                 || tokenMapper.linkOperation(command.tenantId(), tokenHash, persisted.id()) != 1;
         if (operationWasNotPersistedOrTokenLinkFailed) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.replay_operation_not_persisted");
@@ -238,42 +237,41 @@ public class WorkflowNodeReplayOperationService {
     }
 
     private void validate(WorkflowNodeReplayCommand command, boolean submission) {
-        boolean requiredReplayIdentityIsInvalid = EmptyChecks.isNull(command)
-                || !Texts.hasText(command.tenantId())
-                || EmptyChecks.isNull(command.workflowRunId())
-                || EmptyChecks.isNull(command.workflowNodeRunId())
-                || !Texts.hasText(command.reason())
-                || !Texts.hasText(command.requestedBy());
+        boolean requiredReplayIdentityIsInvalid = command == null
+                || !EmptyValues.hasText(command.tenantId())
+                || command.workflowRunId() == null
+                || command.workflowNodeRunId() == null
+                || !EmptyValues.hasText(command.reason())
+                || !EmptyValues.hasText(command.requestedBy());
         if (requiredReplayIdentityIsInvalid) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_request");
         }
         boolean submissionFieldsAreInvalid =
-                submission && (EmptyChecks.isNull(command.operationKey()) || !Texts.hasText(command.previewToken()));
+                submission && (command.operationKey() == null || !EmptyValues.hasText(command.previewToken()));
         if (submissionFieldsAreInvalid) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_request");
         }
         ResultVersionPolicy resultPolicy = ResultVersionPolicy.fromCodeOrNull(command.resultPolicy());
         ConfigVersionPolicy configPolicy = ConfigVersionPolicy.fromCodeOrNull(command.configVersionPolicy());
-        boolean replayPolicyPairSupported = EmptyChecks.isNotNull(resultPolicy)
-                && resultPolicy != ResultVersionPolicy.DRY_RUN_ONLY
-                && EmptyChecks.isNotNull(configPolicy);
+        boolean replayPolicyPairSupported =
+                resultPolicy != null && resultPolicy != ResultVersionPolicy.DRY_RUN_ONLY && configPolicy != null;
         boolean replayPolicyIsValid = replayPolicyPairSupported
                 && (configPolicy == ConfigVersionPolicy.USE_SPECIFIED_VERSION
-                        ? EmptyChecks.isNotNull(command.configVersion())
-                        : EmptyChecks.isNull(command.configVersion()));
+                        ? command.configVersion() != null
+                        : command.configVersion() == null);
         if (!replayPolicyIsValid) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.replay_invalid_policy");
         }
     }
 
     private WorkflowNodeReplayCommand withDefaultPolicies(WorkflowNodeReplayCommand command) {
-        if (EmptyChecks.isNull(command)) {
+        if (command == null) {
             return null;
         }
-        String resultPolicy = Texts.hasText(command.resultPolicy())
+        String resultPolicy = EmptyValues.hasText(command.resultPolicy())
                 ? command.resultPolicy()
                 : ResultVersionPolicy.CREATE_NEW_VERSION.code();
-        String configVersionPolicy = Texts.hasText(command.configVersionPolicy())
+        String configVersionPolicy = EmptyValues.hasText(command.configVersionPolicy())
                 ? command.configVersionPolicy()
                 : ConfigVersionPolicy.USE_ORIGINAL_CONFIG.code();
         return WorkflowNodeReplayCommand.builder()

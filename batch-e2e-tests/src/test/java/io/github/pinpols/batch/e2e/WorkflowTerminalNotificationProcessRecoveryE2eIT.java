@@ -9,7 +9,7 @@ import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.e2e.apps.E2eImportApplication;
@@ -93,7 +93,7 @@ class WorkflowTerminalNotificationProcessRecoveryE2eIT extends AbstractIntegrati
             try {
                 JsonNode body = new ObjectMapper().readTree(exchange.getRequestBody());
                 String key = exchange.getRequestHeaders().getFirst("Idempotency-Key");
-                if (EmptyChecks.isBlank(key)) {
+                if (EmptyValues.isBlank(key)) {
                     exchange.sendResponseHeaders(400, -1);
                     return;
                 }
@@ -122,7 +122,7 @@ class WorkflowTerminalNotificationProcessRecoveryE2eIT extends AbstractIntegrati
     @AfterAll
     static void stopReceiver() {
         RELEASE_RESPONSE.countDown();
-        if (EmptyChecks.isNotNull(endpoint)) endpoint.stop(0);
+        if (endpoint != null) endpoint.stop(0);
     }
 
     @DisplayName("Console 进程终止后恢复已提交意图且不改变领取和锁语义")

@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.support.web;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Time;
@@ -38,7 +37,7 @@ public class ConsoleResponseFieldReader {
         if (value instanceof Number number) {
             return number.intValue();
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String numericText = value.toString();
@@ -50,7 +49,7 @@ public class ConsoleResponseFieldReader {
         if (value instanceof Number number) {
             return number.longValue();
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String numericText = value.toString();
@@ -62,7 +61,7 @@ public class ConsoleResponseFieldReader {
         if (value instanceof Boolean bool) {
             return bool;
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String booleanText = value.toString();
@@ -78,7 +77,7 @@ public class ConsoleResponseFieldReader {
             String numericText = number.toString();
             return new BigDecimal(numericText);
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String numericText = value.toString();
@@ -96,7 +95,7 @@ public class ConsoleResponseFieldReader {
         if (value instanceof Timestamp timestamp) {
             return timestamp.toInstant();
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String instantText = value.toString();
@@ -111,7 +110,7 @@ public class ConsoleResponseFieldReader {
         if (value instanceof Date date) {
             return date.toLocalDate();
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String dateText = value.toString();
@@ -159,7 +158,7 @@ public class ConsoleResponseFieldReader {
             Long convertedValue;
             if (item instanceof Number number) {
                 convertedValue = number.longValue();
-            } else if (EmptyChecks.isNull(item)) {
+            } else if (item == null) {
                 convertedValue = null;
             } else {
                 String numericText = item.toString();

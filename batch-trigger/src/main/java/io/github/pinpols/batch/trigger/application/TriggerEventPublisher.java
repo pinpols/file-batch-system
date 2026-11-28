@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.trigger.application;
 
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -56,7 +55,7 @@ public interface TriggerEventPublisher {
         }
 
         private static String truncate(String message) {
-            if (EmptyChecks.isNull(message)) {
+            if (message == null) {
                 return null;
             }
             return message.length() <= TriggerOutboxRelay.LAST_ERROR_MAX_LENGTH

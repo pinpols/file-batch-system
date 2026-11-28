@@ -4,8 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
@@ -92,7 +91,7 @@ public class ResultVersionPromoteService {
     }
 
     private ResultVersionEntity loadOrThrow(String tenantId, Long versionId) {
-        if (!Texts.hasText(tenantId) || versionId == null) {
+        if (!EmptyValues.hasText(tenantId) || versionId == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.result_version.invalid_argument");
         }
         ResultVersionEntity row = resultVersionMapper.selectById(tenantId, versionId);
@@ -103,9 +102,8 @@ public class ResultVersionPromoteService {
     }
 
     private void materializePromotedVersion(ResultVersionEntity promoted) {
-        boolean promotedVersionIsNotEffective = EmptyChecks.isNull(promoted)
-                || promoted.jobInstanceId() == null
-                || !"EFFECTIVE".equals(promoted.status());
+        boolean promotedVersionIsNotEffective =
+                promoted == null || promoted.jobInstanceId() == null || !"EFFECTIVE".equals(promoted.status());
         if (promotedVersionIsNotEffective) {
             return;
         }

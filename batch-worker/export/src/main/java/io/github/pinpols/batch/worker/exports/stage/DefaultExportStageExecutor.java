@@ -5,7 +5,6 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -106,7 +105,7 @@ public class DefaultExportStageExecutor extends AbstractStageExecutor<ExportJobC
     public ReplayCapabilityDeclaration resolveReplayCapability(ExportJobContext context) {
         ExportStageStep prepareStage = stepsByStage.get(ExportStage.PREPARE);
         ExportStageStep generateStage = stepsByStage.get(ExportStage.GENERATE);
-        if (EmptyChecks.isNull(context)
+        if (context == null
                 || !(prepareStage instanceof PrepareStep prepareStep)
                 || !(generateStage instanceof GenerateStep generateStep)) {
             return ReplayCapabilityDeclaration.unknown(ExportWorkerType.EXPORT);

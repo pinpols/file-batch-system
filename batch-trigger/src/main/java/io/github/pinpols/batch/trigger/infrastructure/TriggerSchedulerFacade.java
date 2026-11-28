@@ -2,7 +2,7 @@ package io.github.pinpols.batch.trigger.infrastructure;
 
 import io.github.pinpols.batch.common.enums.ScheduleType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
@@ -121,7 +121,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
         runManaged("registerByWorkflowCode", () -> {
             triggerDefinitionLoader.setWorkflowScheduleEnabled(tenantId, workflowCode, true);
             TriggerDescriptor descriptor = triggerDefinitionLoader.loadByWorkflowCode(tenantId, workflowCode);
-            if (EmptyChecks.isNotNull(descriptor) && descriptor.isEnabled()) {
+            if (descriptor != null && descriptor.isEnabled()) {
                 scheduleDescriptor(descriptor);
             }
         });
@@ -131,7 +131,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     public void reconcileByWorkflowCode(String tenantId, String workflowCode) {
         runManaged("reconcileByWorkflowCode", () -> {
             TriggerDescriptor descriptor = triggerDefinitionLoader.loadByWorkflowCode(tenantId, workflowCode);
-            if (EmptyChecks.isNull(descriptor) || !descriptor.isEnabled()) {
+            if (descriptor == null || !descriptor.isEnabled()) {
                 removeQuartzByIdentity(tenantId, "WF:" + workflowCode);
                 return;
             }
@@ -167,7 +167,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
         runManaged("resumeByWorkflowCode", () -> {
             triggerDefinitionLoader.setWorkflowScheduleEnabled(tenantId, workflowCode, true);
             TriggerDescriptor descriptor = triggerDefinitionLoader.loadByWorkflowCode(tenantId, workflowCode);
-            if (EmptyChecks.isNotNull(descriptor) && descriptor.isEnabled()) {
+            if (descriptor != null && descriptor.isEnabled()) {
                 scheduleDescriptor(descriptor);
             }
         });
@@ -250,9 +250,9 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     /** 对账需感知定义校验失败,不得继续为未成功注册的定义物化计划。 */
     private void scheduleValidatedDescriptor(TriggerDescriptor descriptor) {
         String scheduleType = descriptor.getScheduleType();
-        if (EmptyChecks.isNotNull(scheduleType)) {
+        if (scheduleType != null) {
             Consumer<TriggerDescriptor> handler = scheduleHandlers.get(scheduleType.toUpperCase(Locale.ROOT));
-            if (EmptyChecks.isNotNull(handler)) {
+            if (handler != null) {
                 handler.accept(descriptor);
             }
         }
@@ -260,7 +260,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
 
     private void scheduleCronDescriptor(TriggerDescriptor descriptor) {
         String expression = descriptor.getScheduleExpression();
-        if (EmptyChecks.isBlank(expression) || !CronExpression.isValidExpression(expression)) {
+        if (EmptyValues.isBlank(expression) || !CronExpression.isValidExpression(expression)) {
             throw new IllegalArgumentException(
                     "invalid cron expression for job " + descriptor.getJobCode() + ": '" + expression + "'");
         }
@@ -285,7 +285,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
         }
         String timezone = descriptor.getTimezone();
         // 调度时区属于持久定义,不能静默回退平台默认值而改变已有 fire 的业务日。
-        if (EmptyChecks.isBlank(timezone)) {
+        if (EmptyValues.isBlank(timezone)) {
             throw new IllegalArgumentException("missing timezone for workflow " + descriptor.getWorkflowCode());
         }
         try {
@@ -338,18 +338,18 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
         JobDataMap jobDataMap = new JobDataMap();
         jobDataMap.put(QuartzLaunchJob.TENANT_ID, descriptor.getTenantId());
         jobDataMap.put(QuartzLaunchJob.JOB_CODE, descriptor.getJobCode());
-        if (EmptyChecks.isNotNull(descriptor.getWorkflowDefinitionId())) {
+        if (descriptor.getWorkflowDefinitionId() != null) {
             jobDataMap.put(QuartzLaunchJob.WORKFLOW_DEFINITION_ID, descriptor.getWorkflowDefinitionId());
         }
-        if (EmptyChecks.isNotNull(descriptor.getWorkflowCode())) {
+        if (descriptor.getWorkflowCode() != null) {
             jobDataMap.put(QuartzLaunchJob.WORKFLOW_CODE, descriptor.getWorkflowCode());
         }
-        if (EmptyChecks.isNotNull(descriptor.getWorkflowVersion())) {
+        if (descriptor.getWorkflowVersion() != null) {
             jobDataMap.put(QuartzLaunchJob.WORKFLOW_VERSION, descriptor.getWorkflowVersion());
         }
         jobDataMap.put(
                 QuartzLaunchJob.JOB_DEFINITION_VERSION,
-                EmptyChecks.isNull(descriptor.getJobDefinitionVersion()) ? 0 : descriptor.getJobDefinitionVersion());
+                descriptor.getJobDefinitionVersion() == null ? 0 : descriptor.getJobDefinitionVersion());
         jobDataMap.put(QuartzLaunchJob.SCHEDULE_TYPE, descriptor.getScheduleType());
         jobDataMap.put(QuartzLaunchJob.SCHEDULE_EXPRESSION, descriptor.getScheduleExpression());
         jobDataMap.put(QuartzLaunchJob.TIMEZONE, descriptor.getTimezone());
@@ -359,9 +359,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
         // null 表示使用既有回退语义，空列表表示明确无依赖；两者都必须遮住后续 JobDetail 的新值。
         jobDataMap.put(
                 QuartzLaunchJob.DEPENDS_ON_JOB_CODES,
-                EmptyChecks.isNull(descriptor.getDependsOnJobCodes())
-                        ? null
-                        : new ArrayList<>(descriptor.getDependsOnJobCodes()));
+                descriptor.getDependsOnJobCodes() == null ? null : new ArrayList<>(descriptor.getDependsOnJobCodes()));
         jobDataMap.put(QuartzLaunchJob.CATCH_UP_POLICY, descriptor.getCatchUpPolicy());
         jobDataMap.put(QuartzLaunchJob.CATCH_UP_MAX_DAYS, descriptor.getCatchUpMaxDays());
         return jobDataMap;
@@ -370,20 +368,19 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     private JobDataMap misfireIdentityData(TriggerDescriptor descriptor) {
         JobDataMap data = new JobDataMap();
         data.put(QuartzLaunchJob.TENANT_ID, descriptor.getTenantId());
-        if (EmptyChecks.isNotNull(descriptor.getWorkflowDefinitionId())) {
+        if (descriptor.getWorkflowDefinitionId() != null) {
             data.put(QuartzLaunchJob.WORKFLOW_DEFINITION_ID, descriptor.getWorkflowDefinitionId());
         }
         return data;
     }
 
     public static String quartzIdentity(TriggerDescriptor descriptor) {
-        if (EmptyChecks.isNull(descriptor)) {
+        if (descriptor == null) {
             throw new IllegalArgumentException("Scheduled triggers require a Workflow identity");
         }
         String tenantId = descriptor.getTenantId();
         String workflowCode = descriptor.getWorkflowCode();
-        boolean workflowScheduleDescriptorIsIncomplete =
-                EmptyChecks.isNull(tenantId) || EmptyChecks.isBlank(workflowCode);
+        boolean workflowScheduleDescriptorIsIncomplete = tenantId == null || EmptyValues.isBlank(workflowCode);
         if (workflowScheduleDescriptorIsIncomplete) {
             throw new IllegalArgumentException("Scheduled triggers require a Workflow identity");
         }
@@ -396,7 +393,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     }
 
     private void deleteQuartzForDescriptor(TriggerDescriptor descriptor) {
-        if (EmptyChecks.isNull(descriptor)) {
+        if (descriptor == null) {
             return;
         }
         try {
@@ -413,7 +410,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
 
     private void rebindPendingRecoveryTriggers(JobKey workflowJobKey) throws SchedulerException {
         JobDetail sourceJob = scheduler.getJobDetail(workflowJobKey);
-        if (EmptyChecks.isNull(sourceJob)) {
+        if (sourceJob == null) {
             return;
         }
         JobDataMap sourceData = sourceJob.getJobDataMap();
@@ -421,7 +418,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
             return;
         }
         List<? extends Trigger> attachedTriggers = scheduler.getTriggersOfJob(workflowJobKey);
-        if (EmptyChecks.isEmpty(attachedTriggers)) {
+        if (EmptyValues.isEmpty(attachedTriggers)) {
             return;
         }
         String tenantId = sourceData.getString(QuartzLaunchJob.TENANT_ID);
@@ -462,8 +459,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
 
     /** 标记只用于避免删掉在途回调；持久义务准入仍须由 occurrence 状态裁决。 */
     public static boolean isReadinessRetry(Trigger trigger) {
-        return EmptyChecks.isNotNull(trigger)
-                && trigger.getJobDataMap().containsKey(QuartzLaunchJob.READINESS_ORIGINAL_FIRE_TIME);
+        return trigger != null && trigger.getJobDataMap().containsKey(QuartzLaunchJob.READINESS_ORIGINAL_FIRE_TIME);
     }
 
     private void removeQuartzByIdentity(String tenantId, String quartzJobIdentity) {
@@ -485,8 +481,8 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
                 return;
             }
             Trigger storedPrimary = scheduler.getTrigger(trigger.getKey());
-            boolean primaryIdentityUnchanged = EmptyChecks.isNotNull(storedPrimary)
-                    && Objects.equals(storedPrimary.getJobDataMap(), trigger.getJobDataMap());
+            boolean primaryIdentityUnchanged =
+                    storedPrimary != null && Objects.equals(storedPrimary.getJobDataMap(), trigger.getJobDataMap());
             if (primaryIdentityUnchanged && sameSchedule(storedPrimary, trigger)) {
                 // 单独替换定义，保留 FIXED_RATE 相位、nextFireTime 以及辅助重试的调度状态。
                 scheduler.addJob(jobDetail, true);
@@ -517,7 +513,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
 
     private int parseFixedRateIntervalSeconds(TriggerDescriptor descriptor) {
         String expression = descriptor.getScheduleExpression();
-        if (EmptyChecks.isBlank(expression)) {
+        if (EmptyValues.isBlank(expression)) {
             throw new IllegalArgumentException("FIXED_RATE schedule_expr must be a positive integer (seconds) for job: "
                     + descriptor.getJobCode());
         }

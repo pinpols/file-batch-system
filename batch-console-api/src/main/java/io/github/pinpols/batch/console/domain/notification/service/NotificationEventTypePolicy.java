@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.notification.service;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Locale;
 import java.util.Set;
 
@@ -14,7 +13,7 @@ public final class NotificationEventTypePolicy {
     private NotificationEventTypePolicy() {}
 
     public static void requireBusinessEventTypes(String eventTypes) {
-        if (EmptyChecks.isNull(eventTypes)) {
+        if (eventTypes == null) {
             return;
         }
         for (String eventType : eventTypes.split(",")) {

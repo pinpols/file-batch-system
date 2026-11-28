@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.view.PipelineProgressClaimView;
 import io.github.pinpols.batch.orchestrator.domain.view.PipelineProgressStageView;
 import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache;
@@ -23,7 +23,7 @@ public class PipelineProgressReadService {
     public List<PipelineProgressItem> snapshot(String tenantId, Long pipelineInstanceId) {
         mapper.setTenantContext(tenantId);
         List<PipelineProgressClaimView> claims = mapper.selectLiveClaims(tenantId, pipelineInstanceId);
-        if (EmptyChecks.isEmpty(claims)) {
+        if (EmptyValues.isEmpty(claims)) {
             return List.of();
         }
         List<PipelineProgressStageView> stages = mapper.selectRunningStages(tenantId, pipelineInstanceId);

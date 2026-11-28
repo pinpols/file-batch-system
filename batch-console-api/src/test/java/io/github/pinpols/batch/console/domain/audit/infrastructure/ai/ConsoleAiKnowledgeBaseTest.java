@@ -144,7 +144,7 @@ class ConsoleAiKnowledgeBaseTest {
                 .contains("ALLOW_PARALLEL_TESTS=1")
                 .contains("openai-compatible")
                 .contains("BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_CHAT_MODEL");
-        assertThat(governance).contains("EmptyChecks").contains("ai-knowledge/*.md");
+        assertThat(governance).contains("EmptyValues").contains("ai-knowledge/*.md");
     }
 
     private static String readKnowledge(String path) throws IOException {

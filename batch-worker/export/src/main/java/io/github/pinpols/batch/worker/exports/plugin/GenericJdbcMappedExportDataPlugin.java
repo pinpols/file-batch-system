@@ -11,7 +11,7 @@ import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.exports.config.JdbcMappedExportSecurityProperties;
 import io.github.pinpols.batch.worker.exports.jdbc.JdbcMappedExportSpec;
 import java.math.BigDecimal;
@@ -98,11 +98,11 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
             RlsTenantSessionSupport.applyIfPresent(businessDataSource);
             return jdbcTemplate.queryForList(sql, context.tenantId(), context.batchNo());
         });
-        if (EmptyChecks.isEmpty(rows)) {
+        if (EmptyValues.isEmpty(rows)) {
             return Map.of();
         }
         Map<String, Object> firstRow = rows.get(0);
-        if (EmptyChecks.isNull(firstRow)) {
+        if (firstRow == null) {
             return Map.of();
         }
         return new LinkedHashMap<>(firstRow);
@@ -111,7 +111,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     @Override
     @SuppressWarnings("java:S2077")
     public DetailPage loadDetailPage(ExportDataContext context, Long batchId, int pageSize, Object cursor) {
-        if (EmptyChecks.isNull(batchId)) {
+        if (batchId == null) {
             return DetailPage.empty();
         }
         JdbcMappedExportSpec spec = JdbcMappedExportSpec.parse(context.templateConfig(), objectMapper);
@@ -139,7 +139,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
         }
         cols.setLength(cols.length() - 1);
         String fk = JdbcMappedSqlValidator.quotePg(spec.detailFkColumn());
-        if (EmptyChecks.isNull(cursor)) {
+        if (cursor == null) {
             // 首页预检: 排序键含 NULL 的行会被 keyset/哈希分片谓词静默过滤,必须先明确失败。
             // 检查不受当前 partition 谓词限制,覆盖哈希会过滤掉的行。
             String nullProbeSql = buildNullSortValueProbeSql(fq, fk, ob, tb);
@@ -147,12 +147,12 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
                 RlsTenantSessionSupport.applyIfPresent(businessDataSource);
                 return jdbcTemplate.queryForList(nullProbeSql, batchId);
             });
-            if (EmptyChecks.isNotEmpty(nullSortValues)) {
+            if (EmptyValues.isNotEmpty(nullSortValues)) {
                 throw new WorkerConfigException("jdbc_mapped_export sort column is NULL for batchId="
                         + batchId
                         + " (orderByColumn="
                         + ob
-                        + (EmptyChecks.isNull(tb) ? "" : ", tiebreakerColumn=" + tb)
+                        + (tb == null ? "" : ", tiebreakerColumn=" + tb)
                         + "); keyset pagination would silently drop those rows.");
             }
         }
@@ -168,7 +168,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
             RlsTenantSessionSupport.applyIfPresent(businessDataSource);
             return jdbcTemplate.queryForList(finalSql, sqlArgs);
         });
-        if (EmptyChecks.isEmpty(rows)) {
+        if (EmptyValues.isEmpty(rows)) {
             return DetailPage.empty();
         }
         boolean hasOverflowRow = rows.size() > limit;
@@ -196,7 +196,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
 
     /** 游标拆为排序键元组: 单列位点是 1 个值,复合位点是 (排序列, 唯一后缀)。 */
     private static List<Object> splitCursor(Object cursor) {
-        if (EmptyChecks.isNull(cursor)) {
+        if (cursor == null) {
             return List.of();
         }
         if (cursor instanceof List<?> values) {
@@ -207,7 +207,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
 
     /** 位点形状必须与当前冻结配置一致; 排序语义变化后旧的单列位点不能继续使用。 */
     private static void requireCursorShape(JdbcMappedExportSpec spec, List<Object> cursorValues, boolean composite) {
-        if (EmptyChecks.isEmpty(cursorValues) || cursorValues.size() == (composite ? 2 : 1)) {
+        if (EmptyValues.isEmpty(cursorValues) || cursorValues.size() == (composite ? 2 : 1)) {
             return;
         }
         throw new WorkerConfigException(
@@ -253,7 +253,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     }
 
     private static void requireNonNullSortValue(Object value, String column, JdbcMappedExportSpec spec) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             throw new WorkerConfigException("jdbc_mapped_export sort column `"
                     + column
                     + "` is NULL on detailTable="
@@ -272,7 +272,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
                 .append(" = ? AND (")
                 .append(ob)
                 .append(" IS NULL");
-        if (EmptyChecks.isNotNull(tb)) {
+        if (tb != null) {
             sql.append(" OR ").append(tb).append(" IS NULL");
         }
         sql.append(") LIMIT 1");
@@ -315,7 +315,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
                 .append(" = ?");
         List<Object> args = new ArrayList<>();
         args.add(batchId);
-        if (EmptyChecks.isNotNull(range) && range.active()) {
+        if (range != null && range.active()) {
             sql.append(" AND ")
                     .append(ob)
                     .append(" >= ?")
@@ -324,7 +324,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
                     .append(range.includeUpper() ? " <= ?" : " < ?");
             args.add(range.loN());
             args.add(range.hiN());
-        } else if (EmptyChecks.isNotNull(range) && range.partitionCount() > 1) {
+        } else if (range != null && range.partitionCount() > 1) {
             sql.append(" AND ((hashtext(").append(ob).append("::text) % ?) + ?) % ? = ?");
             args.add(range.partitionCount());
             args.add(range.partitionCount());
@@ -333,7 +333,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
         }
         appendCursorPredicate(sql, args, ob, tb, cursorValues);
         sql.append(" ORDER BY ").append(ob).append(" ASC");
-        if (EmptyChecks.isNotNull(tb)) {
+        if (tb != null) {
             sql.append(", ").append(tb).append(" ASC");
         }
         sql.append(" LIMIT ?");
@@ -348,11 +348,11 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
      */
     private static void appendCursorPredicate(
             StringBuilder sql, List<Object> args, String ob, String tb, List<Object> cursorValues) {
-        if (EmptyChecks.isEmpty(cursorValues)) {
+        if (EmptyValues.isEmpty(cursorValues)) {
             return;
         }
         Object primary = cursorValues.getFirst();
-        if (EmptyChecks.isNull(tb)) {
+        if (tb == null) {
             sql.append(" AND ").append(ob).append(" > ?");
             args.add(primary);
             return;
@@ -373,7 +373,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     // 兼容旧签名: 单列位点。
     static PagedQuery buildDetailQuery(
             DetailSql q, Long batchId, Object cursor, int pageSize, ExportKeysetRange range) {
-        List<Object> cursorValues = EmptyChecks.isNull(cursor) ? List.of() : List.of(cursor);
+        List<Object> cursorValues = cursor == null ? List.of() : List.of(cursor);
         return buildDetailQuery(q, batchId, cursorValues, pageSize, range);
     }
 

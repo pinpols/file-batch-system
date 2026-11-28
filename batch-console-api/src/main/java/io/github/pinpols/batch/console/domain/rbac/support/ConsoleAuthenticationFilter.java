@@ -4,8 +4,7 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonErrorMessages;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.observability.SseTicketService;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
@@ -138,18 +137,18 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         // SSE ticket 鉴权：EventSource 不能设 header，用一次性 ticket 替代
         String sseTicket = request.getParameter("ticket");
-        if (Texts.hasText(sseTicket)) {
+        if (EmptyValues.hasText(sseTicket)) {
             // ASYNC/ERROR 分派复用 REQUEST 阶段已消费的 ticket 解析结果，避免二次 validate
             // 命中已删 key 后假装匿名 → 落入 AuthorizationFilter 抛 AccessDenied → response committed 雪崩
             SseTicketService.TicketPayload payload =
                     (SseTicketService.TicketPayload) request.getAttribute(TICKET_PRINCIPAL_ATTR);
-            if (EmptyChecks.isNull(payload)) {
+            if (payload == null) {
                 payload = sseTicketService.validate(sseTicket);
-                if (EmptyChecks.isNotNull(payload)) {
+                if (payload != null) {
                     request.setAttribute(TICKET_PRINCIPAL_ATTR, payload);
                 }
             }
-            if (EmptyChecks.isNotNull(payload)) {
+            if (payload != null) {
                 if (!ConsoleRoles.isFormalRoleSet(payload.authorities())) {
                     responseWriter.write(
                             response,
@@ -173,7 +172,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
             HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         String bearerToken = resolveCookieToken(request);
-        if (Texts.hasText(bearerToken)) {
+        if (EmptyValues.hasText(bearerToken)) {
             try {
                 ConsolePrincipal principal = jwtService.authenticate(bearerToken);
                 setAuthentication(principal, bearerToken);
@@ -243,7 +242,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
         for (Cookie cookie : cookies) {
             if (CONSOLE_TOKEN_COOKIE.equals(cookie.getName())) {
                 String value = cookie.getValue();
-                if (Texts.hasText(value)) {
+                if (EmptyValues.hasText(value)) {
                     return value.trim();
                 }
             }
@@ -253,7 +252,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
 
     private String resolveUsername(HttpServletRequest request) {
         String username = request.getHeader(properties.getUserHeader());
-        if (!Texts.hasText(username)) {
+        if (!EmptyValues.hasText(username)) {
             username = batchSecurityProperties.isBypassMode() ? "testing-console-user" : "console-user";
         }
         return username;
@@ -261,7 +260,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
 
     private String resolveTenant(HttpServletRequest request) {
         String tenantId = request.getHeader(properties.getTenantHeader());
-        if (!Texts.hasText(tenantId)) {
+        if (!EmptyValues.hasText(tenantId)) {
             tenantId = properties.getDefaultTenantId();
         }
         if (!properties.getAllowedTenants().isEmpty()
@@ -274,12 +273,12 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
     private Set<SimpleGrantedAuthority> resolveAuthorities(HttpServletRequest request) {
         String rolesHeader = request.getHeader(properties.getRoleHeader());
         Set<String> roles;
-        if (!Texts.hasText(rolesHeader)) {
+        if (!EmptyValues.hasText(rolesHeader)) {
             roles = new LinkedHashSet<>(properties.getDefaultAuthorities());
         } else {
             roles = Arrays.stream(rolesHeader.split(","))
                     .map(String::trim)
-                    .filter(EmptyChecks::isNotBlank)
+                    .filter(EmptyValues::isNotBlank)
                     .collect(Collectors.toCollection(LinkedHashSet::new));
         }
         if (!ConsoleRoles.isFormalRoleSet(roles)) {

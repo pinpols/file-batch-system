@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -59,7 +59,7 @@ public final class PlatformRuntimeValues {
     }
 
     static String defaultText(String value, String fallback) {
-        return Texts.hasText(value) ? value : fallback;
+        return EmptyValues.hasText(value) ? value : fallback;
     }
 
     static String truncate(String value, int maxLength) {

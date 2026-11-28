@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.audit.application.ai;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -20,7 +19,7 @@ public record ConsoleAiTurnStartInput(
 
     public ConsoleAiTurnStartInput {
         // 保留 null 与空列表的既有分支，同时防止调用方在用例执行期间修改附件身份。
-        if (EmptyChecks.isNotNull(attachmentIds)) {
+        if (attachmentIds != null) {
             attachmentIds = Collections.unmodifiableList(new ArrayList<>(attachmentIds));
         }
     }

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.testing;
 
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -56,7 +57,7 @@ public final class TestExcelFileBuilder {
             Sheet sheet = workbook.createSheet(sheetName);
             int rowIndex = 0;
 
-            if (headers != null && !headers.isEmpty()) {
+            if (EmptyValues.isNotEmpty(headers)) {
                 Row headerRow = sheet.createRow(rowIndex++);
                 for (int i = 0; i < headers.size(); i++) {
                     headerRow.createCell(i).setCellValue(headers.get(i));

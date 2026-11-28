@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.enums.ConfigVersionPolicy;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -35,30 +35,30 @@ public class RerunJobDefinitionResolver {
     }
 
     public JobDefinitionView resolve(LaunchRequest request, String jobCode, JobDefinitionView latestDefinition) {
-        Map<String, Object> params = EmptyChecks.isNull(request.params()) ? Map.of() : request.params();
+        Map<String, Object> params = request.params() == null ? Map.of() : request.params();
         if (!OPERATION_JOB_RERUN.equals(params.get(PARAM_OPERATION_TYPE))) {
             return latestDefinition;
         }
         Long sourceInstanceId = positiveLong(params.get(PARAM_PARENT_INSTANCE_ID));
-        if (EmptyChecks.isNull(sourceInstanceId)) {
+        if (sourceInstanceId == null) {
             throw conflict("error.rerun.source_instance_required");
         }
         JobInstanceEntity source = jobInstanceMapper.selectById(request.tenantId(), sourceInstanceId);
-        boolean sourceInstanceDoesNotMatchRequestedJob = EmptyChecks.isNull(source)
+        boolean sourceInstanceDoesNotMatchRequestedJob = source == null
                 || !request.tenantId().equals(source.getTenantId())
                 || !jobCode.equals(source.getJobCode())
-                || EmptyChecks.isNull(latestDefinition)
-                || EmptyChecks.isNull(latestDefinition.id())
+                || latestDefinition == null
+                || latestDefinition.id() == null
                 || !latestDefinition.id().equals(source.getJobDefinitionId());
         if (sourceInstanceDoesNotMatchRequestedJob) {
             throw conflict("error.rerun.source_instance_mismatch");
         }
 
         String rawPolicy = text(params.get(PARAM_CONFIG_VERSION_POLICY));
-        ConfigVersionPolicy policy = EmptyChecks.isBlank(rawPolicy)
+        ConfigVersionPolicy policy = EmptyValues.isBlank(rawPolicy)
                 ? ConfigVersionPolicy.USE_ORIGINAL_CONFIG
                 : ConfigVersionPolicy.fromCodeOrNull(rawPolicy);
-        if (EmptyChecks.isNull(policy)) {
+        if (policy == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.rerun.config_version_policy_invalid");
         }
         return switch (policy) {
@@ -71,7 +71,7 @@ public class RerunJobDefinitionResolver {
     private JobDefinitionView originalDefinition(String tenantId, JobInstanceEntity source, String jobCode) {
         WorkflowRunEntity sourceRun = workflowRunMapper.selectByNodeJobInstanceId(tenantId, source.getId());
         JobDefinitionView snapshot = jobDefinitionFromRun(sourceRun, jobCode, source.getJobDefinitionId());
-        if (EmptyChecks.isNull(snapshot) || !Objects.equals(snapshot.version(), source.getJobDefinitionVersion())) {
+        if (snapshot == null || !Objects.equals(snapshot.version(), source.getJobDefinitionVersion())) {
             throw conflict("error.rerun.original_config_unavailable");
         }
         return snapshot;
@@ -80,13 +80,13 @@ public class RerunJobDefinitionResolver {
     private JobDefinitionView specifiedDefinition(
             String tenantId, JobInstanceEntity source, String jobCode, Map<String, Object> params) {
         Integer version = positiveInteger(params.get(PARAM_CONFIG_VERSION));
-        if (EmptyChecks.isNull(version)) {
+        if (version == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.rerun.config_version_required");
         }
         WorkflowRunEntity versionedRun = workflowRunMapper.selectLatestJobDefinitionSnapshot(
                 tenantId, source.getJobDefinitionId(), jobCode, version);
         JobDefinitionView snapshot = jobDefinitionFromRun(versionedRun, jobCode, source.getJobDefinitionId());
-        if (EmptyChecks.isNull(snapshot) || !version.equals(snapshot.version())) {
+        if (snapshot == null || !version.equals(snapshot.version())) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.rerun.config_version_unavailable", version);
         }
         return snapshot;
@@ -94,7 +94,7 @@ public class RerunJobDefinitionResolver {
 
     private JobDefinitionView jobDefinitionFromRun(WorkflowRunEntity run, String jobCode, Long jobDefinitionId) {
         WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(run);
-        if (EmptyChecks.isNull(snapshot)) {
+        if (snapshot == null) {
             return null;
         }
         List<JobDefinitionView> matches = snapshot.jobDefinitions().values().stream()
@@ -126,7 +126,7 @@ public class RerunJobDefinitionResolver {
     }
 
     private String text(Object value) {
-        return EmptyChecks.isNull(value) ? null : String.valueOf(value);
+        return value == null ? null : String.valueOf(value);
     }
 
     private BizException conflict(String messageKey) {

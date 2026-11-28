@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
 import io.github.pinpols.batch.common.config.BatchProfileSupport;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import java.util.List;
@@ -70,7 +71,7 @@ public class ConsoleDefaultPasswordGuard {
     }
 
     private boolean usesFactoryDefault(String passwordHash) {
-        if (passwordHash == null || passwordHash.isBlank()) {
+        if (EmptyValues.isBlank(passwordHash)) {
             return false;
         }
         try {

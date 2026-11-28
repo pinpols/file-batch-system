@@ -3,8 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.quota;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import io.github.pinpols.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.QuotaResetPolicy;
@@ -120,7 +119,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
         String quotaResetPolicy = request.quotaResetPolicy();
         int burstLimit = request.burstLimit();
         int slidingWindowHours = request.slidingWindowHours();
-        if (!Texts.hasText(tenantId) || !Texts.hasText(quotaScope) || !Texts.hasText(ownerCode)) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(quotaScope) || !EmptyValues.hasText(ownerCode)) {
             QuotaResetPolicy fallbackPolicy = QuotaResetPolicy.from(quotaResetPolicy);
             return QuotaRuntimeSnapshot.withoutWindow(fallbackPolicy.name(), burstLimit);
         }
@@ -237,10 +236,10 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
             changed = true;
         }
         if (!effectivePolicy.isRuntimeManaged()) {
-            boolean quotaStateNeedsReset = EmptyChecks.isNull(state.peakBorrowedCount())
+            boolean quotaStateNeedsReset = state.peakBorrowedCount() == null
                     || state.peakBorrowedCount() != 0
                     || state.windowStartedAt() != null
-                    || EmptyChecks.isNotNull(state.windowExpiresAt());
+                    || state.windowExpiresAt() != null;
             if (quotaStateNeedsReset) {
                 state = state.withoutRuntimeWindow(normalizedPolicy, state.lastResetAt());
                 changed = true;
@@ -266,7 +265,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
             }
         } else if (effectivePolicy == QuotaResetPolicy.SLIDING_WINDOW) {
             int normalizedHours = Math.max(1, slidingWindowHours);
-            boolean quotaWindowHasExpiredOrIsMissing = EmptyChecks.isNull(state.windowStartedAt())
+            boolean quotaWindowHasExpiredOrIsMissing = state.windowStartedAt() == null
                     || state.windowExpiresAt() == null
                     || !now.isBefore(state.windowExpiresAt());
             if (quotaWindowHasExpiredOrIsMissing) {

@@ -6,7 +6,6 @@ import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.OperationResult;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.service.DryRunGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -46,7 +45,7 @@ public class CompleteStep implements ExportStageStep {
     @Override
     public ExportStageResult execute(ExportJobContext context) {
         // ADR-026: 演练模式不更新 file_record 状态 / 不写 audit。
-        Map<String, Object> dryRunAttributes = EmptyChecks.isNull(context) ? null : context.getAttributes();
+        Map<String, Object> dryRunAttributes = context == null ? null : context.getAttributes();
         boolean dryRun = DryRunGuard.fromAttributes(dryRunAttributes).isDryRun();
         if (dryRun) {
             return ExportStageResult.success(stage());

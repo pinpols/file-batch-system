@@ -9,7 +9,7 @@ import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.w
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.infrastructure.config.DefaultTenantConfigPackageExcelService;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PackageValidationResult;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.SheetResult;
@@ -295,7 +295,7 @@ public class ConfigPackageExcelWorkbookWriter {
                 Cell cell = dataRow.createCell(c);
                 cell.setCellStyle(textStyle);
                 String cellText;
-                if (EmptyChecks.isNull(val)) {
+                if (val == null) {
                     cellText = EMPTY;
                 } else {
                     String serializedCellText = String.valueOf(val);
@@ -331,7 +331,7 @@ public class ConfigPackageExcelWorkbookWriter {
                 String val = row.get(def.columns().get(c));
                 Cell cell = dataRow.createCell(c);
                 cell.setCellStyle(textStyle);
-                cell.setCellValue(EmptyChecks.isNull(val) ? EMPTY : val);
+                cell.setCellValue(val == null ? EMPTY : val);
             }
         }
         int lastDataRow = Math.max(0, idx - 1);
@@ -349,7 +349,7 @@ public class ConfigPackageExcelWorkbookWriter {
             String columnName = def.columns().get(c);
             ConsoleExcelStyles.ColumnGuide guide = def.guides().get(columnName);
             boolean requiredFieldGuideIsNotApplicable =
-                    EmptyChecks.isNull(guide) || !guide.required() || EmptyChecks.isNotEmpty(guide.allowedValues());
+                    guide == null || !guide.required() || EmptyValues.isNotEmpty(guide.allowedValues());
             if (requiredFieldGuideIsNotApplicable) {
                 continue;
             }
@@ -438,9 +438,9 @@ public class ConfigPackageExcelWorkbookWriter {
 
     private void writeGuideRow(Row row, GuideRowData rowData, GuideStyles styles) {
         ConsoleExcelStyles.ColumnGuide guide = rowData.guide();
-        boolean isRequired = EmptyChecks.isNotNull(guide) && guide.required();
+        boolean isRequired = guide != null && guide.required();
         writeGuideCell(row, 0, rowData.sectionLabel(), styles.body());
-        if (EmptyChecks.isNotBlank(rowData.sectionLabel())) {
+        if (EmptyValues.isNotBlank(rowData.sectionLabel())) {
             addSheetLink(row.getCell(0), rowData.sheetName());
         }
         writeGuideCell(row, 1, rowData.columnName(), styles.body());
@@ -448,10 +448,10 @@ public class ConfigPackageExcelWorkbookWriter {
         writeGuideCell(row, 2, isRequired ? "★ 必填" : "选填", isRequired ? styles.required() : styles.optional());
         writeGuideCell(row, 3, guideLevelFor(rowData.sheetName(), rowData.columnName(), isRequired), styles.body());
         writeGuideCell(row, 4, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::formatHint), styles.body());
-        writeGuideCell(row, 5, EmptyChecks.isNull(guide) ? EMPTY : joinAllowedValues(guide), styles.body());
+        writeGuideCell(row, 5, guide == null ? EMPTY : joinAllowedValues(guide), styles.body());
         writeGuideCell(row, 6, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::description), styles.body());
         writeGuideCell(row, 7, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::example), styles.body());
-        writeGuideCell(row, 8, EmptyChecks.isNull(rowData.appliesTo()) ? EMPTY : rowData.appliesTo(), styles.body());
+        writeGuideCell(row, 8, rowData.appliesTo() == null ? EMPTY : rowData.appliesTo(), styles.body());
         writeGuideCell(
                 row,
                 9,
@@ -459,8 +459,7 @@ public class ConfigPackageExcelWorkbookWriter {
                         ? EMPTY
                         : defaultBehaviorFor(rowData.columnName(), guide),
                 styles.body());
-        writeGuideCell(
-                row, 10, EmptyChecks.isNull(rowData.fillExample()) ? EMPTY : rowData.fillExample(), styles.body());
+        writeGuideCell(row, 10, rowData.fillExample() == null ? EMPTY : rowData.fillExample(), styles.body());
     }
 
     private record GuideRowData(
@@ -561,14 +560,14 @@ public class ConfigPackageExcelWorkbookWriter {
                             "related_job_code", "WORKFLOW 节点引用的其他 Job（任意 worker 类型）")));
 
     public static String joinAllowedValues(ConsoleExcelStyles.ColumnGuide guide) {
-        if (guide == null || EmptyChecks.isEmpty(guide.allowedValues())) {
+        if (guide == null || EmptyValues.isEmpty(guide.allowedValues())) {
             return EMPTY;
         }
         return String.join(" / ", guide.allowedValues());
     }
 
     public static String defaultBehaviorFor(String colName, ConsoleExcelStyles.ColumnGuide guide) {
-        if (EmptyChecks.isNull(guide)) {
+        if (guide == null) {
             return EMPTY;
         }
         if (guide.required()) {
@@ -589,10 +588,10 @@ public class ConfigPackageExcelWorkbookWriter {
         if (COL_DESCRIPTION.equals(colName)) {
             return "可留空；仅作为备注。";
         }
-        if (EmptyChecks.isNotNull(guide.description()) && guide.description().contains("留空默认")) {
+        if (guide.description() != null && guide.description().contains("留空默认")) {
             return "可留空；按说明中的默认值处理。";
         }
-        if (EmptyChecks.isBlank(guide.example())) {
+        if (EmptyValues.isBlank(guide.example())) {
             return "可留空；不覆盖现有可选配置。";
         }
         return "可留空；建议值/常用值：" + guide.example() + "。";

@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
@@ -21,7 +20,7 @@ public final class ConsoleAiImageNormalizer {
     private ConsoleAiImageNormalizer() {}
 
     public static NormalizedImage normalize(byte[] input, ConsoleAiProperties.Image limits) {
-        if (EmptyChecks.isNull(input) || input.length < 1) {
+        if (input == null || input.length < 1) {
             throw invalidImage();
         }
         boolean inputExceedsByteLimit = input.length > limits.getMaxFileBytes();
@@ -99,12 +98,12 @@ public final class ConsoleAiImageNormalizer {
 
     public record NormalizedImage(byte[] bytes, String mediaType, int width, int height) {
         public NormalizedImage {
-            bytes = EmptyChecks.isNull(bytes) ? null : bytes.clone();
+            bytes = bytes == null ? null : bytes.clone();
         }
 
         @Override
         public byte[] bytes() {
-            return EmptyChecks.isNull(bytes) ? null : bytes.clone();
+            return bytes == null ? null : bytes.clone();
         }
 
         @Override
@@ -128,7 +127,7 @@ public final class ConsoleAiImageNormalizer {
 
         @Override
         public String toString() {
-            return "NormalizedImage[byteCount=" + (EmptyChecks.isNull(bytes) ? "null" : bytes.length)
+            return "NormalizedImage[byteCount=" + (bytes == null ? "null" : bytes.length)
                     + ", mediaType="
                     + mediaType + ", width=" + width + ", height=" + height + "]";
         }

@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.observability.BatchMetricsNames;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.outbox.OutboxChildRecordService;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
@@ -192,12 +192,12 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
 
     private List<OutboxEventEntity> pollPending(SchedulePlan plan) {
         OutboxEventQuery pendingQuery = OutboxEventQuery.builder()
-                .tenantId(EmptyChecks.isNull(plan) ? null : plan.getTenantId())
+                .tenantId(plan == null ? null : plan.getTenantId())
                 .pendingStatus1(OutboxPublishStatus.NEW.code())
                 .pendingStatus2(OutboxPublishStatus.FAILED.code())
                 .batchSize(governance.outbox().getBatchSize())
-                .shardTotal(EmptyChecks.isNull(plan) ? 1 : plan.getShardTotal())
-                .shardIndex(EmptyChecks.isNull(plan) ? 0 : plan.getShardIndex())
+                .shardTotal(plan == null ? 1 : plan.getShardTotal())
+                .shardIndex(plan == null ? 0 : plan.getShardIndex())
                 .build();
         long pollStartNanos = System.nanoTime();
         List<OutboxEventEntity> pendingEvents = outboxEventMapper.selectPending(pendingQuery);
@@ -239,7 +239,7 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
         List<InFlight> inFlight = new ArrayList<>(pendingEvents.size());
         for (OutboxEventEntity event : pendingEvents) {
             Integer claimAttempt = claimAttemptById.get(event.getId());
-            if (EmptyChecks.isNull(claimAttempt)) {
+            if (claimAttempt == null) {
                 continue;
             }
             CompletableFuture<Boolean> future;
@@ -249,7 +249,7 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
                 future = CompletableFuture.completedFuture(false);
             }
             CompletableFuture<Boolean> publishFuture =
-                    EmptyChecks.isNotNull(future) ? future : CompletableFuture.completedFuture(false);
+                    future != null ? future : CompletableFuture.completedFuture(false);
             inFlight.add(new InFlight(event, claimAttempt, publishFuture));
         }
         return inFlight;
@@ -264,7 +264,7 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
      * `future.getNow(false)` 已经对失败结果（false / 异常 / 仍未完成）做正确处理。
      */
     private void awaitAcknowledgements(List<InFlight> inFlight) {
-        if (EmptyChecks.isNotEmpty(inFlight)) {
+        if (EmptyValues.isNotEmpty(inFlight)) {
             CompletableFuture<?>[] acknowledgementFutures =
                     inFlight.stream().map(InFlight::future).toArray(CompletableFuture[]::new);
             CompletableFuture.allOf(acknowledgementFutures)
@@ -475,7 +475,7 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
         retry.setOutboxEventCreatedAt(event.getCreatedAt());
         retry.setEventKey(event.getEventKey());
         retry.setPublishAttempt(publishAttemptNo);
-        boolean retryIsExhausted = EmptyChecks.isNull(nextRetryAt);
+        boolean retryIsExhausted = nextRetryAt == null;
         retry.setRetryStatus(
                 retryIsExhausted ? RetryScheduleStatus.EXHAUSTED.code() : RetryScheduleStatus.FAILED.code());
         retry.setRetryReason(reason);

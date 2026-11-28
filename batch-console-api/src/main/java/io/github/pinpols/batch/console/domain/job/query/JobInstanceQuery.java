@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.job.query;
 
 import io.github.pinpols.batch.common.model.PageRequest;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -41,7 +41,7 @@ public record JobInstanceQuery(
     }
 
     private static LocalDate parseCanonicalBizDate(String bizDate) {
-        if (!Texts.hasText(bizDate)) {
+        if (!EmptyValues.hasText(bizDate)) {
             return null;
         }
         try {

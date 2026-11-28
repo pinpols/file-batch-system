@@ -11,10 +11,10 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.jdbc.JdbcExceptionSupport;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.trigger.domain.ExternalEventLaunchResponse;
 import io.github.pinpols.batch.trigger.domain.ExternalEventLaunchTarget;
 import io.github.pinpols.batch.trigger.domain.command.ExternalEventLaunchCommand;
@@ -80,14 +80,14 @@ final class TriggerExternalEventService {
         triggerRequestMapper.acquireIdempotencyFence(request.tenantId(), command.idempotencyKey());
         TriggerRequestEntity existingRequest =
                 triggerRequestMapper.selectByTenantAndDedupKey(request.tenantId(), command.idempotencyKey());
-        if (EmptyChecks.isNotNull(existingRequest)) {
+        if (existingRequest != null) {
             throw BizException.of(ResultCode.STATE_CONFLICT, EXTERNAL_EVENT_IDENTITY_CONFLICT);
         }
         triggerRequestMapper.acquireExternalEventIdentityFence(
                 request.tenantId(), command.eventSource(), request.externalEventId());
         ExternalEventDeliveryEntity existing = externalEventDeliveryMapper.selectByIdentityForUpdate(
                 request.tenantId(), command.eventSource(), request.externalEventId());
-        if (EmptyChecks.isNotNull(existing)) {
+        if (existing != null) {
             assertSameExternalEventPayload(existing, request);
             registerExternalEventDeliveryAlias(existing, command.idempotencyKey());
             return externalEventLaunchResponse(existing);
@@ -95,12 +95,12 @@ final class TriggerExternalEventService {
 
         List<Long> targets = triggerRequestMapper.selectEnabledExternalEventWorkflowTargets(
                 request.tenantId(), request.externalEventCode());
-        if (EmptyChecks.isEmpty(targets)) {
+        if (EmptyValues.isEmpty(targets)) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.trigger.external_event_target_not_found");
         }
         List<Long> existingWorkflowTargets = triggerRequestMapper.selectWorkflowTargetsByExternalEventIdentity(
                 request.tenantId(), command.eventSource(), request.externalEventId());
-        if (EmptyChecks.isNotEmpty(existingWorkflowTargets)) {
+        if (EmptyValues.isNotEmpty(existingWorkflowTargets)) {
             throw BizException.of(ResultCode.STATE_CONFLICT, EXTERNAL_EVENT_IDENTITY_CONFLICT);
         }
         for (Long workflowDefinitionId : targets) {
@@ -123,7 +123,7 @@ final class TriggerExternalEventService {
         if (externalEventDeliveryMapper.insert(delivery) == 0) {
             delivery = externalEventDeliveryMapper.selectByIdentityForUpdate(
                     request.tenantId(), command.eventSource(), request.externalEventId());
-            Guard.requireFound(delivery, "concurrent external event delivery not found");
+            Preconditions.requireFound(delivery, "concurrent external event delivery not found");
             assertSameExternalEventPayload(delivery, request);
             registerExternalEventDeliveryAlias(delivery, command.idempotencyKey());
             return externalEventLaunchResponse(delivery);
@@ -166,15 +166,15 @@ final class TriggerExternalEventService {
     }
 
     private void validateExternalEventCommand(ExternalEventLaunchCommand command) {
-        if (EmptyChecks.isNull(command)) {
+        if (command == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
         }
         ExternalEventLaunchInput request = command.request();
-        if (EmptyChecks.isNull(request) || EmptyChecks.isBlank(request.tenantId())) {
+        if (request == null || EmptyValues.isBlank(request.tenantId())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
         }
         String eventSource = command.eventSource();
-        if (EmptyChecks.isBlank(eventSource)) {
+        if (EmptyValues.isBlank(eventSource)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
         }
         String trimmedEventSource = eventSource.trim();
@@ -182,7 +182,7 @@ final class TriggerExternalEventService {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
         }
         String externalEventCode = request.externalEventCode();
-        if (EmptyChecks.isBlank(externalEventCode)) {
+        if (EmptyValues.isBlank(externalEventCode)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
         }
         String trimmedExternalEventCode = externalEventCode.trim();
@@ -190,17 +190,17 @@ final class TriggerExternalEventService {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
         }
         String externalEventId = request.externalEventId();
-        if (EmptyChecks.isBlank(externalEventId)) {
+        if (EmptyValues.isBlank(externalEventId)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
         }
         String trimmedExternalEventId = externalEventId.trim();
         if (trimmedExternalEventId.length() > EXTERNAL_EVENT_ID_MAX_LENGTH) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
         }
-        boolean externalEventRequestIdentityIsIncomplete = EmptyChecks.isNull(request.bizDate())
-                || EmptyChecks.isBlank(command.idempotencyKey())
-                || EmptyChecks.isBlank(command.requestId())
-                || EmptyChecks.isBlank(command.traceId());
+        boolean externalEventRequestIdentityIsIncomplete = request.bizDate() == null
+                || EmptyValues.isBlank(command.idempotencyKey())
+                || EmptyValues.isBlank(command.requestId())
+                || EmptyValues.isBlank(command.traceId());
         if (externalEventRequestIdentityIsIncomplete) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
         }

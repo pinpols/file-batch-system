@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.application.ops.query.ConsolePersistentWaitQuery;
 import io.github.pinpols.batch.console.application.ops.response.ConsolePersistentWaitPageResponse;
@@ -48,8 +47,8 @@ public class ConsolePersistentWaitController {
                 request.workflowDefinitionId(),
                 request.bizDateFrom(),
                 request.bizDateTo(),
-                EmptyChecks.isNull(request.pageNo()) ? 1 : request.pageNo(),
-                EmptyChecks.isNull(request.pageSize()) ? DEFAULT_PAGE_SIZE : request.pageSize());
+                request.pageNo() == null ? 1 : request.pageNo(),
+                request.pageSize() == null ? DEFAULT_PAGE_SIZE : request.pageSize());
         return responseFactory.success(orchestrator.listPersistentWaits(query));
     }
 

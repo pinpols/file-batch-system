@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.common.constants;
 
+import io.github.pinpols.batch.common.utils.EmptyValues;
+
 /**
  * 统一错误文案。S2.1:全部中文化(原 12 条英文 + 5 helper),与 messages_zh_CN.properties 默认 zh_CN 输出对齐;真要做 i18n
  * 翻译的接入方应直接抛 {@code BizException.of(code, key, args)} 走 MessageSource,而非读这里的常量(常量是 fail-safe
@@ -32,9 +34,7 @@ public final class CommonErrorMessages {
     }
 
     public static String invalidFormat(String fieldName, String expectedFormat) {
-        return fieldName
-                + " 格式不合法"
-                + (expectedFormat == null || expectedFormat.isBlank() ? "" : "(期望格式 " + expectedFormat + ")");
+        return fieldName + " 格式不合法" + (EmptyValues.isBlank(expectedFormat) ? "" : "(期望格式 " + expectedFormat + ")");
     }
 
     public static String invalidValue(String fieldName) {

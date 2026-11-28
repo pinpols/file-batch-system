@@ -10,9 +10,8 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.jdbc.JdbcExceptionSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.trigger.domain.ExternalEventLaunchResponse;
 import io.github.pinpols.batch.trigger.domain.ExternalEventLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
@@ -64,13 +63,13 @@ public class DefaultTriggerService implements TriggerService {
     @Override
     public LaunchResponse verifyCatchUpSubmission(TriggerLaunchCommand command) {
         // 完整性检查按短路顺序求值，保证 request 为 null 时不读取其字段。
-        boolean catchUpCommandIncomplete = EmptyChecks.isNull(command)
-                || EmptyChecks.isNull(command.request())
-                || EmptyChecks.isBlank(command.idempotencyKey())
-                || EmptyChecks.isBlank(command.request().tenantId())
-                || EmptyChecks.isNull(command.request().workflowDefinitionId())
+        boolean catchUpCommandIncomplete = command == null
+                || command.request() == null
+                || EmptyValues.isBlank(command.idempotencyKey())
+                || EmptyValues.isBlank(command.request().tenantId())
+                || command.request().workflowDefinitionId() == null
                 || command.request().workflowDefinitionId() <= 0
-                || EmptyChecks.isNull(command.request().bizDate());
+                || command.request().bizDate() == null;
         if (catchUpCommandIncomplete || command.request().triggerType() != TriggerType.CATCH_UP) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
         }
@@ -121,23 +120,23 @@ public class DefaultTriggerService implements TriggerService {
     }
 
     private void validateRequest(TriggerLaunchCommand command) {
-        Guard.require(EmptyChecks.isNotNull(command), "launch command is required");
-        if (EmptyChecks.isBlank(command.idempotencyKey())) {
+        Preconditions.require(command != null, "launch command is required");
+        if (EmptyValues.isBlank(command.idempotencyKey())) {
             throw BizException.of(ResultCode.MISSING_IDEMPOTENCY_KEY, "error.common.missing_idempotency_key");
         }
-        if (EmptyChecks.isNull(command.request())) {
+        if (command.request() == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
         }
-        if (EmptyChecks.isBlank(command.request().tenantId())) {
+        if (EmptyValues.isBlank(command.request().tenantId())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
         }
         Map<String, Object> params = command.request().params();
-        boolean containsForbiddenParentWorkflowContext = EmptyChecks.isNotNull(params)
-                && (params.containsKey("_parentWorkflowRunId") || params.containsKey("_parentNodeCode"));
+        boolean containsForbiddenParentWorkflowContext =
+                params != null && (params.containsKey("_parentWorkflowRunId") || params.containsKey("_parentNodeCode"));
         if (containsForbiddenParentWorkflowContext) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.trigger.parent_context_forbidden");
         }
-        boolean hasWorkflowTarget = EmptyChecks.isNotNull(command.request().workflowDefinitionId());
+        boolean hasWorkflowTarget = command.request().workflowDefinitionId() != null;
         if (!hasWorkflowTarget) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.trigger.workflow_target_required");
         }
@@ -148,15 +147,15 @@ public class DefaultTriggerService implements TriggerService {
                 command.request().tenantId(), command.request().workflowDefinitionId())) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.definition_not_found");
         }
-        if (EmptyChecks.isNull(command.request().bizDate())) {
+        if (command.request().bizDate() == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.biz_date_required");
         }
-        if (EmptyChecks.isNull(command.request().triggerType())) {
+        if (command.request().triggerType() == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.trigger.type_required");
         }
         String externalEventCode = command.request().externalEventCode();
-        boolean externalEventCodeIsInvalidForTrigger = EmptyChecks.isNotNull(externalEventCode)
-                && (!Texts.hasText(externalEventCode)
+        boolean externalEventCodeIsInvalidForTrigger = externalEventCode != null
+                && (!EmptyValues.hasText(externalEventCode)
                         || externalEventCode.trim().length()
                                 > TriggerExternalEventService.EXTERNAL_EVENT_CODE_MAX_LENGTH
                         || command.request().triggerType() != TriggerType.EVENT);
@@ -165,18 +164,16 @@ public class DefaultTriggerService implements TriggerService {
         }
         String eventSource = command.request().externalEventSource();
         String eventId = command.request().externalEventId();
-        boolean externalEventIdentityWasProvided = EmptyChecks.isNotNull(externalEventCode)
-                || EmptyChecks.isNotNull(eventSource)
-                || EmptyChecks.isNotNull(eventId);
+        boolean externalEventIdentityWasProvided = externalEventCode != null || eventSource != null || eventId != null;
         boolean providedExternalEventIdentityIsInvalid = externalEventIdentityWasProvided
-                && (!Texts.hasText(eventSource)
+                && (!EmptyValues.hasText(eventSource)
                         || eventSource.trim().length() > TriggerExternalEventService.EXTERNAL_EVENT_SOURCE_MAX_LENGTH
                         || !eventSource.equals(eventSource.trim())
-                        || !Texts.hasText(eventId)
+                        || !EmptyValues.hasText(eventId)
                         || eventId.trim().length() > TriggerExternalEventService.EXTERNAL_EVENT_ID_MAX_LENGTH
                         || !eventId.equals(eventId.trim())
                         || command.request().triggerType() != TriggerType.EVENT
-                        || !Texts.hasText(externalEventCode));
+                        || !EmptyValues.hasText(externalEventCode));
         if (providedExternalEventIdentityIsInvalid) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.trigger.external_event_identity_invalid");
         }

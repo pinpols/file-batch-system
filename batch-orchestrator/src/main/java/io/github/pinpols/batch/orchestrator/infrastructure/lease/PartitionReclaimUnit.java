@@ -5,7 +5,6 @@ import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
 import io.github.pinpols.batch.orchestrator.application.service.governance.UnknownExternalOutcomeCloser;
@@ -102,7 +101,7 @@ public class PartitionReclaimUnit {
     }
 
     private void doReclaim(JobPartitionEntity partition, JobTaskEntity task, JobInstanceEntity jobInstance) {
-        if (EmptyChecks.isNotNull(task.getNonIdempotentStartedAt())) {
+        if (task.getNonIdempotentStartedAt() != null) {
             closeUnknownExternalOutcome(partition, task);
             return;
         }

@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.constants.NodeOutputKeys;
 import io.github.pinpols.batch.common.enums.SystemPipelineTaskKeys;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
@@ -75,7 +75,7 @@ public class ProcessStepExecutionAdapter
         // 注意:稳定 batchKey 配合 P0-2 staging tenant/target 强校验,跨 tenant 复用同 batchKey 仍会被
         // commit/feedback 的 WHERE 过滤兜住。
         if (attributes.get(PipelineRuntimeKeys.PROCESS_PAYLOAD) instanceof ProcessPayload typed
-                && EmptyChecks.isNotBlank(typed.batchKey())) {
+                && EmptyValues.isNotBlank(typed.batchKey())) {
             context.setBatchKey(typed.batchKey());
         }
         return context;
@@ -83,12 +83,12 @@ public class ProcessStepExecutionAdapter
 
     @Override
     public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
-        if (EmptyChecks.isNull(request)) {
+        if (request == null) {
             return ReplayCapabilityDeclaration.unknown(ProcessWorkerType.PROCESS);
         }
         Map<String, Object> requestContext = request.context();
         Map<String, Object> attributes =
-                EmptyChecks.isNull(requestContext) ? new LinkedHashMap<>() : new LinkedHashMap<>(requestContext);
+                requestContext == null ? new LinkedHashMap<>() : new LinkedHashMap<>(requestContext);
         Object rawPayload = attributes.get(PipelineRuntimeKeys.PAYLOAD);
         if (rawPayload instanceof String payload) {
             try {
@@ -104,7 +104,7 @@ public class ProcessStepExecutionAdapter
     @SuppressWarnings("unchecked")
     private void enrichProcessAttributes(String rawPayload, Map<String, Object> attributes)
             throws JsonProcessingException {
-        if (EmptyChecks.isBlank(rawPayload)) {
+        if (EmptyValues.isBlank(rawPayload)) {
             return;
         }
         Object parsed = objectMapper.readValue(rawPayload, Object.class);
@@ -112,7 +112,7 @@ public class ProcessStepExecutionAdapter
             Map<String, Object> payloadAttributes = (Map<String, Object>) payloadMap;
             payloadAttributes.forEach(attributes::putIfAbsent);
             Object processImplCode = payloadAttributes.get(ComputeStep.ATTR_PROCESS_IMPL_CODE);
-            if (EmptyChecks.isNotNull(processImplCode)) {
+            if (processImplCode != null) {
                 attributes.putIfAbsent(ComputeStep.ATTR_PROCESS_IMPL_CODE, String.valueOf(processImplCode));
             }
             Object systemStepParams = payloadAttributes.get(SystemPipelineTaskKeys.STEP_PARAMS);
@@ -136,7 +136,7 @@ public class ProcessStepExecutionAdapter
 
     @Override
     protected boolean isSuccess(ProcessStageResult result) {
-        return EmptyChecks.isNotNull(result) && result.success();
+        return result != null && result.success();
     }
 
     @Override
@@ -177,7 +177,7 @@ public class ProcessStepExecutionAdapter
         // ADR-041 Phase1.3:归一化 count 信封。process:input=processedCount,output=publishedCount(缺省回落
         // stagedCount)。
         Object processOutputCount = attributes.get(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT);
-        if (EmptyChecks.isNull(processOutputCount)) {
+        if (processOutputCount == null) {
             processOutputCount = attributes.get(ProcessRuntimeKeys.PROCESS_STAGED_COUNT);
         }
         putIfPresent(outputs, NodeOutputKeys.INPUT_COUNT, attributes.get(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT));
@@ -187,7 +187,7 @@ public class ProcessStepExecutionAdapter
                 outputs,
                 PipelineRuntimeKeys.HIGH_WATER_MARK_OUT,
                 attributes.get(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT));
-        if (EmptyChecks.isNotEmpty(outputs)) {
+        if (EmptyValues.isNotEmpty(outputs)) {
             attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
         }
         return new StepExecutionResponse(true, "SUCCESS", "process stage completed");

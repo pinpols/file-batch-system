@@ -5,8 +5,8 @@ import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.common.utils.SensitiveEvidenceMasking;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleClusterDiagnosticResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleInstanceDiagnosisResponse;
@@ -203,7 +203,7 @@ public class ConsoleClusterDiagnosticService {
 
     public ConsoleInstanceDiagnosisResponse instanceDiagnosis(String tenantId, Long instanceId) {
         String resolved = tenantGuard.resolveTenant(tenantId);
-        JobInstanceDiagnosticView instance = Guard.requireFound(
+        JobInstanceDiagnosticView instance = Preconditions.requireFound(
                 diagnosticMapper.selectJobInstanceSummary(resolved, instanceId), "job instance not found");
         List<ClusterStatusCountView> partitionStatusCounts =
                 diagnosticMapper.partitionStatusCounts(resolved, instanceId);
@@ -214,7 +214,7 @@ public class ConsoleClusterDiagnosticService {
                 diagnosticMapper.activeTaskWorkerIssues(resolved, instanceId, TASK_HEARTBEAT_STALE_SECONDS);
         String workerGroup = instance.workerGroup();
         String normalizedWorkerGroup = CodeNormalizer.toUpperOrNull(workerGroup);
-        Long onlineWorkersForGroup = EmptyChecks.isNull(normalizedWorkerGroup)
+        Long onlineWorkersForGroup = normalizedWorkerGroup == null
                 ? null
                 : valueOrZero(diagnosticMapper.countOnlineWorkersForGroup(resolved, normalizedWorkerGroup));
 
@@ -226,7 +226,7 @@ public class ConsoleClusterDiagnosticService {
         long activeOutboxEvents = countOutboxStatuses(outboxStatusCounts, ACTIVE_OUTBOX_STATUSES);
 
         String currentStatus = instance.instanceStatus();
-        String instanceStatus = EmptyChecks.isNull(currentStatus) ? "" : currentStatus;
+        String instanceStatus = currentStatus == null ? "" : currentStatus;
         boolean activeInstanceWithoutChildren = isActive(instanceStatus) && totalPartitions == 0 && totalTasks == 0;
         if (activeInstanceWithoutChildren) {
             List<String> recommendations = List.of(
@@ -254,12 +254,12 @@ public class ConsoleClusterDiagnosticService {
                     evidence));
         }
         boolean activeInstanceWithoutOnlineWorker =
-                isActive(instanceStatus) && EmptyChecks.isNotNull(onlineWorkersForGroup) && onlineWorkersForGroup == 0;
+                isActive(instanceStatus) && onlineWorkersForGroup != null && onlineWorkersForGroup == 0;
         if (activeInstanceWithoutOnlineWorker) {
             List<String> recommendations = List.of(
                     "Start or recover a worker in that workerGroup", "Adjust job_definition.worker_group if needed");
             String instanceWorkerGroup = instance.workerGroup();
-            String workerGroupEvidence = EmptyChecks.isNull(instanceWorkerGroup) ? "" : instanceWorkerGroup;
+            String workerGroupEvidence = instanceWorkerGroup == null ? "" : instanceWorkerGroup;
             Map<String, Object> evidence = Map.of("workerGroup", workerGroupEvidence);
             findings.add(finding(
                     "WARN",
@@ -282,7 +282,7 @@ public class ConsoleClusterDiagnosticService {
         }
         workerIssues.forEach(issue -> {
             String issueReason = issue.reasonCode();
-            String reasonCode = EmptyChecks.isNull(issueReason) ? "TASK_WORKER_ISSUE" : issueReason;
+            String reasonCode = issueReason == null ? "TASK_WORKER_ISSUE" : issueReason;
             List<String> recommendations = List.of(
                     "Check worker registration status and heartbeats",
                     "Retry or cancel partitions after the lease is reclaimed");
@@ -297,7 +297,7 @@ public class ConsoleClusterDiagnosticService {
         return new ConsoleInstanceDiagnosisResponse(
                 resolved,
                 instance.id(),
-                EmptyChecks.isEmpty(findings),
+                EmptyValues.isEmpty(findings),
                 instanceSummary(instance),
                 summary(partitionStatusCounts, taskStatusCounts, outboxStatusCounts, onlineWorkersForGroup),
                 findings);
@@ -392,7 +392,7 @@ public class ConsoleClusterDiagnosticService {
     }
 
     private static void putWhenPresent(Map<String, Object> target, String key, Object value) {
-        if (EmptyChecks.isNotNull(value)) {
+        if (value != null) {
             target.put(key, value);
         }
     }

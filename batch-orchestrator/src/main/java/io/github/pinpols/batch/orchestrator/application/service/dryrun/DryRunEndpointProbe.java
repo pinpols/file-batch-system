@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.security.BlockedAddressException;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.infrastructure.http.OrchestratorOutboundTransport;
 import java.net.URI;
 import java.time.Duration;
@@ -32,7 +32,7 @@ final class DryRunEndpointProbe {
         int probed = 0;
         for (String key : ENDPOINT_PARAM_KEYS) {
             Object raw = params.get(key);
-            if (!(raw instanceof String url) || !Texts.hasText(url)) {
+            if (!(raw instanceof String url) || !EmptyValues.hasText(url)) {
                 continue;
             }
             probed++;

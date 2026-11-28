@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.router;
 
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.route.WorkerRouter;
 import io.github.pinpols.batch.orchestrator.application.route.WorkerRoutingPolicy;
 import java.util.List;
@@ -26,7 +26,7 @@ public class DefaultWorkerRouter implements WorkerRouter {
     public WorkerRouteModel route(String tenantId, String jobCode, String stepCode) {
         WorkerRouteModel route = new WorkerRouteModel();
         route.setWorkerCode(tenantId + ":" + jobCode + ":" + stepCode);
-        String workerType = EmptyChecks.isBlank(stepCode) ? "DEFAULT" : stepCode.toUpperCase();
+        String workerType = EmptyValues.isBlank(stepCode) ? "DEFAULT" : stepCode.toUpperCase();
         route.setWorkerType(workerType);
         route.setPriority(5);
         route.setAvailable(true);

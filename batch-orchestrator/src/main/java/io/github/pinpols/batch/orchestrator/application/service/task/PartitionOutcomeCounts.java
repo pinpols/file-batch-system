@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef;
 import io.github.pinpols.batch.orchestrator.domain.view.PartitionStatusSummary;
@@ -49,7 +48,7 @@ record PartitionOutcomeCounts(long total, long success, long failed, long cancel
 
     /** 摘要缺失或任一计数不一致时返回 false，调用方据此判定实例进度冲突。 */
     boolean matches(PartitionStatusSummary summary) {
-        return EmptyChecks.isNotNull(summary)
+        return summary != null
                 && summary.totalCount() == total
                 && summary.successCount() == success
                 && summary.failedCount() == failed

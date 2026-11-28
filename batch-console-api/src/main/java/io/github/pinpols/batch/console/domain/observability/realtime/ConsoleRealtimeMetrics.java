@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.observability.realtime;
 
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -57,6 +58,6 @@ public class ConsoleRealtimeMetrics {
     }
 
     private String normalize(String value) {
-        return value == null || value.isBlank() ? "unknown" : value;
+        return EmptyValues.isBlank(value) ? "unknown" : value;
     }
 }

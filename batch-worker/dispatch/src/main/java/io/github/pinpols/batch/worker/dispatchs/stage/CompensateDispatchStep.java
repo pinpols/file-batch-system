@@ -7,7 +7,6 @@ import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.OperationResult;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.service.DryRunGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
@@ -49,12 +48,11 @@ public class CompensateDispatchStep implements DispatchStageStep {
     @Override
     public DispatchStageResult execute(DispatchJobContext context) {
         // ADR-026: 演练模式不发外部补偿（也没真投递过），跳过即可。
-        Map<String, Object> dryRunAttributes = EmptyChecks.isNull(context) ? null : context.getAttributes();
+        Map<String, Object> dryRunAttributes = context == null ? null : context.getAttributes();
         if (DryRunGuard.fromAttributes(dryRunAttributes).isDryRun()) {
             return DispatchStageResult.success(stage());
         }
-        Object payload =
-                EmptyChecks.isNull(context) ? null : context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
+        Object payload = context == null ? null : context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
         if (!(payload instanceof DispatchPayload dispatchPayload)) {
             return DispatchStageResult.failure(
                     stage(),

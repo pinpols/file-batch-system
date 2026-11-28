@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.orchestrator.domain.command;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.List;
 import java.util.Map;
 
@@ -9,12 +8,12 @@ public record VerifierFailure(String code, String message, Object evidence) {
 
     /** 旧输入不改写；内部以空集合表示无失败，保留原 toString 归一化和 null 元素的位置语义。 */
     public static List<VerifierFailure> fromWire(List<Map<String, Object>> failures) {
-        if (EmptyChecks.isNull(failures)) {
+        if (failures == null) {
             return List.of();
         }
         return failures.stream()
                 .map(failure -> {
-                    if (EmptyChecks.isNull(failure)) {
+                    if (failure == null) {
                         return null;
                     }
                     Object codeValue = failure.get("code");
@@ -28,6 +27,6 @@ public record VerifierFailure(String code, String message, Object evidence) {
     }
 
     private static String stringValue(Object value) {
-        return EmptyChecks.isNull(value) ? null : value.toString();
+        return value == null ? null : value.toString();
     }
 }

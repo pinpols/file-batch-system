@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarHolidayRow;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -23,7 +22,7 @@ public record ConsoleHolidayResponse(
         Instant updatedAt) {
 
     public static ConsoleHolidayResponse from(CalendarHolidayRow row) {
-        if (EmptyChecks.isNull(row)) {
+        if (row == null) {
             return null;
         }
         return new ConsoleHolidayResponse(

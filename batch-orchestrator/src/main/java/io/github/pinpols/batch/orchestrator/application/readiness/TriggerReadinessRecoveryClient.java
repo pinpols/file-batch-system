@@ -7,9 +7,8 @@ import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReadinessWaitEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.http.OrchestratorOutboundTransport;
 import java.io.IOException;
@@ -53,7 +52,7 @@ public class TriggerReadinessRecoveryClient {
     }
 
     public RecoveryOutcome recover(ReadinessWaitEntity wait) {
-        if (EmptyChecks.isNull(wait) || !Texts.hasText(internalSecret)) {
+        if (wait == null || !EmptyValues.hasText(internalSecret)) {
             return RecoveryOutcome.FAILED;
         }
         try {
@@ -104,7 +103,7 @@ public class TriggerReadinessRecoveryClient {
     private String extractOutcome(String responseBody) {
         try {
             RecoverOutcomeBody body = JsonUtils.fromJson(responseBody, RecoverOutcomeBody.class);
-            return EmptyChecks.isNull(body) ? null : body.outcome();
+            return body == null ? null : body.outcome();
         } catch (RuntimeException parseFailure) {
             return null;
         }

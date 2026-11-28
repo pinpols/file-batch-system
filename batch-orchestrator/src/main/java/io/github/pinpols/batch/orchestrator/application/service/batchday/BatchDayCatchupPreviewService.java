@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.batchday;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.config.BatchDayScanProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
@@ -43,7 +43,7 @@ public class BatchDayCatchupPreviewService {
     private final BatchDayScanProperties batchDayScanProperties;
 
     public BatchDayCatchupPreview preview(String tenantId, String calendarCode) {
-        boolean calendarScopeIsIncomplete = EmptyChecks.isBlank(tenantId) || EmptyChecks.isBlank(calendarCode);
+        boolean calendarScopeIsIncomplete = EmptyValues.isBlank(tenantId) || EmptyValues.isBlank(calendarCode);
         if (calendarScopeIsIncomplete) {
             throw new IllegalArgumentException("tenantId and calendarCode are required");
         }
@@ -55,12 +55,11 @@ public class BatchDayCatchupPreviewService {
 
     public BatchDayHistoricalGapInventory inventoryHistoricalGaps(
             String tenantId, String calendarCode, LocalDate fromDate, LocalDate throughDate) {
-        boolean calendarScopeIsIncomplete = EmptyChecks.isBlank(tenantId) || EmptyChecks.isBlank(calendarCode);
+        boolean calendarScopeIsIncomplete = EmptyValues.isBlank(tenantId) || EmptyValues.isBlank(calendarCode);
         if (calendarScopeIsIncomplete) {
             throw new IllegalArgumentException("tenantId and calendarCode are required");
         }
-        boolean catchupDateRangeIsInvalid =
-                EmptyChecks.isNull(fromDate) || EmptyChecks.isNull(throughDate) || throughDate.isBefore(fromDate);
+        boolean catchupDateRangeIsInvalid = fromDate == null || throughDate == null || throughDate.isBefore(fromDate);
         if (catchupDateRangeIsInvalid) {
             throw new IllegalArgumentException("A valid inclusive date range is required");
         }
@@ -82,7 +81,7 @@ public class BatchDayCatchupPreviewService {
             catchupControlMapper.setTenantContext(tenantId);
             BusinessCalendarEntity calendar =
                     businessCalendarMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, calendarCode, true);
-            if (EmptyChecks.isNull(calendar)) {
+            if (calendar == null) {
                 throw new IllegalArgumentException("Enabled business calendar was not found");
             }
             Instant previewInstant = dateTimeSupport.nowInstant();
@@ -101,7 +100,7 @@ public class BatchDayCatchupPreviewService {
             catchupControlMapper.setTenantContext(tenantId);
             BusinessCalendarEntity calendar =
                     businessCalendarMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, calendarCode, true);
-            if (EmptyChecks.isNull(calendar)) {
+            if (calendar == null) {
                 throw new IllegalArgumentException("Enabled business calendar was not found");
             }
             Instant currentInstant = dateTimeSupport.nowInstant();
@@ -137,11 +136,11 @@ public class BatchDayCatchupPreviewService {
         LocalDate latestExisting = null;
         String cursorSource = "PERSISTED_CURSOR";
         LocalDate cursor = persistedCursor;
-        if (EmptyChecks.isNull(cursor)) {
+        if (cursor == null) {
             latestExisting = batchDayInstanceMapper.selectLatestBizDateAtOrBefore(
                     calendar.tenantId(), calendar.calendarCode(), currentBizDate);
-            cursor = EmptyChecks.isNull(latestExisting) ? currentBizDate.minusDays(1) : latestExisting;
-            cursorSource = EmptyChecks.isNull(latestExisting) ? "CURRENT_DATE_BASELINE" : "LATEST_BATCH_DAY_BASELINE";
+            cursor = latestExisting == null ? currentBizDate.minusDays(1) : latestExisting;
+            cursorSource = latestExisting == null ? "CURRENT_DATE_BASELINE" : "LATEST_BATCH_DAY_BASELINE";
         }
 
         long remaining = Math.max(0, ChronoUnit.DAYS.between(cursor, currentBizDate));
@@ -166,16 +165,16 @@ public class BatchDayCatchupPreviewService {
                 scanLimit,
                 dates,
                 false,
-                EmptyChecks.isNotNull(control) && Boolean.TRUE.equals(control.paused()),
-                EmptyChecks.isNull(control) ? null : control.pausedAt(),
-                EmptyChecks.isNull(control) ? null : control.pausedBy(),
-                EmptyChecks.isNull(control) ? null : control.pauseReason());
+                control != null && Boolean.TRUE.equals(control.paused()),
+                control == null ? null : control.pausedAt(),
+                control == null ? null : control.pausedBy(),
+                control == null ? null : control.pauseReason());
         return preview;
     }
 
     private LocalDate resolveCurrentBusinessDate(BusinessCalendarEntity calendar, Instant now) {
         ZoneId zone = timezoneProvider.resolveOrDefault(calendar.timezone());
-        LocalTime cutoff = EmptyChecks.isNull(calendar.cutoffTime()) ? DEFAULT_CUTOFF_TIME : calendar.cutoffTime();
+        LocalTime cutoff = calendar.cutoffTime() == null ? DEFAULT_CUTOFF_TIME : calendar.cutoffTime();
         ZonedDateTime localNow = now.atZone(zone);
         boolean cutoffHasNotBeenReached = localNow.toLocalTime().isBefore(cutoff);
         if (cutoffHasNotBeenReached) {

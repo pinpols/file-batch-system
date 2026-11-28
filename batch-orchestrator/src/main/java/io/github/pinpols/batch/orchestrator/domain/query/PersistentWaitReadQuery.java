@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.orchestrator.domain.query;
 
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -26,7 +26,7 @@ public record PersistentWaitReadQuery(
     }
 
     private static String requireTenant(String tenantId) {
-        if (!Texts.hasText(tenantId)) {
+        if (!EmptyValues.hasText(tenantId)) {
             throw new IllegalArgumentException("tenantId must not be blank");
         }
         return tenantId;

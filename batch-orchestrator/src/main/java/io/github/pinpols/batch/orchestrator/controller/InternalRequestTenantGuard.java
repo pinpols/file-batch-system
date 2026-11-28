@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.config.InternalAuthFilter;
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -18,10 +18,10 @@ final class InternalRequestTenantGuard {
 
     static String resolveTenant(HttpServletRequest request, String declaredTenantId) {
         Object resolved = request.getAttribute(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID);
-        if (!(resolved instanceof String resolvedTenantId) || !Texts.hasText(resolvedTenantId)) {
+        if (!(resolved instanceof String resolvedTenantId) || !EmptyValues.hasText(resolvedTenantId)) {
             return declaredTenantId;
         }
-        if (!Texts.hasText(declaredTenantId)) {
+        if (!EmptyValues.hasText(declaredTenantId)) {
             return resolvedTenantId;
         }
         if (!resolvedTenantId.equals(declaredTenantId)) {

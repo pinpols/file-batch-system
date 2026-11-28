@@ -5,11 +5,10 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
@@ -93,13 +92,13 @@ public class PreprocessStep implements ImportStageStep {
         Map<String, Object> attrs = context.getAttributes();
         ImportPayload importPayload =
                 attrs.get(PipelineRuntimeKeys.IMPORT_PAYLOAD) instanceof ImportPayload payload ? payload : null;
-        boolean rawPayloadIsBlank = !Texts.hasText(context.getRawPayload());
+        boolean rawPayloadIsBlank = !EmptyValues.hasText(context.getRawPayload());
         if (rawPayloadIsBlank) {
-            boolean importPayloadHasNoSource = EmptyChecks.isNull(importPayload)
-                    || (!Texts.hasText(importPayload.content())
-                            && !Texts.hasText(importPayload.contentBase64())
+            boolean importPayloadHasNoSource = importPayload == null
+                    || (!EmptyValues.hasText(importPayload.content())
+                            && !EmptyValues.hasText(importPayload.contentBase64())
                             // 大文件对象自动加载:无内联内容但带 storagePath 时,源在对象存储,放行到 resolveRawBytes 拉取。
-                            && !Texts.hasText(importPayload.storagePath()));
+                            && !EmptyValues.hasText(importPayload.storagePath()));
             if (importPayloadHasNoSource) {
                 return ImportStageResult.failure(
                         stage(),
@@ -111,8 +110,8 @@ public class PreprocessStep implements ImportStageStep {
             }
         }
         try {
-            boolean templateSnapshotNeedsLoading = EmptyChecks.isNotNull(importPayload)
-                    && Texts.hasText(importPayload.templateCode())
+            boolean templateSnapshotNeedsLoading = importPayload != null
+                    && EmptyValues.hasText(importPayload.templateCode())
                     && !hasTemplateConfigSnapshot(attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
             if (templateSnapshotNeedsLoading) {
                 Map<String, Object> templateConfig = pipelineDefinitions.loadLatestTemplateConfig(
@@ -127,7 +126,7 @@ public class PreprocessStep implements ImportStageStep {
             // 越权防护:任何从 payload.storagePath 拉对象前,先核对该路径确实是本租户已登记 file_record 的
             // storage_path(逐字相等)。payload 来自上游消息,storagePath/storageBucket 字段一旦被篡改/伪造即可
             // 指向他租户对象;这里 fail-fast 把"裸信任 payload 直接拉取"收敛成"只拉本租户登记的那个对象"。
-            if (importPayload != null && Texts.hasText(importPayload.storagePath())) {
+            if (importPayload != null && EmptyValues.hasText(importPayload.storagePath())) {
                 objectSource.assertObjectBelongsToTenant(context, importPayload);
             }
 
@@ -140,11 +139,10 @@ public class PreprocessStep implements ImportStageStep {
                 Charset directCharset = resolveCharset(importPayload, templateConfigObject);
                 // 加密装饰层不支持明文 offset range 读(statSize 也是密文长度,不能做切片计算)→ 回退整份流式。
                 // 文件束每片绑定整份独立文件，只允许普通单文件分片使用字节范围下载。
-                boolean sourceSupportsDirectRangeSlice =
-                        EmptyChecks.isNull(attrs.get(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID))
-                                && objectSource.supportsRangeRead()
-                                && ImportPreprocessObjectSource.rangeSliceEligible(
-                                        importPayload, templateConfig, partitionNo, partitionCount, directCharset);
+                boolean sourceSupportsDirectRangeSlice = attrs.get(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID) == null
+                        && objectSource.supportsRangeRead()
+                        && ImportPreprocessObjectSource.rangeSliceEligible(
+                                importPayload, templateConfig, partitionNo, partitionCount, directCharset);
                 if (sourceSupportsDirectRangeSlice) {
                     return objectSource.streamObjectRangeToSpool(
                             context,
@@ -196,10 +194,10 @@ public class PreprocessStep implements ImportStageStep {
      * byte[] 路径（设置 normalizedPayload，没有临时文件开销）。
      */
     private long directStreamObjectBytes(ImportPayload importPayload, Map<String, Object> templateConfig) {
-        boolean objectCanStreamDirect = EmptyChecks.isNotNull(importPayload)
-                && Texts.hasText(importPayload.storagePath())
-                && !Texts.hasText(importPayload.content())
-                && !Texts.hasText(importPayload.contentBase64())
+        boolean objectCanStreamDirect = importPayload != null
+                && EmptyValues.hasText(importPayload.storagePath())
+                && !EmptyValues.hasText(importPayload.content())
+                && !EmptyValues.hasText(importPayload.contentBase64())
                 && ImportPreprocessObjectSource.canStreamObjectDirect(importPayload, templateConfig);
         return objectCanStreamDirect ? objectSource.objectSizeBytes(importPayload) : -1L;
     }
@@ -225,7 +223,7 @@ public class PreprocessStep implements ImportStageStep {
     }
 
     private boolean hasTemplateConfigSnapshot(Object value) {
-        return value instanceof Map<?, ?> map && EmptyChecks.isNotEmpty(map);
+        return value instanceof Map<?, ?> map && EmptyValues.isNotEmpty(map);
     }
 
     /**
@@ -324,20 +322,20 @@ public class PreprocessStep implements ImportStageStep {
     private Charset resolveCharset(ImportPayload importPayload, Object templateConfigObject) {
         if (templateConfigObject instanceof Map<?, ?> templateConfig) {
             Object targetCharset = templateConfig.get("target_charset");
-            if (targetCharset != null && Texts.hasText(String.valueOf(targetCharset))) {
+            if (targetCharset != null && EmptyValues.hasText(String.valueOf(targetCharset))) {
                 String targetCharsetName = String.valueOf(targetCharset);
                 return EncodingUtils.resolve(targetCharsetName);
             }
             Object charset = templateConfig.get("charset");
-            if (charset != null && Texts.hasText(String.valueOf(charset))) {
+            if (charset != null && EmptyValues.hasText(String.valueOf(charset))) {
                 String charsetName = String.valueOf(charset);
                 return EncodingUtils.resolve(charsetName);
             }
         }
-        if (importPayload != null && Texts.hasText(importPayload.targetCharset())) {
+        if (importPayload != null && EmptyValues.hasText(importPayload.targetCharset())) {
             return EncodingUtils.resolve(importPayload.targetCharset());
         }
-        if (importPayload != null && Texts.hasText(importPayload.charset())) {
+        if (importPayload != null && EmptyValues.hasText(importPayload.charset())) {
             return EncodingUtils.resolve(importPayload.charset());
         }
         return StandardCharsets.UTF_8;
@@ -367,7 +365,7 @@ public class PreprocessStep implements ImportStageStep {
     private static boolean charsetDetectionEnabled(Object templateConfigObject) {
         if (templateConfigObject instanceof Map<?, ?> templateConfig) {
             Object raw = templateConfig.get("charset_detect");
-            if (EmptyChecks.isNull(raw)) {
+            if (raw == null) {
                 return false;
             }
             String rawText = String.valueOf(raw);
@@ -380,16 +378,16 @@ public class PreprocessStep implements ImportStageStep {
     private static boolean hasExplicitCharset(ImportPayload importPayload, Object templateConfigObject) {
         if (templateConfigObject instanceof Map<?, ?> templateConfig) {
             Object targetCharset = templateConfig.get("target_charset");
-            if (targetCharset != null && Texts.hasText(String.valueOf(targetCharset))) {
+            if (targetCharset != null && EmptyValues.hasText(String.valueOf(targetCharset))) {
                 return true;
             }
             Object charset = templateConfig.get("charset");
-            if (charset != null && Texts.hasText(String.valueOf(charset))) {
+            if (charset != null && EmptyValues.hasText(String.valueOf(charset))) {
                 return true;
             }
         }
         return importPayload != null
-                && (Texts.hasText(importPayload.targetCharset()) || Texts.hasText(importPayload.charset()));
+                && (EmptyValues.hasText(importPayload.targetCharset()) || EmptyValues.hasText(importPayload.charset()));
     }
 
     /**
@@ -399,8 +397,8 @@ public class PreprocessStep implements ImportStageStep {
     private static CodingErrorAction resolveInvalidCharAction(Object templateConfigObject) {
         if (templateConfigObject instanceof Map<?, ?> templateConfig) {
             Object policy = templateConfig.get("invalid_char_policy");
-            String presenceText = EmptyChecks.isNull(policy) ? null : String.valueOf(policy);
-            if (EmptyChecks.isNotNull(policy) && Texts.hasText(presenceText)) {
+            String presenceText = policy == null ? null : String.valueOf(policy);
+            if (policy != null && EmptyValues.hasText(presenceText)) {
                 String rawPolicy = String.valueOf(policy);
                 String raw = rawPolicy.trim();
                 if ("REPLACE".equalsIgnoreCase(raw)) {
@@ -565,7 +563,7 @@ public class PreprocessStep implements ImportStageStep {
     private static String decodeStrict(byte[] bytes, Charset charset, CodingErrorAction action) {
         CharsetDecoder decoder = charset.newDecoder().onMalformedInput(action).onUnmappableCharacter(action);
         try {
-            byte[] sourceBytes = EmptyChecks.isNull(bytes) ? new byte[0] : bytes;
+            byte[] sourceBytes = bytes == null ? new byte[0] : bytes;
             ByteBuffer sourceBuffer = ByteBuffer.wrap(sourceBytes);
             CharBuffer decodedBuffer = decoder.decode(sourceBuffer);
             return decodedBuffer.toString();
@@ -578,7 +576,7 @@ public class PreprocessStep implements ImportStageStep {
     }
 
     private static long countReplacement(String text) {
-        if (text == null || text.isEmpty()) {
+        if (EmptyValues.isEmpty(text)) {
             return 0L;
         }
         return text.chars().filter(c -> c == '\uFFFD').count();

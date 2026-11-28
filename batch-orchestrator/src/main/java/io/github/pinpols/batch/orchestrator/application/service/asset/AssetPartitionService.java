@@ -2,8 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.asset;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
@@ -51,7 +50,7 @@ public class AssetPartitionService {
 
     public Optional<AssetPartitionSnapshot> findEffectiveJobPartition(
             String tenantId, String jobCode, LocalDate bizDate) {
-        if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || bizDate == null) {
+        if (!EmptyValues.hasText(tenantId) || !EmptyValues.hasText(jobCode) || bizDate == null) {
             return Optional.empty();
         }
         Optional<ResultVersionEntity> latest = resultVersionQueryService.findLatestByJob(tenantId, jobCode, bizDate);
@@ -65,8 +64,8 @@ public class AssetPartitionService {
         if (materialized != null && latest.isEmpty()) {
             return Optional.of(materialized);
         }
-        boolean materializedMatchesLatestVersion = EmptyChecks.isNotNull(materialized)
-                && Objects.equals(latest.get().id(), materialized.resultVersionId());
+        boolean materializedMatchesLatestVersion =
+                materialized != null && Objects.equals(latest.get().id(), materialized.resultVersionId());
         if (materializedMatchesLatestVersion) {
             return Optional.of(materialized);
         }
@@ -85,7 +84,7 @@ public class AssetPartitionService {
         String tenantId = instance.getTenantId();
         String jobCode = instance.getJobCode();
         Long assetId = resolveDataAssetId(new DataAssetKey(tenantId, jobCode, ASSET_TYPE_JOB));
-        if (EmptyChecks.isNull(assetId)) {
+        if (assetId == null) {
             log.warn(
                     "asset partition materialization skipped: data_asset missing after upsert,"
                             + " tenantId={}, jobCode={}, jobInstanceId={}",
@@ -115,11 +114,11 @@ public class AssetPartitionService {
 
     private Long resolveDataAssetId(DataAssetKey key) {
         Long committedId = dataAssetIdCache.getIfPresent(key);
-        if (EmptyChecks.isNotNull(committedId)) {
+        if (committedId != null) {
             return committedId;
         }
         Long assetId = ensureDataAssetId(key);
-        if (EmptyChecks.isNotNull(assetId)) {
+        if (assetId != null) {
             publishCommittedDataAssetId(key, assetId);
         }
         return assetId;
@@ -156,14 +155,14 @@ public class AssetPartitionService {
     private boolean isMaterializable(JobInstanceEntity instance, ResultVersionEntity version) {
         return instance != null
                 && version != null
-                && Texts.hasText(instance.getTenantId())
-                && Texts.hasText(instance.getJobCode())
+                && EmptyValues.hasText(instance.getTenantId())
+                && EmptyValues.hasText(instance.getJobCode())
                 && instance.getBizDate() != null
                 && instance.getId() != null
                 && FRESHNESS_EFFECTIVE.equals(version.status())
                 && instance.getTenantId().equals(version.tenantId())
                 && instance.getId().equals(version.jobInstanceId())
-                && Texts.hasText(version.businessKey());
+                && EmptyValues.hasText(version.businessKey());
     }
 
     private AssetPartitionSnapshot toJobPartition(

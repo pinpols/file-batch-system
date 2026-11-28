@@ -4,7 +4,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Ticker;
 import io.github.pinpols.batch.common.security.ApiKeyHasher;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.mapper.auth.ApiKeyAuthMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
@@ -181,8 +181,8 @@ public class ApiKeyVerifier {
      * @return 命中且活跃的 {@link ApiKeyCandidate};否则空(filter 直接返 401,不暴露具体原因防侧信道)
      */
     public Optional<ApiKeyCandidate> verify(String rawKey, String claimedTenantId) {
-        if (rawKey == null || rawKey.isBlank()) return Optional.empty();
-        if (claimedTenantId == null || claimedTenantId.isBlank()) return Optional.empty();
+        if (EmptyValues.isBlank(rawKey)) return Optional.empty();
+        if (EmptyValues.isBlank(claimedTenantId)) return Optional.empty();
         if (rawKey.length() < KEY_PREFIX_LEN) return Optional.empty();
 
         // 缓存命中:跳过候选查库 + PBKDF2 慢路径,直接返回。仍走 touch 节流(命中也代表 key 活跃)。
@@ -191,8 +191,7 @@ public class ApiKeyVerifier {
         if (cached != null) {
             // expires_at 硬边界内存复查:自然过期不允许被缓存 TTL 延长(revoke 的 5 分钟窗口是另一回事,见类 javadoc)。
             Instant expiresAt = cached.expiresAt();
-            boolean cachedKeyIsExpired =
-                    EmptyChecks.isNotNull(expiresAt) && expiresAt.isBefore(instantSource.instant());
+            boolean cachedKeyIsExpired = expiresAt != null && expiresAt.isBefore(instantSource.instant());
             if (cachedKeyIsExpired) {
                 verifyCache.invalidate(cacheKey);
                 // 落回慢路径:SQL 只取未过期行,自然拒掉。
@@ -204,7 +203,7 @@ public class ApiKeyVerifier {
 
         String prefix = rawKey.substring(0, KEY_PREFIX_LEN);
         List<ApiKeyCandidate> candidates = mapper.findActiveCandidatesByPrefixAndTenant(prefix, claimedTenantId);
-        if (candidates == null || candidates.isEmpty()) return Optional.empty();
+        if (EmptyValues.isEmpty(candidates)) return Optional.empty();
 
         // 候选数极小(同一租户同一前缀的活跃 key,索引剪枝后通常 0-1 行,极端冲突 <5)。
         // 逐行常量时间比对,命中即停;legacy sha256 命中后异步升级 KDF。
@@ -284,8 +283,8 @@ public class ApiKeyVerifier {
 
     /** scopes 字符串解析:逗号/空格 split,trim,去空;{@code "*"} 通配。 */
     static boolean scopesAllow(String scopesField, String requiredScope) {
-        if (requiredScope == null || requiredScope.isBlank()) return true;
-        if (scopesField == null || scopesField.isBlank()) return false;
+        if (EmptyValues.isBlank(requiredScope)) return true;
+        if (EmptyValues.isBlank(scopesField)) return false;
         Set<String> scopes = Arrays.stream(scopesField.split("[,\\s]+"))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())

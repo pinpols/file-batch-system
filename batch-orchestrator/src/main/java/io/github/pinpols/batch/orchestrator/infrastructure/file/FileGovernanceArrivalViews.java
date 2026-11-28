@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews;
 import lombok.Builder;
 
@@ -63,7 +62,7 @@ public final class FileGovernanceArrivalViews {
     }
 
     private static String textValue(Object value) {
-        return EmptyChecks.isNull(value) ? null : String.valueOf(value);
+        return value == null ? null : String.valueOf(value);
     }
 
     /**

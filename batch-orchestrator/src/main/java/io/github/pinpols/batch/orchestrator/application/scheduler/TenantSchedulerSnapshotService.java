@@ -3,8 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.scheduler;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
@@ -60,7 +59,7 @@ public class TenantSchedulerSnapshotService {
     private final ResourceSchedulerProperties resourceSchedulerProperties;
 
     public SchedulerSnapshotResponse buildLive(String tenantId) {
-        if (!Texts.hasText(tenantId)) {
+        if (!EmptyValues.hasText(tenantId)) {
             return new SchedulerSnapshotResponse(
                     BatchDateTimeSupport.utcNow(), tenantId, List.of(), List.of(), List.of());
         }
@@ -90,7 +89,7 @@ public class TenantSchedulerSnapshotService {
         // R7-A3-P1: 把 N 条 countActiveByFairShareGroup 单查改成 1 条 GROUP BY 预聚合。
         Set<String> groups = new LinkedHashSet<>();
         for (TenantQuotaPolicyEntity p : quotaRows) {
-            if (Texts.hasText(p.fairShareGroup())) {
+            if (EmptyValues.hasText(p.fairShareGroup())) {
                 groups.add(p.fairShareGroup());
             }
         }
@@ -98,13 +97,13 @@ public class TenantSchedulerSnapshotService {
         if (!groups.isEmpty()) {
             for (FairShareGroupActiveCountView row : jobInstanceMapper.countActiveByFairShareGroups(groups)) {
                 String fairShareGroup = row.fairShareGroup();
-                long activeJobCount = EmptyChecks.isNull(row.cnt()) ? 0L : row.cnt();
+                long activeJobCount = row.cnt() == null ? 0L : row.cnt();
                 groupCountMap.put(fairShareGroup, activeJobCount);
             }
         }
         for (TenantQuotaPolicyEntity p : quotaRows) {
             long groupJobs =
-                    Texts.hasText(p.fairShareGroup()) ? groupCountMap.getOrDefault(p.fairShareGroup(), 0L) : 0L;
+                    EmptyValues.hasText(p.fairShareGroup()) ? groupCountMap.getOrDefault(p.fairShareGroup(), 0L) : 0L;
             int baseJobs = p.maxRunningJobsPerTenant() == null ? 0 : p.maxRunningJobsPerTenant();
             int burst = p.burstLimit() == null ? 0 : Math.max(0, p.burstLimit());
             int effJobs = baseJobs > 0 ? baseJobs + burst : 0;
@@ -157,7 +156,7 @@ public class TenantSchedulerSnapshotService {
         if (!queueCodes.isEmpty()) {
             for (QueueActiveCountView row : jobInstanceMapper.countActiveByTenantAndQueueCodes(tenantId, queueCodes)) {
                 String queueCode = row.queueCode();
-                long activeJobCount = EmptyChecks.isNull(row.cnt()) ? 0L : row.cnt();
+                long activeJobCount = row.cnt() == null ? 0L : row.cnt();
                 queueCountMap.put(queueCode, activeJobCount);
             }
         }
@@ -195,10 +194,10 @@ public class TenantSchedulerSnapshotService {
             long tenantWaitingPartitions,
             Set<String> onlineWorkerGroups) {
         long activeJobs = queueCountMap.getOrDefault(queue.queueCode(), 0L);
-        int maxRunningJobs = EmptyChecks.isNull(queue.maxRunningJobs()) ? 0 : queue.maxRunningJobs();
-        int burstLimit = EmptyChecks.isNull(queue.burstLimit()) ? 0 : Math.max(0, queue.burstLimit());
+        int maxRunningJobs = queue.maxRunningJobs() == null ? 0 : queue.maxRunningJobs();
+        int burstLimit = queue.burstLimit() == null ? 0 : Math.max(0, queue.burstLimit());
         int effectiveMaxRunningJobs = maxRunningJobs > 0 ? maxRunningJobs + burstLimit : 0;
-        int partitionCap = EmptyChecks.isNull(queue.maxRunningPartitions()) ? 0 : queue.maxRunningPartitions();
+        int partitionCap = queue.maxRunningPartitions() == null ? 0 : queue.maxRunningPartitions();
         QueuePartitionBacklogStats backlog = backlogMap.getOrDefault(queue.queueCode(), emptyBacklog(queue));
         QuotaRuntimeStateService.QuotaReservationOwner quotaOwner =
                 new QuotaRuntimeStateService.QuotaReservationOwner(tenantId, "QUEUE_JOBS", queue.queueCode());
@@ -273,7 +272,7 @@ public class TenantSchedulerSnapshotService {
         if (effectiveJobCap > 0 && activeJobs >= effectiveJobCap) {
             return BOTTLENECK_QUEUE_JOB_LIMIT;
         }
-        if (Texts.hasText(queue.workerGroup())) {
+        if (EmptyValues.hasText(queue.workerGroup())) {
             String normalizedWorkerGroup = queue.workerGroup().toLowerCase(Locale.ROOT);
             if (!onlineWorkerGroups.contains(normalizedWorkerGroup)) {
                 return BOTTLENECK_NO_ONLINE_WORKER;
@@ -285,7 +284,7 @@ public class TenantSchedulerSnapshotService {
     private static Set<String> onlineWorkerGroups(List<SchedulerSnapshotResponse.WorkerLoadSnapshot> workers) {
         Set<String> groups = new HashSet<>();
         for (SchedulerSnapshotResponse.WorkerLoadSnapshot worker : workers) {
-            if (Texts.hasText(worker.workerGroup())) {
+            if (EmptyValues.hasText(worker.workerGroup())) {
                 groups.add(worker.workerGroup().toLowerCase(Locale.ROOT));
             }
         }

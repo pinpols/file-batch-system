@@ -10,7 +10,7 @@ import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.config.RateLimitProperties;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.lettuce.core.RedisException;
@@ -129,7 +129,8 @@ public class TokenBucketRateLimiter {
             BucketSpec spec,
             BackendFailureMode failureMode,
             boolean dynamicConfiguration) {
-        boolean rateLimitRequestIsInvalid = spec.capacity() <= 0 || !Texts.hasText(tenantId) || !Texts.hasText(action);
+        boolean rateLimitRequestIsInvalid =
+                spec.capacity() <= 0 || !EmptyValues.hasText(tenantId) || !EmptyValues.hasText(action);
         if (rateLimitRequestIsInvalid) {
             return true;
         }

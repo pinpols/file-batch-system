@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionVersionEntity;
@@ -113,7 +112,7 @@ class WorkflowCreateVersionSnapshotIntegrationTest extends AbstractMutationInteg
     @AfterEach
     void cleanOwnedRows() {
         insertFault.disarm();
-        if (EmptyChecks.isNull(workflowCode)) {
+        if (workflowCode == null) {
             return;
         }
         String selectOwnedIdsSql = """
@@ -330,7 +329,7 @@ class WorkflowCreateVersionSnapshotIntegrationTest extends AbstractMutationInteg
         public Object intercept(Invocation invocation) throws Throwable {
             MappedStatement mapped = (MappedStatement) invocation.getArgs()[0];
             FaultTarget target = active.get();
-            if (!INSERT_ID.equals(mapped.getId()) || EmptyChecks.isNull(target)) {
+            if (!INSERT_ID.equals(mapped.getId()) || target == null) {
                 return invocation.proceed();
             }
             Object parameter = invocation.getArgs()[1];

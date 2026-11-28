@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.support.persistence;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
@@ -21,7 +21,7 @@ public class JdbcTenantDatabaseContext implements TenantDatabaseContext {
 
     @Override
     public void bind(String tenantId) {
-        if (EmptyChecks.isBlank(tenantId) || !TransactionSynchronizationManager.isActualTransactionActive()) {
+        if (EmptyValues.isBlank(tenantId) || !TransactionSynchronizationManager.isActualTransactionActive()) {
             return;
         }
         Connection connection = DataSourceUtils.getConnection(dataSource);

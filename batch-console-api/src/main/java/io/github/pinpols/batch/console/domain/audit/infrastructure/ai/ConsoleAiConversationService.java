@@ -7,8 +7,7 @@ import io.github.pinpols.batch.common.page.CursorCodec;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentBindingInput;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiTurnStartInput;
@@ -79,19 +78,18 @@ public class ConsoleAiConversationService {
         }
         mapper.setTenantContext(tenantId);
 
-        if (EmptyChecks.isNotNull(clientTurnId)
-                && EmptyChecks.isNotNull(mapper.selectByClientTurnId(tenantId, ownerUserId, clientTurnId))) {
+        if (clientTurnId != null && mapper.selectByClientTurnId(tenantId, ownerUserId, clientTurnId) != null) {
             throw BizException.of(ResultCode.CONFLICT, "error.common.state_conflict");
         }
 
-        boolean creating = !Texts.hasText(requestedConversationId);
+        boolean creating = !EmptyValues.hasText(requestedConversationId);
         String conversationId = creating ? UUID.randomUUID().toString() : requestedConversationId;
         OffsetDateTime now = nowUtc();
         int retentionDays = properties.getPersistence().getRetentionDays();
         Duration retentionDuration = Duration.ofDays(retentionDays);
         OffsetDateTime expiresAt = now.plus(retentionDuration);
         ConsoleAiConversationEntity conversation = mapper.selectForUpdate(tenantId, conversationId);
-        if (EmptyChecks.isNull(conversation)) {
+        if (conversation == null) {
             if (!creating) {
                 throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
             }
@@ -122,7 +120,7 @@ public class ConsoleAiConversationService {
                         .contextVersion(contextVersion)
                         .build();
         Long turnNo = mapper.allocateTurnNo(consoleAiConversationAllocateTurnNoParam);
-        if (EmptyChecks.isNull(turnNo)) {
+        if (turnNo == null) {
             throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
         }
         persistStartedTurn(input, conversationId, turnNo);
@@ -159,7 +157,7 @@ public class ConsoleAiConversationService {
     public void completeTurn(TurnCompletion completion) {
         mapper.setTenantContext(completion.tenantId());
         String status =
-                switch (EmptyChecks.isNull(completion.decision()) ? "" : completion.decision()) {
+                switch (completion.decision() == null ? "" : completion.decision()) {
                     case FAILED -> FAILED;
                     case "REJECTED_SCOPE", "REJECTED_SAFETY", "REJECTED_DISABLED", "REJECTED_BUDGET" -> REJECTED;
                     default -> COMPLETE;
@@ -246,7 +244,7 @@ public class ConsoleAiConversationService {
     }
 
     private CursorPosition decodeCursor(String cursor) {
-        if (!Texts.hasText(cursor)) {
+        if (!EmptyValues.hasText(cursor)) {
             return new CursorPosition(null, null);
         }
         if (cursor.length() > CURSOR_MAX_LENGTH) {
@@ -255,7 +253,7 @@ public class ConsoleAiConversationService {
         Map<String, Object> values = CursorCodec.decode(cursor);
         if (!(values.get("updatedAt") instanceof String updatedAt)
                 || !(values.get("id") instanceof String id)
-                || EmptyChecks.isBlank(id)
+                || EmptyValues.isBlank(id)
                 || id.length() > CONVERSATION_ID_MAX_LENGTH) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
         }
@@ -273,7 +271,7 @@ public class ConsoleAiConversationService {
         requirePersistenceEnabled();
         requireOwner(ownerUserId);
         mapper.setTenantContext(tenantId);
-        if (EmptyChecks.isNull(mapper.selectActiveByOwner(tenantId, conversationId, ownerUserId))) {
+        if (mapper.selectActiveByOwner(tenantId, conversationId, ownerUserId) == null) {
             throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
         }
         int atLeastOneTurn = Math.max(requestedLimit, 1);
@@ -295,7 +293,7 @@ public class ConsoleAiConversationService {
         requireOwner(ownerUserId);
         mapper.setTenantContext(tenantId);
         ConsoleAiTurnEntity row = mapper.selectByClientTurnId(tenantId, ownerUserId, clientTurnId);
-        if (EmptyChecks.isNull(row)) {
+        if (row == null) {
             throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
         }
         String conversationId = row.getConversationId();
@@ -330,7 +328,7 @@ public class ConsoleAiConversationService {
         requirePersistenceEnabled();
         requireOwner(ownerUserId);
         mapper.setTenantContext(tenantId);
-        if (EmptyChecks.isNull(mapper.selectActiveByOwner(tenantId, conversationId, ownerUserId))) {
+        if (mapper.selectActiveByOwner(tenantId, conversationId, ownerUserId) == null) {
             throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
         }
         attachmentService.enqueueConversation(tenantId, conversationId);
@@ -354,12 +352,10 @@ public class ConsoleAiConversationService {
             turn.setPromptText(decryptedPrompt);
             String decryptedResponse = decryptText(turn.getResponseText());
             turn.setResponseText(decryptedResponse);
-            int promptLength = EmptyChecks.isNull(turn.getPromptText())
-                    ? 0
-                    : turn.getPromptText().length();
-            int responseLength = EmptyChecks.isNull(turn.getResponseText())
-                    ? 0
-                    : turn.getResponseText().length();
+            int promptLength =
+                    turn.getPromptText() == null ? 0 : turn.getPromptText().length();
+            int responseLength =
+                    turn.getResponseText() == null ? 0 : turn.getResponseText().length();
             int turnLength = promptLength + responseLength;
             if (turnLength > remaining) {
                 continue;
@@ -381,7 +377,7 @@ public class ConsoleAiConversationService {
     }
 
     private String encryptText(String value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         Base64.Encoder encoder = Base64.getEncoder();
@@ -391,7 +387,7 @@ public class ConsoleAiConversationService {
     }
 
     private String decryptText(String value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         byte[] ciphertext = Base64.getDecoder().decode(value);
@@ -400,7 +396,7 @@ public class ConsoleAiConversationService {
     }
 
     private static void requireOwner(String ownerUserId) {
-        if (!Texts.hasText(ownerUserId)) {
+        if (!EmptyValues.hasText(ownerUserId)) {
             throw BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey());
         }
     }

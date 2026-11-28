@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -56,7 +57,7 @@ public class S3ExportStorage {
                             .formatted(content.length));
         }
         String targetObjectName = objectName;
-        if (targetObjectName == null || targetObjectName.isBlank()) {
+        if (EmptyValues.isBlank(targetObjectName)) {
             targetObjectName =
                     BatchFileConstants.EXPORT_OBJECT_PREFIX + UUID.randomUUID() + BatchFileConstants.BIN_SUFFIX;
         }
@@ -86,7 +87,7 @@ public class S3ExportStorage {
             throw new IllegalArgumentException("contentPath is required");
         }
         String targetObjectName = objectName;
-        if (targetObjectName == null || targetObjectName.isBlank()) {
+        if (EmptyValues.isBlank(targetObjectName)) {
             targetObjectName =
                     BatchFileConstants.EXPORT_OBJECT_PREFIX + UUID.randomUUID() + BatchFileConstants.BIN_SUFFIX;
         }
@@ -133,7 +134,7 @@ public class S3ExportStorage {
      * @return SHA-256 十六进制字符串
      */
     public String sha256Hex(String objectName) {
-        if (objectName == null || objectName.isBlank()) {
+        if (EmptyValues.isBlank(objectName)) {
             throw new IllegalArgumentException("objectName is required");
         }
         try {
@@ -161,7 +162,7 @@ public class S3ExportStorage {
      * @return 存在返回 {@code true}，否则返回 {@code false}
      */
     public boolean objectExists(String objectName) {
-        if (objectName == null || objectName.isBlank()) {
+        if (EmptyValues.isBlank(objectName)) {
             return false;
         }
         try {

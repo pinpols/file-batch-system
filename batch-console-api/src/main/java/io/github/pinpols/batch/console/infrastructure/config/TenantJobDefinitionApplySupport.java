@@ -4,9 +4,8 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Nullables;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
 import io.github.pinpols.batch.console.config.JobMonitoringDefaultsProperties;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
@@ -63,22 +62,22 @@ final class TenantJobDefinitionApplySupport {
     }
 
     void ensureManagedSingleJobWorkflows(List<JobDefinitionSpec> jobSpecs, String tenantId) {
-        if (EmptyChecks.isNull(jobSpecs)) {
+        if (jobSpecs == null) {
             return;
         }
         for (JobDefinitionSpec spec : jobSpecs) {
-            if (!Texts.hasText(spec.getJobCode())) {
+            if (!EmptyValues.hasText(spec.getJobCode())) {
                 continue;
             }
             JobDefinitionView job = jobDefinitionMapper.selectByUniqueKey(tenantId, spec.getJobCode());
-            if (EmptyChecks.isNotNull(job)) {
+            if (job != null) {
                 singleJobWorkflowProvisioner.provision(job);
             }
         }
     }
 
     static List<JobDefinitionSpec> orderJobDefinitionsByDependencies(List<JobDefinitionSpec> specs) {
-        if (EmptyChecks.isNull(specs) || specs.size() < 2) {
+        if (specs == null || specs.size() < 2) {
             return specs;
         }
 
@@ -88,7 +87,7 @@ final class TenantJobDefinitionApplySupport {
             JobDefinitionSpec spec = specs.get(index);
             String jobCode = spec.getJobCode();
             boolean jobCodeIsMissingOrDuplicated =
-                    !Texts.hasText(jobCode) || EmptyChecks.isNotNull(jobsByCode.putIfAbsent(jobCode, spec));
+                    !EmptyValues.hasText(jobCode) || jobsByCode.putIfAbsent(jobCode, spec) != null;
             if (jobCodeIsMissingOrDuplicated) {
                 // 保持普通依赖写入使用的 graph → configuration-revision 锁顺序。
                 return specs;
@@ -104,7 +103,7 @@ final class TenantJobDefinitionApplySupport {
         for (JobDefinitionSpec spec : specs) {
             Set<String> uniqueUpstreams = new LinkedHashSet<>();
             for (String upstreamJobCode : dependencyCodesForOrdering(spec)) {
-                boolean upstreamDependencyIsIneligible = EmptyChecks.isNull(upstreamJobCode)
+                boolean upstreamDependencyIsIneligible = upstreamJobCode == null
                         || !jobsByCode.containsKey(upstreamJobCode)
                         || !uniqueUpstreams.add(upstreamJobCode);
                 if (upstreamDependencyIsIneligible) {
@@ -125,7 +124,7 @@ final class TenantJobDefinitionApplySupport {
         });
 
         List<JobDefinitionSpec> ordered = new ArrayList<>(specs.size());
-        while (!EmptyChecks.isEmpty(Objects.requireNonNull(readyJobs))) {
+        while (!EmptyValues.isEmpty(Objects.requireNonNull(readyJobs))) {
             String upstreamJobCode = readyJobs.remove();
             ordered.add(jobsByCode.get(upstreamJobCode));
             for (String downstreamJobCode : dependentsByUpstream.getOrDefault(upstreamJobCode, List.of())) {
@@ -144,16 +143,16 @@ final class TenantJobDefinitionApplySupport {
 
     private static List<String> dependencyCodesForOrdering(JobDefinitionSpec spec) {
         List<JobDependencyRuleRequest> rules = spec.getDependencyRules();
-        if (EmptyChecks.isNotNull(rules)) {
+        if (rules != null) {
             return rules.stream()
-                    .filter(EmptyChecks::isNotNull)
+                    .filter(Objects::nonNull)
                     .map(JobDependencyRuleRequest::upstreamJobCode)
                     .map(CodeNormalizer::trimToNull)
-                    .filter(EmptyChecks::isNotNull)
+                    .filter(Objects::nonNull)
                     .toList();
         }
         String upstreamJobCode = CodeNormalizer.trimToNull(spec.getDependsOnJobCode());
-        return EmptyChecks.isNull(upstreamJobCode) ? List.of() : List.of(upstreamJobCode);
+        return upstreamJobCode == null ? List.of() : List.of(upstreamJobCode);
     }
 
     void insertJobDefinition(String tenantId, JobDefinitionSpec spec, String operator) {
@@ -168,7 +167,7 @@ final class TenantJobDefinitionApplySupport {
         entity.setJobType(spec.getJobType());
         entity.setBizType(spec.getBizType());
         applyJobScheduleAndRouting(entity, spec);
-        entity.setDagEnabled(EmptyChecks.isNotNull(spec.getDagEnabled()) && spec.getDagEnabled());
+        entity.setDagEnabled(spec.getDagEnabled() != null && spec.getDagEnabled());
         entity.setShardStrategy(Nullables.coalesce(spec.getShardStrategy(), "NONE"));
         entity.setRetryPolicy(Nullables.coalesce(spec.getRetryPolicy(), "NONE"));
         entity.setRetryMaxCount(spec.getRetryMaxCount());
@@ -178,20 +177,19 @@ final class TenantJobDefinitionApplySupport {
                 resolveStartGrace(spec.getScheduleType(), dependsOnJobCode, spec.getStartGraceSeconds());
         LocalTime completionDeadlineLocalTime = spec.getCompletionDeadlineLocalTime();
         int dependencyCompletionWindowSeconds = valueOrZero(spec.getDependencyCompletionWindowSeconds());
-        int completionDeadlineDayOffset = EmptyChecks.isNull(spec.getCompletionDeadlineLocalTime())
-                ? 0
-                : valueOrZero(spec.getCompletionDeadlineDayOffset());
+        int completionDeadlineDayOffset =
+                spec.getCompletionDeadlineLocalTime() == null ? 0 : valueOrZero(spec.getCompletionDeadlineDayOffset());
         entity.setExecutionHandler(spec.getExecutionHandler());
         entity.setParamSchema(spec.getParamSchema());
         String defaultParams = TenantConfigMaskedParameters.resolve(spec.getDefaultParams(), null);
         entity.setDefaultParams(defaultParams);
         entity.setPriority(Nullables.coalesce(spec.getPriority(), 5));
-        entity.setEnabled(EmptyChecks.isNotNull(spec.getEnabled()) && spec.getEnabled());
+        entity.setEnabled(spec.getEnabled() != null && spec.getEnabled());
         entity.setDescription(spec.getDescription());
         String executionMode = Nullables.coalesce(spec.getExecutionMode(), "FULL");
         boolean incrementalModeIsMissingWatermarkField = "INCREMENTAL".equals(executionMode)
-                && (EmptyChecks.isNull(spec.getWatermarkField())
-                        || EmptyChecks.isBlank(Objects.requireNonNull(spec.getWatermarkField())));
+                && (spec.getWatermarkField() == null
+                        || EmptyValues.isBlank(Objects.requireNonNull(spec.getWatermarkField())));
         if (incrementalModeIsMissingWatermarkField) {
             throw BizException.of(
                     ResultCode.INVALID_ARGUMENT,
@@ -225,8 +223,8 @@ final class TenantJobDefinitionApplySupport {
         List<JobDependencyRuleRequest> dependencyRules = resolveJobDependencyRules(spec, existing);
         validateJobDependencyRules(existing.getTenantId(), existing.getJobCode(), dependencyRules);
         String dependsOnJobCode = firstUpstreamCode(dependencyRules);
-        boolean hasDependencies = EmptyChecks.isNotEmpty(dependencyRules);
-        LocalTime completionDeadlineLocalTime = EmptyChecks.isNull(spec.getCompletionDeadlineLocalTime())
+        boolean hasDependencies = EmptyValues.isNotEmpty(dependencyRules);
+        LocalTime completionDeadlineLocalTime = spec.getCompletionDeadlineLocalTime() == null
                 ? existing.getCompletionDeadlineLocalTime()
                 : spec.getCompletionDeadlineLocalTime();
         Integer dependencyCompletionWindowSeconds = resolveMonitoringValue(
@@ -263,7 +261,7 @@ final class TenantJobDefinitionApplySupport {
         param.setExecutionHandler(Nullables.coalesce(spec.getExecutionHandler(), existing.getExecutionHandler()));
         param.setParamSchema(Nullables.coalesce(spec.getParamSchema(), existing.getParamSchema()));
         param.setPriority(Nullables.coalesce(spec.getPriority(), existing.getPriority()));
-        if (EmptyChecks.isNotNull(spec.getDefaultParams())) {
+        if (spec.getDefaultParams() != null) {
             String defaultParams =
                     TenantConfigMaskedParameters.resolve(spec.getDefaultParams(), existing.getDefaultParams());
             param.setDefaultParams(defaultParams);
@@ -349,11 +347,11 @@ final class TenantJobDefinitionApplySupport {
     private List<JobDependencyRuleRequest> resolveJobDependencyRules(
             JobDefinitionSpec spec, JobDefinitionView existing) {
         List<JobDependencyRuleRequest> requestedRules = spec.getDependencyRules();
-        if (EmptyChecks.isNotNull(requestedRules)) {
+        if (requestedRules != null) {
             List<JobDependencyRuleRequest> normalized = normalizeJobDependencyRules(requestedRules);
             String legacyUpstream = CodeNormalizer.trimToNull(spec.getDependsOnJobCode());
-            boolean legacyUpstreamDoesNotMatchDependencies = Texts.hasText(legacyUpstream)
-                    && (EmptyChecks.isEmpty(Objects.requireNonNull(normalized))
+            boolean legacyUpstreamDoesNotMatchDependencies = EmptyValues.hasText(legacyUpstream)
+                    && (EmptyValues.isEmpty(Objects.requireNonNull(normalized))
                             || !legacyUpstream.equals(normalized.getFirst().upstreamJobCode()));
             if (legacyUpstreamDoesNotMatchDependencies) {
                 throw invalidJobDependency();
@@ -362,10 +360,10 @@ final class TenantJobDefinitionApplySupport {
         }
 
         String legacyUpstream = CodeNormalizer.trimToNull(spec.getDependsOnJobCode());
-        if (Texts.hasText(legacyUpstream)) {
+        if (EmptyValues.hasText(legacyUpstream)) {
             return List.of(new JobDependencyRuleRequest(legacyUpstream, "SAME_DAY"));
         }
-        if (EmptyChecks.isNull(existing) || EmptyChecks.isNull(existing.getJobDependencyRules())) {
+        if (existing == null || existing.getJobDependencyRules() == null) {
             return List.of();
         }
         return existing.getJobDependencyRules().stream()
@@ -380,18 +378,18 @@ final class TenantJobDefinitionApplySupport {
         Set<String> upstreamCodes = new LinkedHashSet<>();
         List<JobDependencyRuleRequest> normalized = new ArrayList<>(rules.size());
         for (JobDependencyRuleRequest rule : rules) {
-            if (EmptyChecks.isNull(rule)) {
+            if (rule == null) {
                 throw invalidJobDependency();
             }
             String upstreamCode = CodeNormalizer.trimToNull(rule.upstreamJobCode());
             String alignment = null;
-            if (EmptyChecks.isNotNull(rule.bizDateAlignment())) {
+            if (rule.bizDateAlignment() != null) {
                 String trimmedAlignment = rule.bizDateAlignment().trim();
                 alignment = trimmedAlignment.toUpperCase(Locale.ROOT);
             }
-            boolean dependencyRuleIsInvalid = !Texts.hasText(upstreamCode)
+            boolean dependencyRuleIsInvalid = !EmptyValues.hasText(upstreamCode)
                     || !upstreamCode.matches("^[a-zA-Z][a-zA-Z0-9_-]{0,63}$")
-                    || !Texts.hasText(alignment)
+                    || !EmptyValues.hasText(alignment)
                     || !JOB_DEPENDENCY_BIZ_DATE_ALIGNMENTS.contains(alignment)
                     || !upstreamCodes.add(upstreamCode);
             if (dependencyRuleIsInvalid) {
@@ -404,7 +402,7 @@ final class TenantJobDefinitionApplySupport {
 
     private void validateJobDependencyRules(
             String tenantId, String downstreamJobCode, List<JobDependencyRuleRequest> rules) {
-        if (EmptyChecks.isEmpty(Objects.requireNonNull(rules))) {
+        if (EmptyValues.isEmpty(Objects.requireNonNull(rules))) {
             return;
         }
 
@@ -420,7 +418,7 @@ final class TenantJobDefinitionApplySupport {
         for (JobDependencyRuleRequest rule : rules) {
             String upstreamJobCode = rule.upstreamJobCode();
             boolean dependencyWouldBeInvalid = downstreamJobCode.equals(upstreamJobCode)
-                    || EmptyChecks.isNull(jobMapper.selectByUniqueKey(tenantId, upstreamJobCode))
+                    || jobMapper.selectByUniqueKey(tenantId, upstreamJobCode) == null
                     || reachesDependency(graph, upstreamJobCode, downstreamJobCode, new HashSet<>());
             if (dependencyWouldBeInvalid) {
                 throw invalidJobDependency();
@@ -431,13 +429,13 @@ final class TenantJobDefinitionApplySupport {
     private void replaceJobDependencyRules(
             String tenantId, String downstreamJobCode, List<JobDependencyRuleRequest> rules) {
         jobDefinitionMapper.deleteDependencies(tenantId, downstreamJobCode);
-        if (EmptyChecks.isNotEmpty(rules)) {
+        if (EmptyValues.isNotEmpty(rules)) {
             jobDefinitionMapper.insertDependencyRules(tenantId, downstreamJobCode, rules);
         }
     }
 
     private static String firstUpstreamCode(List<JobDependencyRuleRequest> rules) {
-        return EmptyChecks.isEmpty(rules) ? null : rules.getFirst().upstreamJobCode();
+        return EmptyValues.isEmpty(rules) ? null : rules.getFirst().upstreamJobCode();
     }
 
     private static BizException invalidJobDependency() {
@@ -461,48 +459,48 @@ final class TenantJobDefinitionApplySupport {
     }
 
     private int resolveStartGrace(String scheduleType, String dependsOnJobCode, Integer requested) {
-        if (EmptyChecks.isNotNull(requested)) {
+        if (requested != null) {
             return requested;
         }
-        return "CRON".equals(scheduleType) || Texts.hasText(dependsOnJobCode)
+        return "CRON".equals(scheduleType) || EmptyValues.hasText(dependsOnJobCode)
                 ? monitoringDefaults.getStartGraceSeconds()
                 : 0;
     }
 
     private static Integer resolveCompletionDeadlineDayOffset(
             LocalTime deadlineTime, Integer requestedOffset, Integer existingOffset) {
-        if (EmptyChecks.isNull(deadlineTime)) {
+        if (deadlineTime == null) {
             return 0;
         }
-        return EmptyChecks.isNull(requestedOffset) ? valueOrZero(existingOffset) : requestedOffset;
+        return requestedOffset == null ? valueOrZero(existingOffset) : requestedOffset;
     }
 
     private int resolveSoftRuntime(Integer requested) {
-        return EmptyChecks.isNull(requested) ? monitoringDefaults.getSoftRuntimeSeconds() : requested;
+        return requested == null ? monitoringDefaults.getSoftRuntimeSeconds() : requested;
     }
 
     /** 配置包与 API 使用相同的完成期限互斥规则，运行资格由持久事实决定。 */
     private static void validateMonitoringCompletionMode(
             LocalTime completionDeadlineLocalTime, Integer dependencyCompletionWindowSeconds) {
         boolean relativeWindowConfigured = valueOrZero(dependencyCompletionWindowSeconds) > 0;
-        if (EmptyChecks.isNotNull(completionDeadlineLocalTime) && relativeWindowConfigured) {
+        if (completionDeadlineLocalTime != null && relativeWindowConfigured) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.job.monitoring_completion_modes_exclusive");
         }
     }
 
     private static Integer resolveMonitoringValue(Integer requested, Integer existing) {
-        return valueOrZero(EmptyChecks.isNull(requested) ? existing : requested);
+        return valueOrZero(requested == null ? existing : requested);
     }
 
     private static Integer valueOrZero(Integer value) {
-        return EmptyChecks.isNull(value) ? 0 : value;
+        return value == null ? 0 : value;
     }
 
     private static String resolveMonitoringSeverity(String requested, String existing) {
-        return severityOrWarn(EmptyChecks.isNull(requested) ? existing : requested);
+        return severityOrWarn(requested == null ? existing : requested);
     }
 
     private static String severityOrWarn(String severity) {
-        return EmptyChecks.isBlank(severity) ? "WARN" : severity;
+        return EmptyValues.isBlank(severity) ? "WARN" : severity;
     }
 }

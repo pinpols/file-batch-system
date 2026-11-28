@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
@@ -88,10 +88,9 @@ public class WaitingPartitionDispatchScheduler {
         List<WaitingDispatchCandidate> sorted =
                 candidates.stream().sorted(comparator).toList();
         for (WaitingDispatchCandidate candidate : sorted) {
-            String tenantId = EmptyChecks.isNull(candidate.partition())
-                    ? null
-                    : candidate.partition().getTenantId();
-            if (EmptyChecks.isBlank(tenantId)) {
+            String tenantId =
+                    candidate.partition() == null ? null : candidate.partition().getTenantId();
+            if (EmptyValues.isBlank(tenantId)) {
                 continue;
             }
             try {
@@ -130,7 +129,7 @@ public class WaitingPartitionDispatchScheduler {
                 String tenantTag = partition == null ? null : partition.getTenantId();
                 BatchMdc.put(StructuredLogField.TENANT_ID, tenantTag);
                 try {
-                    if (tenantTag == null || tenantTag.isBlank()) {
+                    if (EmptyValues.isBlank(tenantTag)) {
                         // 没 tenantId 的 partition 进不了 RLS 路径，直接退回回退（与原行为等价：buildCandidate 会再判 null）
                         candidate = buildCandidate(partition);
                     } else {
@@ -166,7 +165,7 @@ public class WaitingPartitionDispatchScheduler {
 
     private List<JobPartitionEntity> selectWaitingCandidates(int batchSize) {
         WaitingPartitionScanCursor scanCursor = jobMappers.jobPartitionMapper.selectWaitingPartitionScanCursor();
-        if (EmptyChecks.isNull(scanCursor)) {
+        if (scanCursor == null) {
             throw new IllegalStateException("Waiting partition scan cursor is missing");
         }
         long cursor = scanCursor.lastPartitionId();
@@ -177,32 +176,32 @@ public class WaitingPartitionDispatchScheduler {
             dryRunPhase = false;
         }
         List<JobPartitionEntity> waitingPartitions = selectWaitingPage(batchSize, cursor, upperId, dryRunPhase);
-        if (EmptyChecks.isEmpty(waitingPartitions) && !dryRunPhase) {
+        if (EmptyValues.isEmpty(waitingPartitions) && !dryRunPhase) {
             dryRunPhase = true;
             cursor = 0;
             waitingPartitions = selectWaitingPage(batchSize, cursor, upperId, true);
         }
-        if (EmptyChecks.isEmpty(waitingPartitions) && scanCursor.dryRunPhase()) {
+        if (EmptyValues.isEmpty(waitingPartitions) && scanCursor.dryRunPhase()) {
             // 旧轮次已结束；同一 tick 开始下一轮，避免空跑延迟恢复。
             upperId = jobMappers.jobPartitionMapper.selectLatestPartitionId();
             cursor = 0;
             dryRunPhase = false;
             waitingPartitions = selectWaitingPage(batchSize, cursor, upperId, false);
-            if (EmptyChecks.isEmpty(waitingPartitions)) {
+            if (EmptyValues.isEmpty(waitingPartitions)) {
                 dryRunPhase = true;
                 waitingPartitions = selectWaitingPage(batchSize, cursor, upperId, true);
             }
         }
-        long lastId = EmptyChecks.isEmpty(waitingPartitions)
+        long lastId = EmptyValues.isEmpty(waitingPartitions)
                 ? 0
                 : waitingPartitions.getLast().getId();
-        boolean phaseComplete = EmptyChecks.isEmpty(waitingPartitions) || lastId >= upperId;
+        boolean phaseComplete = EmptyValues.isEmpty(waitingPartitions) || lastId >= upperId;
         boolean nextDryRunPhase = phaseComplete ? !dryRunPhase : dryRunPhase;
         long nextCursor = phaseComplete ? 0 : lastId;
         long nextUpperId = phaseComplete && dryRunPhase ? 0 : upperId;
         boolean cursorNeedsAdvance = scanCursor.lastPartitionId() != 0
                 || scanCursor.cycleUpperId() != 0
-                || EmptyChecks.isNotEmpty(waitingPartitions);
+                || EmptyValues.isNotEmpty(waitingPartitions);
         if (cursorNeedsAdvance
                 && jobMappers.jobPartitionMapper.advanceWaitingPartitionScanCursor(
                                 nextCursor, nextUpperId, nextDryRunPhase, scanCursor.version())
@@ -263,7 +262,7 @@ public class WaitingPartitionDispatchScheduler {
             JobTaskEntity task,
             JobInstanceEntity jobInstance,
             ResourceSchedulingDecision decision) {
-        boolean waitingDispatchContextIncomplete = EmptyChecks.isNull(partition)
+        boolean waitingDispatchContextIncomplete = partition == null
                 || task == null
                 || jobInstance == null
                 || decision == null
@@ -298,9 +297,7 @@ public class WaitingPartitionDispatchScheduler {
         // capability_tags=[delivery] 的分发 worker → NO_AVAILABLE_WORKER 无限循环。
         String partitionQueueCode = extractInputField(partition, "queueCode");
         request.setQueueCode(
-                partitionQueueCode != null && !partitionQueueCode.isBlank()
-                        ? partitionQueueCode
-                        : jobInstance.getQueueCode());
+                EmptyValues.isNotBlank(partitionQueueCode) ? partitionQueueCode : jobInstance.getQueueCode());
         request.setWorkerGroup(
                 partition.getWorkerGroup() == null ? jobInstance.getWorkerGroup() : partition.getWorkerGroup());
         request.setWorkerType(task.getTaskType());
@@ -316,7 +313,7 @@ public class WaitingPartitionDispatchScheduler {
         // windowCode 同理：优先读 partition（sub-job 的 window），否则回退到 workflow 的 job_definition
         String partitionWindowCode = extractInputField(partition, "windowCode");
         request.setWindowCode(
-                partitionWindowCode != null && !partitionWindowCode.isBlank()
+                EmptyValues.isNotBlank(partitionWindowCode)
                         ? partitionWindowCode
                         : (jobDefinition == null ? null : jobDefinition.windowCode()));
         return request;
@@ -325,7 +322,7 @@ public class WaitingPartitionDispatchScheduler {
     private static String firstInputField(JobPartitionEntity partition, String... fields) {
         for (String field : fields) {
             String value = extractInputField(partition, field);
-            if (EmptyChecks.isNotBlank(value)) {
+            if (EmptyValues.isNotBlank(value)) {
                 return value;
             }
         }

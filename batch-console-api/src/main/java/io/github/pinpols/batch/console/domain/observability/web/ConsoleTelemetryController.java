@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.observability.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleTelemetryService;
 import io.github.pinpols.batch.console.domain.observability.application.contract.request.FrontendTelemetryRequest;
@@ -44,7 +45,7 @@ public class ConsoleTelemetryController {
     private void validateProps(FrontendTelemetryRequest request) {
         for (Event event : request.events()) {
             Map<String, Object> props = event.props();
-            if (props == null || props.isEmpty()) {
+            if (EmptyValues.isEmpty(props)) {
                 continue;
             }
             if (props.size() > MAX_PROPS_KEYS_PER_EVENT) {

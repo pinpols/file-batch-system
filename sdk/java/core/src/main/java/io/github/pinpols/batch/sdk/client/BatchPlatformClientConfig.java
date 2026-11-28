@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.sdk.client;
 
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -201,27 +201,27 @@ public class BatchPlatformClientConfig {
     private static void applyExecutionEnvironment(
             BatchPlatformClientConfigBuilder builder, String prefix, UnaryOperator<String> env) {
         String dryRunSafe = env.apply(prefix + "DRY_RUN_SAFE");
-        if (!EmptyChecks.isBlank(dryRunSafe)) {
+        if (!SdkEmptyValues.isBlank(dryRunSafe)) {
             String dryRunSafeValue = dryRunSafe.trim();
             boolean dryRunSafeEnabled = parseBoolean(dryRunSafeValue);
             builder.dryRunSafe(dryRunSafeEnabled);
         }
 
         String maxConcurrent = env.apply(prefix + "MAX_CONCURRENT_TASKS");
-        if (maxConcurrent != null && !maxConcurrent.isBlank()) {
+        if (SdkEmptyValues.isNotBlank(maxConcurrent)) {
             String maxConcurrentValue = maxConcurrent.trim();
             int maxConcurrentTasks = Integer.parseInt(maxConcurrentValue);
             builder.maxConcurrentTasks(maxConcurrentTasks);
         }
         String heartbeat = env.apply(prefix + "HEARTBEAT_INTERVAL_SECONDS");
-        if (heartbeat != null && !heartbeat.isBlank()) {
+        if (SdkEmptyValues.isNotBlank(heartbeat)) {
             String heartbeatValue = heartbeat.trim();
             long heartbeatSeconds = Long.parseLong(heartbeatValue);
             Duration heartbeatInterval = Duration.ofSeconds(heartbeatSeconds);
             builder.heartbeatInterval(heartbeatInterval);
         }
         String httpTimeout = env.apply(prefix + "HTTP_TIMEOUT_SECONDS");
-        if (httpTimeout != null && !httpTimeout.isBlank()) {
+        if (SdkEmptyValues.isNotBlank(httpTimeout)) {
             String httpTimeoutValue = httpTimeout.trim();
             long httpTimeoutSeconds = Long.parseLong(httpTimeoutValue);
             Duration httpTimeoutDuration = Duration.ofSeconds(httpTimeoutSeconds);
@@ -229,7 +229,7 @@ public class BatchPlatformClientConfig {
         }
         // Lane I:lease 续约间隔也开放 env 覆盖,方便运维联调 heartbeat / lease 配比
         String leaseRenew = env.apply(prefix + "LEASE_RENEW_INTERVAL_SECONDS");
-        if (leaseRenew != null && !leaseRenew.isBlank()) {
+        if (SdkEmptyValues.isNotBlank(leaseRenew)) {
             String leaseRenewValue = leaseRenew.trim();
             long leaseRenewSeconds = Long.parseLong(leaseRenewValue);
             Duration leaseRenewInterval = Duration.ofSeconds(leaseRenewSeconds);
@@ -241,7 +241,7 @@ public class BatchPlatformClientConfig {
     private static void applyClaimRetryEnvironment(
             BatchPlatformClientConfigBuilder builder, String prefix, UnaryOperator<String> env) {
         String retryMaxAttempts = env.apply(prefix + "RETRY_MAX_ATTEMPTS");
-        if (!EmptyChecks.isBlank(retryMaxAttempts)) {
+        if (!SdkEmptyValues.isBlank(retryMaxAttempts)) {
             String retryMaxAttemptsValue = retryMaxAttempts.trim();
             int totalAttempts = Integer.parseInt(retryMaxAttemptsValue);
             if (totalAttempts < 1) {
@@ -250,14 +250,14 @@ public class BatchPlatformClientConfig {
             builder.claimMax5xxRetries(totalAttempts - 1);
         }
         String retryBaseDelay = env.apply(prefix + "RETRY_BASE_DELAY_MS");
-        if (!EmptyChecks.isBlank(retryBaseDelay)) {
+        if (!SdkEmptyValues.isBlank(retryBaseDelay)) {
             String retryBaseDelayValue = retryBaseDelay.trim();
             long retryBaseDelayMillis = Long.parseLong(retryBaseDelayValue);
             Duration retryBaseDelayDuration = Duration.ofMillis(retryBaseDelayMillis);
             builder.claimRetryBaseDelay(retryBaseDelayDuration);
         }
         String clientErrorThreshold = env.apply(prefix + "CLIENT_ERROR_FAIL_FAST_THRESHOLD");
-        if (!EmptyChecks.isBlank(clientErrorThreshold)) {
+        if (!SdkEmptyValues.isBlank(clientErrorThreshold)) {
             String clientErrorThresholdValue = clientErrorThreshold.trim();
             int clientErrorFailFastThreshold = Integer.parseInt(clientErrorThresholdValue);
             builder.clientErrorFailFastThreshold(clientErrorFailFastThreshold);
@@ -270,13 +270,13 @@ public class BatchPlatformClientConfig {
         // R3-4(Round-2 P0 #4):时序校验严格度开关,env 默认 true(保持 fail-fast)。
         // 仅当显式设为 false / 0 / no / off 时降级为 WARN-only。
         String requestSigning = env.apply(prefix + "REQUEST_SIGNING_ENABLED");
-        if (requestSigning != null && !requestSigning.isBlank()) {
+        if (SdkEmptyValues.isNotBlank(requestSigning)) {
             String requestSigningValue = requestSigning.trim();
             boolean requestSigningEnabled = parseBoolean(requestSigningValue);
             builder.requestSigningEnabled(requestSigningEnabled);
         }
         String strictTiming = env.apply(prefix + "STRICT_TIMING");
-        if (strictTiming != null && !strictTiming.isBlank()) {
+        if (SdkEmptyValues.isNotBlank(strictTiming)) {
             String strictTimingValue = strictTiming.trim();
             boolean strictTimingEnabled = parseBoolean(strictTimingValue);
             builder.strictTimingValidation(strictTimingEnabled);
@@ -294,7 +294,7 @@ public class BatchPlatformClientConfig {
 
     private static String required(UnaryOperator<String> env, String prefix, String key, List<String> missing) {
         String value = env.apply(prefix + key);
-        if (value == null || value.isBlank()) {
+        if (SdkEmptyValues.isBlank(value)) {
             missing.add(prefix + key);
             return null;
         }
@@ -316,7 +316,7 @@ public class BatchPlatformClientConfig {
 
     /** 调度器不接受零或负周期；该结构约束不能被 WARN 降级，否则 client 会在后台线程启动后失败。 */
     private static void requirePositiveSchedulerInterval(String name, Duration interval) {
-        if (EmptyChecks.isNull(interval) || interval.isZero() || interval.isNegative()) {
+        if (interval == null || interval.isZero() || interval.isNegative()) {
             throw new IllegalArgumentException(name + " must be > 0, got " + interval);
         }
     }

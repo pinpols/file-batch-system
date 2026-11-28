@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.config;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
@@ -54,7 +53,7 @@ public class ConsoleAiConfiguration {
             ChatModel fallbackModel,
             boolean failoverEnabled,
             boolean imageInputEnabled) {
-        if (EmptyChecks.isNull(primaryModel)) {
+        if (primaryModel == null) {
             throw new IllegalStateException(
                     "configured console AI provider is unavailable; check batch.console.ai.provider and its credentials");
         }
@@ -64,7 +63,7 @@ public class ConsoleAiConfiguration {
         ConsoleAiClients.ProviderClient primary =
                 new ConsoleAiClients.ProviderClient(primaryName, primaryChatClient, imageInputEnabled);
         ConsoleAiClients.ProviderClient fallback = null;
-        if (failoverEnabled && EmptyChecks.isNotNull(fallbackModel)) {
+        if (failoverEnabled && fallbackModel != null) {
             ChatClient fallbackChatClient = ChatClient.create(fallbackModel);
             fallback = new ConsoleAiClients.ProviderClient(fallbackName, fallbackChatClient);
         }
@@ -91,7 +90,7 @@ public class ConsoleAiConfiguration {
         optionsBuilder.timeout(compatible.getTimeout());
         OpenAiChatOptions options = optionsBuilder.build();
         OpenAiChatModel model = OpenAiChatModel.builder().options(options).build();
-        String providerName = Texts.hasText(compatible.getProviderName())
+        String providerName = EmptyValues.hasText(compatible.getProviderName())
                 ? compatible.getProviderName().trim()
                 : providerName(ConsoleAiProperties.Provider.OPENAI_COMPATIBLE);
         ChatClient compatibleChatClient = ChatClient.create(model);
@@ -109,7 +108,7 @@ public class ConsoleAiConfiguration {
     }
 
     private static void requireCompatibleText(String value, String propertyName) {
-        if (!Texts.hasText(value)) {
+        if (!EmptyValues.hasText(value)) {
             throw new IllegalStateException(propertyName + " must be configured for openai-compatible");
         }
     }

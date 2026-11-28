@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
@@ -41,7 +41,7 @@ public class WorkflowNodeTerminalFinalizer {
     public void finalizeIfAllNodesTerminal(WorkflowRunEntity workflowRun) {
         WorkflowRunEntity currentRun = workflowMappers.workflowRunMapper.selectByTenantAndIdForUpdate(
                 workflowRun.getTenantId(), workflowRun.getId());
-        if (EmptyChecks.isNull(currentRun) || !LIVE_RUN_STATUSES.contains(currentRun.getRunStatus())) {
+        if (currentRun == null || !LIVE_RUN_STATUSES.contains(currentRun.getRunStatus())) {
             return;
         }
         List<WorkflowNodeRunEntity> allNodeRuns =
@@ -55,7 +55,7 @@ public class WorkflowNodeTerminalFinalizer {
         }
         // 尚未派发的并行分支没有 node_run，必须以冻结图确认节点是否齐全。
         WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(currentRun);
-        if (EmptyChecks.isNotNull(snapshot)) {
+        if (snapshot != null) {
             boolean missingNode = snapshot.nodes().stream()
                     .filter(node -> !Boolean.FALSE.equals(node.getEnabled()))
                     // END 是控制边界；跳过全部业务分支时允许它不被激活。
@@ -66,7 +66,7 @@ public class WorkflowNodeTerminalFinalizer {
             }
         }
         List<WorkflowNodeRunEntity> nodeRuns = List.copyOf(latestByNode.values());
-        if (EmptyChecks.isEmpty(nodeRuns)
+        if (EmptyValues.isEmpty(nodeRuns)
                 || nodeRuns.stream().anyMatch(node -> !TERMINAL_NODE_STATUSES.contains(node.getNodeStatus()))) {
             return;
         }

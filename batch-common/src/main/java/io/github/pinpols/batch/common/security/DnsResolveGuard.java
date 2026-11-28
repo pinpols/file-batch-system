@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.security;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -72,7 +72,7 @@ public final class DnsResolveGuard {
 
     static List<InetAddress> validateResolvedAddresses(String host, InetAddress[] resolved)
             throws UnknownHostException {
-        if (EmptyChecks.isEmpty(resolved)) {
+        if (EmptyValues.isEmpty(resolved)) {
             throw new UnknownHostException("No addresses resolved for host '" + host + "'");
         }
         LinkedHashSet<InetAddress> validated = new LinkedHashSet<>();

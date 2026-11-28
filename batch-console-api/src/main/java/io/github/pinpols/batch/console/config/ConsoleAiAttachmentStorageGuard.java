@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.config;
 
 import io.github.pinpols.batch.common.config.S3StorageProperties;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -17,7 +17,7 @@ public class ConsoleAiAttachmentStorageGuard {
     @PostConstruct
     void validate() {
         String attachmentBucket = aiProperties.getAttachment().getStorageBucket();
-        if (EmptyChecks.isBlank(attachmentBucket)) {
+        if (EmptyValues.isBlank(attachmentBucket)) {
             throw new IllegalStateException("AI attachment storage bucket must not be blank");
         }
         if (attachmentBucket.trim().equals(storageProperties.getBucket())) {

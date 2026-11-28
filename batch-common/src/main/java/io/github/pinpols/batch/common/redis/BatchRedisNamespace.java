@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.redis;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
@@ -12,16 +12,16 @@ public final class BatchRedisNamespace {
     private final String prefix;
 
     public BatchRedisNamespace(String namespace) {
-        String normalized = EmptyChecks.isNull(namespace) ? "" : namespace.trim();
-        if (!EmptyChecks.isEmpty(Objects.requireNonNull(normalized))
+        String normalized = namespace == null ? "" : namespace.trim();
+        if (!EmptyValues.isEmpty(Objects.requireNonNull(normalized))
                 && !VALID_NAMESPACE.matcher(normalized).matches()) {
             throw new IllegalArgumentException("batch.kafka.namespace must match [a-z0-9][a-z0-9_-]{0,47}");
         }
-        this.prefix = EmptyChecks.isEmpty(Objects.requireNonNull(normalized)) ? "" : normalized + ":";
+        this.prefix = EmptyValues.isEmpty(Objects.requireNonNull(normalized)) ? "" : normalized + ":";
     }
 
     public String key(String key) {
-        return EmptyChecks.isNull(key) ? null : prefix + key;
+        return key == null ? null : prefix + key;
     }
 
     public String scanPattern(String pattern) {
@@ -29,15 +29,15 @@ public final class BatchRedisNamespace {
     }
 
     public String channel(String channel) {
-        return EmptyChecks.isNull(channel) ? null : prefix + channel;
+        return channel == null ? null : prefix + channel;
     }
 
     public boolean isNamespaced() {
-        return !EmptyChecks.isEmpty(Objects.requireNonNull(prefix));
+        return !EmptyValues.isEmpty(Objects.requireNonNull(prefix));
     }
 
     String logicalKey(String key) {
-        return !EmptyChecks.isEmpty(Objects.requireNonNull(prefix)) && key.startsWith(prefix)
+        return !EmptyValues.isEmpty(Objects.requireNonNull(prefix)) && key.startsWith(prefix)
                 ? key.substring(prefix.length())
                 : key;
     }

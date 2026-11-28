@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.worker.core.support;
 
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRunFence;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -78,10 +78,9 @@ public class PipelineCompensationHook {
      */
     public boolean runCompensation(
             String tenantId, String pipelineType, PipelineRunFence pipelineRun, Map<String, Object> attributes) {
-        Long pipelineInstanceId = EmptyChecks.isNull(pipelineRun) ? null : pipelineRun.pipelineInstanceId();
+        Long pipelineInstanceId = pipelineRun == null ? null : pipelineRun.pipelineInstanceId();
         try {
-            boolean compensationIsNotConfiguredOrDisabled =
-                    EmptyChecks.isNull(attributes) || !compensateEnabled(attributes);
+            boolean compensationIsNotConfiguredOrDisabled = attributes == null || !compensateEnabled(attributes);
             if (compensationIsNotConfiguredOrDisabled) {
                 // 默认 off:行为逐字节不变,不触碰任何 compensator。
                 return false;
@@ -176,7 +175,7 @@ public class PipelineCompensationHook {
         if (value instanceof Boolean b) {
             return b;
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return false;
         }
         String rawValue = String.valueOf(value);
@@ -185,13 +184,13 @@ public class PipelineCompensationHook {
     }
 
     private PipelineCompensator resolveCompensator(String pipelineType) {
-        if (pipelineType == null || pipelineType.isBlank()) {
+        if (EmptyValues.isBlank(pipelineType)) {
             return null;
         }
         String trimmedPipelineType = pipelineType.trim();
         String wanted = trimmedPipelineType.toUpperCase(Locale.ROOT);
         for (PipelineCompensator candidate : compensatorProvider) {
-            if (EmptyChecks.isNotNull(candidate.pipelineType())) {
+            if (candidate.pipelineType() != null) {
                 String candidateType = candidate.pipelineType();
                 String trimmedCandidateType = candidateType.trim();
                 String normalizedCandidateType = trimmedCandidateType.toUpperCase(Locale.ROOT);

@@ -4,7 +4,8 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.console.application.contract.request.config.AlertRoutingSaveRequest;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertRoutingApplicationService;
 import io.github.pinpols.batch.console.domain.notification.application.contract.query.AlertRoutingQueryRequest;
@@ -86,7 +87,7 @@ public class DefaultConsoleAlertRoutingApplicationService implements ConsoleAler
     public ConsoleAlertRoutingResponse update(Long id, AlertRoutingSaveRequest request) {
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
         AlertRoutingConfigRow selectedRoute = alertRoutingConfigMapper.selectById(tenantId, id);
-        AlertRoutingConfigRow existing = Guard.requireFound(selectedRoute, "alert routing not found");
+        AlertRoutingConfigRow existing = Preconditions.requireFound(selectedRoute, "alert routing not found");
         String existingRouteCode = existing.routeCode();
         if (!existingRouteCode.equals(request.getRouteCode())) {
             AlertRoutingConfigRow duplicate =
@@ -142,7 +143,7 @@ public class DefaultConsoleAlertRoutingApplicationService implements ConsoleAler
 
     private AlertRoutingConfigUpsertParam toParam(Long id, String tenantId, AlertRoutingSaveRequest request) {
         String operator = requestMetadataResolver.current().operatorId();
-        if (operator == null || operator.isBlank()) {
+        if (EmptyValues.isBlank(operator)) {
             operator = "system";
         }
         AlertRoutingConfigUpsertParam param = new AlertRoutingConfigUpsertParam();

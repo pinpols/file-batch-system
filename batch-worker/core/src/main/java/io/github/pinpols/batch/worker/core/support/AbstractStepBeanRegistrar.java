@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.core.support;
 
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.mapper.StepRegistryMapper;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -115,7 +116,7 @@ public abstract class AbstractStepBeanRegistrar<T> {
             // camelCase 的 bean name（prepareDispatchStep）。登记必须对齐，否则 Excel 校验 /
             // 下拉的 impl_code 跟运行时脱节。
             String code = binding.implCodeExtractor().apply(bean);
-            if (code == null || code.isBlank()) {
+            if (EmptyValues.isBlank(code)) {
                 continue;
             }
             String owner = bean.getClass().getName();

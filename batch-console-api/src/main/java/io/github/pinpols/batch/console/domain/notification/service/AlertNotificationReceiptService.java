@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerAlert;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerWebhookPayload;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertNotificationReceiptMapper;
@@ -22,7 +22,7 @@ public class AlertNotificationReceiptService {
         for (AlertmanagerAlert alert : payload.safeAlerts()) {
             String fingerprint = alert.label("fingerprint");
             String alertTenant = alert.label("tenant");
-            if (!tenantId.equals(alertTenant) || EmptyChecks.isBlank(fingerprint)) {
+            if (!tenantId.equals(alertTenant) || EmptyValues.isBlank(fingerprint)) {
                 continue;
             }
             AlertNotificationReceiptCommand command = new AlertNotificationReceiptCommand(

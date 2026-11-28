@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.support.cache;
 
 import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.data.redis.core.Cursor;
@@ -51,7 +51,7 @@ public final class RedisKeyUtils {
     /** 与 {@link #scanAndDelete} 相同，但 Redis 异常直接抛出，适合需要把失败纳入一致性决策的调用方。 */
     public static long scanAndDeleteOrThrow(
             StringRedisTemplate redisTemplate, String pattern, int batchSize, BatchRedisNamespace namespace) {
-        if (pattern == null || pattern.isBlank()) {
+        if (EmptyValues.isBlank(pattern)) {
             return 0L;
         }
         int safeBatch = batchSize <= 0 ? DEFAULT_SCAN_BATCH_SIZE : batchSize;
@@ -78,7 +78,7 @@ public final class RedisKeyUtils {
 
     private static long deleteBatch(StringRedisTemplate redisTemplate, List<String> keys) {
         Long n = redisTemplate.delete(keys);
-        if (EmptyChecks.isNull(n)) {
+        if (n == null) {
             throw new IllegalStateException("Redis batch delete did not execute");
         }
         return n;

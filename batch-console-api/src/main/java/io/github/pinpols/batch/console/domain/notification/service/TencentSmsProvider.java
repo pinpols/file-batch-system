@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.console.config.SmsProperties;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
@@ -90,7 +91,7 @@ public class TencentSmsProvider implements SmsProvider {
 
     @Override
     public WebhookDeliveryResult send(List<String> phoneNumbers, NotificationMessage message) {
-        if (phoneNumbers == null || phoneNumbers.isEmpty()) {
+        if (EmptyValues.isEmpty(phoneNumbers)) {
             return WebhookDeliveryResult.failure(null, "missing sms phoneNumbers");
         }
 
@@ -109,18 +110,18 @@ public class TencentSmsProvider implements SmsProvider {
             return WebhookDeliveryResult.failure(null, "invalid sms config");
         }
 
-        if (sdkAppId == null || sdkAppId.isBlank()) {
+        if (EmptyValues.isBlank(sdkAppId)) {
             return WebhookDeliveryResult.failure(null, "missing sms sdkAppId");
         }
-        if (signName == null || signName.isBlank()) {
+        if (EmptyValues.isBlank(signName)) {
             return WebhookDeliveryResult.failure(null, "missing sms signName");
         }
-        if (templateId == null || templateId.isBlank()) {
+        if (EmptyValues.isBlank(templateId)) {
             return WebhookDeliveryResult.failure(null, "missing sms templateId");
         }
 
         String endpoint = properties.getTencentEndpoint();
-        if (endpoint == null || endpoint.isBlank()) {
+        if (EmptyValues.isBlank(endpoint)) {
             return WebhookDeliveryResult.failure(null, "missing sms endpoint");
         }
 

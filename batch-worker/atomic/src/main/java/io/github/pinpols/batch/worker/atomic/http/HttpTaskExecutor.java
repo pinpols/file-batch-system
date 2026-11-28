@@ -11,7 +11,7 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicParameterNumbers;
@@ -148,7 +148,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     void shutdownHttpClient() {
         stopping.set(true);
         OkHttpClient client = sharedClient.getAndSet(null);
-        if (EmptyChecks.isNull(client)) {
+        if (client == null) {
             return;
         }
         client.dispatcher().cancelAll();
@@ -208,7 +208,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
         return headers.entrySet().stream()
                 .anyMatch(entry -> "Idempotency-Key".equalsIgnoreCase(String.valueOf(entry.getKey()))
                         && entry.getValue() instanceof String value
-                        && EmptyChecks.isNotBlank(value));
+                        && EmptyValues.isNotBlank(value));
     }
 
     @Override
@@ -272,8 +272,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
                     LogSanitizer.value(ctx.jobCode()),
                     SwallowedExceptionLogger.summary(ex));
             String exceptionMessage = ex.getMessage();
-            String failureMessage =
-                    EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : ex.getMessage();
+            String failureMessage = exceptionMessage == null ? ex.getClass().getSimpleName() : ex.getMessage();
             return AtomicErrorCode.fail(AtomicErrorCode.EXECUTION_FAILED, failureMessage, ex);
         }
     }
@@ -284,7 +283,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
         Map<String, Object> params = ctx.parameters();
 
         Object urlObj = params.get(PARAM_URL);
-        if (!(urlObj instanceof String urlString) || EmptyChecks.isBlank(urlString)) {
+        if (!(urlObj instanceof String urlString) || EmptyValues.isBlank(urlString)) {
             throw new HttpValidationException("parameters.url required");
         }
         URI uri;
@@ -313,9 +312,9 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
 
         Duration timeout = props.getDefaultTimeout();
         Object t = params.get(PARAM_TIMEOUT);
-        if (EmptyChecks.isNotNull(t)) {
+        if (t != null) {
             Long sec = AtomicParameterNumbers.positiveLong(t);
-            if (EmptyChecks.isNull(sec)) {
+            if (sec == null) {
                 throw new HttpValidationException("timeoutSeconds must be positive integer");
             }
             Duration requested = Duration.ofSeconds(sec);
@@ -484,7 +483,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
 
     private static String stringParam(Map<String, Object> p, String key, String fallback) {
         Object v = p.get(key);
-        return v instanceof String string && EmptyChecks.isNotBlank(string) ? string.trim() : fallback;
+        return v instanceof String string && EmptyValues.isNotBlank(string) ? string.trim() : fallback;
     }
 
     private void validateRequestBodySize(String body) {
@@ -514,10 +513,10 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
                 TaskResult result = runOnce(inv);
                 // 显式接受的状态已满足调用方预期；未指定期望时服务端错误沿原策略重试。
                 Integer status = (Integer) result.output().get("statusCode");
-                boolean serverFailureCanBeRetried = EmptyChecks.isNotNull(status)
+                boolean serverFailureCanBeRetried = status != null
                         && status >= 500
                         && attempt < maxAttempts
-                        && (EmptyChecks.isEmpty(inv.expectedStatus) || !result.success());
+                        && (EmptyValues.isEmpty(inv.expectedStatus) || !result.success());
                 if (serverFailureCanBeRetried) {
                     log.warn("http 5xx, retrying: status={}, attempt={}/{}", status, attempt, maxAttempts);
                     sleep(props.getRetryBackoff().toMillis() * (1L << (attempt - 1)));
@@ -566,7 +565,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
                 throw ex;
             }
         }
-        if (!idempotent && EmptyChecks.isNotNull(lastException)) {
+        if (!idempotent && lastException != null) {
             return AtomicErrorCode.fail(
                     AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN,
                     "http request outcome is unknown; the remote side effect may have committed",
@@ -630,7 +629,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
 
         boolean serverError = statusCode >= 500 && statusCode < 600;
         boolean expectMatch =
-                EmptyChecks.isEmpty(inv.expectedStatus) ? !serverError : inv.expectedStatus.contains(statusCode);
+                EmptyValues.isEmpty(inv.expectedStatus) ? !serverError : inv.expectedStatus.contains(statusCode);
         if (!expectMatch) {
             AtomicErrorCode code = IDEMPOTENT_METHODS.contains(inv.method)
                     ? AtomicErrorCode.EXECUTION_FAILED
@@ -638,7 +637,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
             String outcomeNote = code == AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN
                     ? "; remote side effect may have committed, manual reconciliation is required"
                     : "";
-            String statusReason = EmptyChecks.isEmpty(inv.expectedStatus)
+            String statusReason = EmptyValues.isEmpty(inv.expectedStatus)
                     ? "is a server error"
                     : "not in expected " + inv.expectedStatus;
             return AtomicErrorCode.fail(
@@ -711,7 +710,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
             Set.of("set-cookie", "set-cookie2", "authorization", "proxy-authorization", "cookie");
 
     static Map<String, List<String>> sanitizeResponseHeaders(Map<String, List<String>> headers) {
-        if (headers == null || headers.isEmpty()) {
+        if (EmptyValues.isEmpty(headers)) {
             return Map.of();
         }
         Map<String, List<String>> filtered = new LinkedHashMap<>(headers.size());

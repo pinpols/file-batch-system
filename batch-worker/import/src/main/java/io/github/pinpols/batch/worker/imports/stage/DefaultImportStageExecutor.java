@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -70,13 +70,13 @@ public class DefaultImportStageExecutor extends AbstractStageExecutor<ImportJobC
     @Override
     public List<ImportStageResult> execute(ImportJobContext context) {
         ImportStagingFiles stagingFiles = new ImportStagingFiles();
-        if (EmptyChecks.isNotNull(context)) {
+        if (context != null) {
             context.setStagingFiles(stagingFiles);
         }
         // 主链路：执行 stage loop；无论成功/失败都尝试收敛错误明细产物（用于对账/审计）。
         try {
             List<ImportStageResult> results = runStageLoop(context);
-            if (EmptyChecks.isNotEmpty(results) && results.stream().allMatch(ImportStageResult::success)) {
+            if (EmptyValues.isNotEmpty(results) && results.stream().allMatch(ImportStageResult::success)) {
                 stagingFiles.markSuccessful();
             }
             return results;
@@ -84,7 +84,7 @@ public class DefaultImportStageExecutor extends AbstractStageExecutor<ImportJobC
             try {
                 finalizeImport(context);
             } finally {
-                if (EmptyChecks.isNotNull(context)) {
+                if (context != null) {
                     context.setStagingFiles(null);
                 }
                 try {
@@ -112,7 +112,7 @@ public class DefaultImportStageExecutor extends AbstractStageExecutor<ImportJobC
 
     private void recordImportRowsMetrics(ImportJobContext context) {
         MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-        if (EmptyChecks.isNull(registry)) {
+        if (registry == null) {
             return;
         }
         recordRows(registry, "parsed", context, PipelineRuntimeKeys.IMPORT_PARSED_COUNT);
@@ -143,7 +143,7 @@ public class DefaultImportStageExecutor extends AbstractStageExecutor<ImportJobC
     public ReplayCapabilityDeclaration resolveReplayCapability(ImportJobContext context) {
         ImportStageStep receiveStage = stepsByStage.get(ImportStage.RECEIVE);
         ImportStageStep loadStage = stepsByStage.get(ImportStage.LOAD);
-        if (EmptyChecks.isNull(context)
+        if (context == null
                 || !(receiveStage instanceof ReceiveStep receiveStep)
                 || !(loadStage instanceof LoadStep loadStep)) {
             return ReplayCapabilityDeclaration.unknown(ImportWorkerType.IMPORT);

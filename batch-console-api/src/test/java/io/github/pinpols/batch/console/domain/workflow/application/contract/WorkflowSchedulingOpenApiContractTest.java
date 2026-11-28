@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerActionResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowNodeRunResponse;
 import java.io.IOException;
@@ -91,9 +90,7 @@ class WorkflowSchedulingOpenApiContractTest {
     }
 
     private static JsonNode openApi() throws IOException {
-        for (Path current = Path.of("").toAbsolutePath();
-                EmptyChecks.isNotNull(current);
-                current = current.getParent()) {
+        for (Path current = Path.of("").toAbsolutePath(); current != null; current = current.getParent()) {
             Path schema = current.resolve("docs/api/console-api.openapi.yaml");
             if (Files.isRegularFile(schema)) {
                 return new YAMLMapper().readTree(Files.readString(schema));

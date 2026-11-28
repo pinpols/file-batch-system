@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.contract.request.auth.AiChatRequest;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
@@ -313,7 +313,7 @@ public class ConsoleAiController {
         authorizationService.assertAllowed();
         YearMonth billingMonth;
         try {
-            billingMonth = EmptyChecks.isBlank(month) ? YearMonth.now(ZoneOffset.UTC) : YearMonth.parse(month);
+            billingMonth = EmptyValues.isBlank(month) ? YearMonth.now(ZoneOffset.UTC) : YearMonth.parse(month);
         } catch (DateTimeParseException exception) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
         }

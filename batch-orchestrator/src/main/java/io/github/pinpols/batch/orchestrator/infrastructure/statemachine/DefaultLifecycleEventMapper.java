@@ -1,8 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.statemachine;
 
 import io.github.pinpols.batch.common.persistence.Stateful;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleStatusCatalog;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateTransition;
@@ -32,23 +31,22 @@ public class DefaultLifecycleEventMapper<T> implements LifecycleEventMapper<T> {
     }
 
     private String resolveState(T target) {
-        if (target instanceof String status && Texts.hasText(status)) {
+        if (target instanceof String status && EmptyValues.hasText(status)) {
             return status;
         }
         if (target instanceof Enum<?> enumValue) {
             return enumValue.name();
         }
-        if (target instanceof Stateful stateful && Texts.hasText(stateful.getStatus())) {
+        if (target instanceof Stateful stateful && EmptyValues.hasText(stateful.getStatus())) {
             return stateful.getStatus();
         }
-        String targetType =
-                EmptyChecks.isNull(target) ? "null" : target.getClass().getName();
+        String targetType = target == null ? "null" : target.getClass().getName();
         throw new IllegalArgumentException(
                 "Cannot resolve lifecycle status from " + targetType + ": use String, Enum or Stateful");
     }
 
     private String normalizeEvent(String event) {
-        if (!Texts.hasText(event)) {
+        if (!EmptyValues.hasText(event)) {
             return "NOOP";
         }
         String trimmedEvent = event.trim();

@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.trigger.domain;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.mapper.TriggerDefinitionMapper;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.util.List;
@@ -32,7 +31,7 @@ public class TriggerDefinitionLoader {
 
     /** tenantId 为空时与 Quartz 全局列表一致，返回全部租户。 */
     public List<TriggerDescriptor> loadUnscheduledDefinitions(String tenantId) {
-        return EmptyChecks.isNull(tenantId)
+        return tenantId == null
                 ? triggerDefinitionMapper.selectAllUnscheduledDefinitions()
                 : triggerDefinitionMapper.selectUnscheduledDefinitionsByTenant(tenantId);
     }

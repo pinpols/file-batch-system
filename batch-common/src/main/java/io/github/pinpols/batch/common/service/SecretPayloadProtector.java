@@ -1,9 +1,8 @@
 package io.github.pinpols.batch.common.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Map;
@@ -18,7 +17,7 @@ public class SecretPayloadProtector {
     private final BatchObjectCryptoService cryptoService;
 
     public String protect(String plaintextJson) {
-        if (!Texts.hasText(plaintextJson)) {
+        if (!EmptyValues.hasText(plaintextJson)) {
             throw new IllegalArgumentException("secretPayloadJson is required");
         }
         byte[] plaintext = plaintextJson.getBytes(StandardCharsets.UTF_8);
@@ -39,7 +38,7 @@ public class SecretPayloadProtector {
     }
 
     private String reveal(String protectedJson, boolean requireEncrypted) {
-        if (!Texts.hasText(protectedJson)) {
+        if (!EmptyValues.hasText(protectedJson)) {
             throw new IllegalArgumentException("protected secret payload is required");
         }
         Object parsed = JsonUtils.fromJson(protectedJson, new TypeReference<Object>() {});
@@ -47,7 +46,7 @@ public class SecretPayloadProtector {
             throw new IllegalArgumentException("unsupported protected secret payload format");
         }
         Object ciphertext = envelope.get("ciphertext");
-        if (!(ciphertext instanceof String encoded) || EmptyChecks.isBlank(encoded)) {
+        if (!(ciphertext instanceof String encoded) || EmptyValues.isBlank(encoded)) {
             throw new IllegalArgumentException("protected secret ciphertext is missing");
         }
         Base64.Decoder decoder = Base64.getDecoder();

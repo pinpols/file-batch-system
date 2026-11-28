@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.storage;
 
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
 import java.io.IOException;
 import java.io.InputStream;
@@ -92,7 +93,7 @@ public class FilesystemObjectStore implements BatchObjectStore {
             Duration defaultPresignTtl,
             long maxListScanEntries,
             AtomicFileMover atomicFileMover) {
-        if (root == null || root.isBlank()) {
+        if (EmptyValues.isBlank(root)) {
             throw new IllegalArgumentException("filesystem storage root must not be blank");
         }
         this.root = Paths.get(root).toAbsolutePath().normalize();
@@ -312,10 +313,10 @@ public class FilesystemObjectStore implements BatchObjectStore {
     public String presign(String bucket, String key, Duration ttl) {
         // 校验 key 合法性 + 在 root 内（即便不真读文件也应防止生成穿越 URL）
         resolveKey(bucket, key);
-        if (downloadBaseUrl == null || downloadBaseUrl.isBlank()) {
+        if (EmptyValues.isBlank(downloadBaseUrl)) {
             throw new ObjectStoreException("filesystem presign requires batch.storage.filesystem.download-base-url");
         }
-        if (presignSecret == null || presignSecret.isBlank()) {
+        if (EmptyValues.isBlank(presignSecret)) {
             throw new ObjectStoreException("filesystem presign requires non-blank secret (set"
                     + " batch.storage.filesystem.presign-secret or batch.security.internal-secret)");
         }
@@ -331,7 +332,7 @@ public class FilesystemObjectStore implements BatchObjectStore {
 
     /** 解析 key 对应的 Path 并做 traversal 校验。 */
     Path resolveKey(String bucket, String key) {
-        if (key == null || key.isBlank()) {
+        if (EmptyValues.isBlank(key)) {
             throw new ObjectStoreException("filesystem object key must not be blank");
         }
         if (key.contains("..") || key.startsWith("/")) {
@@ -359,7 +360,7 @@ public class FilesystemObjectStore implements BatchObjectStore {
     }
 
     private Path resolveBucketRoot(String bucket) {
-        if (bucket == null || bucket.isBlank()) {
+        if (EmptyValues.isBlank(bucket)) {
             throw new ObjectStoreException("filesystem bucket must not be blank");
         }
         boolean bucketContainsPathTraversal = bucket.contains("..") || bucket.contains("/") || bucket.contains("\\");

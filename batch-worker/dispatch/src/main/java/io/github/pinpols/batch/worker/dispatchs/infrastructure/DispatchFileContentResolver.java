@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectStoreException;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.io.InputStream;
@@ -40,7 +40,7 @@ public class DispatchFileContentResolver {
         String rawStorageType = String.valueOf(storageTypeValue);
         String storageType = rawStorageType.toUpperCase(Locale.ROOT);
         String storagePath = String.valueOf(fileRecord.getOrDefault("storage_path", ""));
-        if (!Texts.hasText(storagePath)) {
+        if (!EmptyValues.hasText(storagePath)) {
             throw new IllegalStateException("storage_path missing");
         }
         // C-4: 规范化前拒绝路径遍历序列
@@ -60,7 +60,7 @@ public class DispatchFileContentResolver {
         String defaultBucket = s3Properties.getBucket();
         Object storageBucketValue = fileRecord.getOrDefault("storage_bucket", defaultBucket);
         String bucket = String.valueOf(storageBucketValue);
-        if (!Texts.hasText(bucket)) {
+        if (!EmptyValues.hasText(bucket)) {
             bucket = s3Properties.getBucket();
         }
         // M-7: 若 decryptIfNeeded 抛异常，确保对象存储流被关闭

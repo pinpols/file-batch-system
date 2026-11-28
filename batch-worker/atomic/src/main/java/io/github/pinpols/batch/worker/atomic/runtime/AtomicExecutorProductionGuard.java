@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
 import io.github.pinpols.batch.common.config.BatchProfileSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.atomic.http.HttpExecutorProperties;
 import io.github.pinpols.batch.worker.atomic.shell.ShellExecutorProperties;
 import io.github.pinpols.batch.worker.atomic.spark.SparkSubmitExecutorProperties;
@@ -91,17 +91,17 @@ public class AtomicExecutorProductionGuard {
         }
         Set<String> enforced = new HashSet<>();
         for (String p : guardProperties.getEnforceProfiles()) {
-            if (EmptyChecks.isNotBlank(p)) {
+            if (EmptyValues.isNotBlank(p)) {
                 String trimmedProfile = p.trim();
                 String normalizedProfile = trimmedProfile.toLowerCase(Locale.ROOT);
                 enforced.add(normalizedProfile);
             }
         }
-        if (EmptyChecks.isEmpty(enforced) || EmptyChecks.isNull(activeProfiles)) {
+        if (EmptyValues.isEmpty(enforced) || activeProfiles == null) {
             return false;
         }
         for (String active : activeProfiles) {
-            if (EmptyChecks.isNotNull(active)) {
+            if (active != null) {
                 String trimmedProfile = active.trim();
                 String normalizedProfile = trimmedProfile.toLowerCase(Locale.ROOT);
                 if (enforced.contains(normalizedProfile)) {
@@ -116,35 +116,34 @@ public class AtomicExecutorProductionGuard {
     List<String> collectViolations() {
         List<String> violations = new ArrayList<>();
         SqlExecutorProperties sql = sqlProps.getIfAvailable();
-        boolean enabledSqlHasNoDataSourceAllowlist = EmptyChecks.isNotNull(sql)
+        boolean enabledSqlHasNoDataSourceAllowlist = sql != null
                 && sql.isEnabled()
-                && EmptyChecks.isEmpty(Objects.requireNonNull(sql.getAllowedDataSourceBeans()));
+                && EmptyValues.isEmpty(Objects.requireNonNull(sql.getAllowedDataSourceBeans()));
         if (enabledSqlHasNoDataSourceAllowlist) {
             violations.add("batch.worker.executors.sql.enabled=true 但 allowedDataSourceBeans 为空"
                     + " — prod profile 必须显式配 batch.worker.executors.sql.allowed-data-source-beans"
                     + " 列出可用 DataSource bean 名(防业务方借 parameters.dataSourceBean 切到任意高权限连接)");
         }
-        if (EmptyChecks.isNotNull(sql) && sql.isEnabled()) {
+        if (sql != null && sql.isEnabled()) {
             addBusinessDataSourceViolations(
                     violations, "sql", sql.getDataSourceBeanName(), sql.getAllowedDataSourceBeans());
         }
         StoredProcExecutorProperties sp = storedProcProps.getIfAvailable();
-        boolean enabledStoredProcedureHasNoSchemaAllowlist = EmptyChecks.isNotNull(sp)
-                && sp.isEnabled()
-                && EmptyChecks.isEmpty(Objects.requireNonNull(sp.getAllowedSchemas()));
+        boolean enabledStoredProcedureHasNoSchemaAllowlist =
+                sp != null && sp.isEnabled() && EmptyValues.isEmpty(Objects.requireNonNull(sp.getAllowedSchemas()));
         if (enabledStoredProcedureHasNoSchemaAllowlist) {
             violations.add("batch.worker.executors.stored-proc.enabled=true 但 allowedSchemas 为空"
                     + " — prod profile 必须配 batch.worker.executors.stored-proc.allowed-schemas"
                     + " 限定可调用的 schema(默认空=允许全部,prod 风险过大)");
         }
-        if (EmptyChecks.isNotNull(sp) && sp.isEnabled()) {
+        if (sp != null && sp.isEnabled()) {
             addBusinessDataSourceViolations(
                     violations, "stored-proc", sp.getDataSourceBeanName(), sp.getAllowedDataSourceBeans());
         }
         HttpExecutorProperties http = httpProps.getIfAvailable();
-        boolean httpEnabledWithEmptyUnenforcedAllowlist = EmptyChecks.isNotNull(http)
+        boolean httpEnabledWithEmptyUnenforcedAllowlist = http != null
                 && http.isEnabled()
-                && EmptyChecks.isEmpty(Objects.requireNonNull(http.getAllowedHostPatterns()))
+                && EmptyValues.isEmpty(Objects.requireNonNull(http.getAllowedHostPatterns()))
                 && !http.isEnforceAllowlist();
         if (httpEnabledWithEmptyUnenforcedAllowlist) {
             violations.add("batch.worker.executors.http.enabled=true 但 allowedHostPatterns 为空且"
@@ -154,18 +153,18 @@ public class AtomicExecutorProductionGuard {
                     + " fail-closed 拒绝全部");
         }
         ShellExecutorProperties shell = shellProps.getIfAvailable();
-        boolean enabledShellHasNoCommandAllowlist = EmptyChecks.isNotNull(shell)
+        boolean enabledShellHasNoCommandAllowlist = shell != null
                 && shell.isEnabled()
-                && EmptyChecks.isEmpty(Objects.requireNonNull(shell.getCommandWhitelist()));
+                && EmptyValues.isEmpty(Objects.requireNonNull(shell.getCommandWhitelist()));
         if (enabledShellHasNoCommandAllowlist) {
             violations.add("batch.worker.executors.shell.enabled=true 但 commandWhitelist 为空"
                     + " — prod profile 必须配 batch.worker.executors.shell.command-whitelist"
                     + " 列出允许执行的程序绝对路径(默认空=允许全部 program,任意 RCE 风险)");
         }
         SparkSubmitExecutorProperties spark = sparkProps.getIfAvailable();
-        boolean enabledSparkHasNoResourceAllowlist = EmptyChecks.isNotNull(spark)
+        boolean enabledSparkHasNoResourceAllowlist = spark != null
                 && spark.isEnabled()
-                && EmptyChecks.isEmpty(Objects.requireNonNull(spark.getAppResourceAllowlist()));
+                && EmptyValues.isEmpty(Objects.requireNonNull(spark.getAppResourceAllowlist()));
         if (enabledSparkHasNoResourceAllowlist) {
             violations.add("batch.worker.executors.spark-submit.enabled=true 但 appResourceAllowlist 为空"
                     + " — prod profile 必须配 batch.worker.executors.spark-submit.app-resource-allowlist"
@@ -181,7 +180,7 @@ public class AtomicExecutorProductionGuard {
     private static void addBusinessDataSourceViolations(
             List<String> violations, String executor, String defaultBean, Set<String> allowedBeans) {
         String prefix = "batch.worker.executors." + executor;
-        if (EmptyChecks.isBlank(defaultBean)) {
+        if (EmptyValues.isBlank(defaultBean)) {
             violations.add(prefix + ".enabled=true 但未配置 " + prefix + ".data-source-bean-name"
                     + " — 任务不带 dataSourceBean 时会回落到平台库,必须显式指定业务库 DataSource bean");
         }

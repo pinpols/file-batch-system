@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.ops.infrastructure;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.resilience.DownstreamFallback;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleSchedulerCommandResponse;
 import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerActionResponse;
 import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerStatusResponse;
@@ -52,9 +51,7 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
                             .uri("/api/triggers/management/scheduler-status")
                             .retrieve()
                             .body(SCHEDULER_RESPONSE);
-                    return EmptyChecks.isNotNull(response)
-                            ? response.data()
-                            : new ConsoleSchedulerCommandResponse(null);
+                    return response != null ? response.data() : new ConsoleSchedulerCommandResponse(null);
                 },
                 ex -> new ConsoleSchedulerCommandResponse("UNKNOWN"));
     }
@@ -80,14 +77,13 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
                             .client()
                             .get()
                             .uri(
-                                    EmptyChecks.isNotNull(tenantScope)
+                                    tenantScope != null
                                             ? "/api/triggers/management/list?tenantId={tenantId}"
                                             : "/api/triggers/management/list",
                                     tenantScope)
                             .retrieve()
                             .body(LIST_RESPONSE);
-                    List<ConsoleTriggerStatusResponse> responseItems =
-                            EmptyChecks.isNotNull(response) ? response.data() : List.of();
+                    List<ConsoleTriggerStatusResponse> responseItems = response != null ? response.data() : List.of();
                     return filterByTenant(responseItems, tenantScope);
                 },
                 ex -> List.of());
@@ -96,14 +92,14 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
     /** 下游不提供租户筛选；缺失租户标识的条目在租户作用域内按失败关闭处理。 */
     static List<ConsoleTriggerStatusResponse> filterByTenant(
             List<ConsoleTriggerStatusResponse> data, String tenantScope) {
-        if (EmptyChecks.isNull(data)) {
+        if (data == null) {
             return List.of();
         }
-        if (EmptyChecks.isNull(tenantScope)) {
+        if (tenantScope == null) {
             return data;
         }
         return data.stream()
-                .filter(item -> EmptyChecks.isNotNull(item) && tenantScope.equals(item.tenantId()))
+                .filter(item -> item != null && tenantScope.equals(item.tenantId()))
                 .toList();
     }
 
@@ -121,7 +117,7 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
                             .build(action))
                     .retrieve()
                     .body(ACTION_RESPONSE);
-            return EmptyChecks.isNotNull(response) ? response.data() : ConsoleTriggerActionResponse.empty();
+            return response != null ? response.data() : ConsoleTriggerActionResponse.empty();
         });
     }
 

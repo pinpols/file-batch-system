@@ -10,8 +10,7 @@ import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.exports.config.ExportWorkerConfiguration;
 import io.github.pinpols.batch.worker.exports.config.SqlTemplateExportSecurityProperties;
 import io.github.pinpols.batch.worker.exports.sql.SqlTemplateExportSpec;
@@ -89,7 +88,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
 
     @Override
     public Map<String, Object> loadBatch(ExportDataContext context) {
-        if (context == null || !Texts.hasText(context.tenantId()) || !Texts.hasText(context.batchNo())) {
+        if (context == null || !EmptyValues.hasText(context.tenantId()) || !EmptyValues.hasText(context.batchNo())) {
             return Map.of();
         }
         // 最小头部行：下游 pipeline 要求非空 batch map 及 batchId（可以是合成值）。
@@ -104,7 +103,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     @Override
     @SuppressWarnings("java:S2077")
     public DetailPage loadDetailPage(ExportDataContext context, Long batchId, int pageSize, Object cursor) {
-        if (context == null || !Texts.hasText(context.tenantId()) || !Texts.hasText(context.batchNo())) {
+        if (context == null || !EmptyValues.hasText(context.tenantId()) || !EmptyValues.hasText(context.batchNo())) {
             return DetailPage.empty();
         }
         SqlTemplateExportSpec spec = SqlTemplateExportSpec.parse(context.templateConfig(), objectMapper);
@@ -126,7 +125,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
         // region 由 allowedRegions 字典在 PREPARE 阶段把关,这里仅透传不再校验。
         baseParams.put("region", regionFromSnapshot(context));
 
-        boolean firstPage = EmptyChecks.isEmpty(cursorValues);
+        boolean firstPage = EmptyValues.isEmpty(cursorValues);
         // 首页（cursor == null）时执行 EXPLAIN 预检
         boolean shouldRunExplainCheck = firstPage && security.isExplainCheckEnabled();
         if (shouldRunExplainCheck) {
@@ -139,7 +138,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
                 RlsTenantSessionSupport.applyIfPresent(businessDataSource);
                 return jdbc.queryForList(nullProbeSql, baseParams);
             });
-            if (!EmptyChecks.isEmpty(nullSortValues)) {
+            if (!EmptyValues.isEmpty(nullSortValues)) {
                 throw new WorkerConfigException(
                         "sql_template_export sort column is NULL for the template query result (cursorColumn="
                                 + spec.cursorColumn()
@@ -173,7 +172,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
             RlsTenantSessionSupport.applyIfPresent(businessDataSource);
             return pageJdbc.queryForList(finalSql, finalParams);
         });
-        if (rows == null || rows.isEmpty()) {
+        if (EmptyValues.isEmpty(rows)) {
             return DetailPage.empty();
         }
         boolean hasOverflowRow = rows.size() > limit;
@@ -188,7 +187,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     }
 
     private static List<Object> splitCursor(Object cursor) {
-        if (EmptyChecks.isNull(cursor)) {
+        if (cursor == null) {
             return List.of();
         }
         if (cursor instanceof List<?> values) {
@@ -199,7 +198,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
 
     /** 位点形状必须与当前冻结配置一致; 排序语义变化后旧的单列位点不能继续使用。 */
     private static void requireCursorShape(SqlTemplateExportSpec spec, List<Object> cursorValues, boolean composite) {
-        if (EmptyChecks.isEmpty(cursorValues) || cursorValues.size() == (composite ? 2 : 1)) {
+        if (EmptyValues.isEmpty(cursorValues) || cursorValues.size() == (composite ? 2 : 1)) {
             return;
         }
         throw new WorkerConfigException("sql_template_export cursor does not match the configured sort key: expected "
@@ -210,7 +209,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     }
 
     private static void bindCursor(Map<String, Object> params, SqlTemplateExportSpec spec, List<Object> cursorValues) {
-        if (EmptyChecks.isEmpty(cursorValues)) {
+        if (EmptyValues.isEmpty(cursorValues)) {
             return;
         }
         if (!spec.tiebreakerColumnIsConfigured()) {
@@ -233,7 +232,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     }
 
     private static void requireNonNullSortValue(Object value, String column) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             throw new WorkerConfigException("sql_template_export sort column `"
                     + column
                     + "` is NULL in the query result; keyset pagination cannot order NULL values."
@@ -305,7 +304,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
             int candidate = n.intValue();
             return candidate > 0 ? candidate : null;
         }
-        boolean textualValueIsPresent = EmptyChecks.isNotNull(value) && Texts.hasText(String.valueOf(value));
+        boolean textualValueIsPresent = value != null && EmptyValues.hasText(String.valueOf(value));
         if (textualValueIsPresent) {
             try {
                 String rawText = String.valueOf(value);
@@ -387,8 +386,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
         // R2-P2-4 二层防御：之前手动 `"` 拼接 cursorColumn 依赖上游 requireIdentifier 校验。
         // 改为统一走 quotePg（同样调 requireIdentifier 但出于此函数自管），即使未来调用绕过 spec.parse 也安全。
         String cursorIdent = JdbcMappedSqlValidator.quotePg(cursorColumn);
-        String tiebreakerIdent =
-                EmptyChecks.isNull(tiebreakerColumn) ? null : JdbcMappedSqlValidator.quotePg(tiebreakerColumn);
+        String tiebreakerIdent = tiebreakerColumn == null ? null : JdbcMappedSqlValidator.quotePg(tiebreakerColumn);
         StringBuilder where = new StringBuilder();
         if (range != null && range.active()) {
             where.append("WHERE base.%s >= :__loN%n".formatted(cursorIdent));
@@ -405,13 +403,13 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
             where.append(partitionPredicate);
         }
         if (hasCursor) {
-            String cursorPredicate = EmptyChecks.isNull(tiebreakerIdent)
+            String cursorPredicate = tiebreakerIdent == null
                     ? "base.%s > :__cursor%n".formatted(cursorIdent)
                     : "(base.%s > :__cursor0 OR (base.%s = :__cursor0 AND base.%s > :__cursor1))%n"
                             .formatted(cursorIdent, cursorIdent, tiebreakerIdent);
-            where.append(EmptyChecks.isEmpty(where) ? "WHERE " : "AND ").append(cursorPredicate);
+            where.append(EmptyValues.isEmpty(where) ? "WHERE " : "AND ").append(cursorPredicate);
         }
-        String orderBy = EmptyChecks.isNull(tiebreakerIdent)
+        String orderBy = tiebreakerIdent == null
                 ? "base.%s ASC".formatted(cursorIdent)
                 : "base.%s ASC, base.%s ASC".formatted(cursorIdent, tiebreakerIdent);
         return """

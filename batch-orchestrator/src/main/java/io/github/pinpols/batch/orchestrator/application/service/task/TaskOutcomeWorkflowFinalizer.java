@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeTerminalFinalizer;
@@ -50,7 +50,7 @@ final class TaskOutcomeWorkflowFinalizer {
     }
 
     void finalizeWorkflow(Context context) {
-        if (EmptyChecks.isEmpty(Objects.requireNonNull(context.activeNodes()))) {
+        if (EmptyValues.isEmpty(Objects.requireNonNull(context.activeNodes()))) {
             nodeTerminalFinalizer.finalizeIfAllNodesTerminal(context.workflowRun());
             return;
         }
@@ -89,7 +89,7 @@ final class TaskOutcomeWorkflowFinalizer {
     private void diagnoseRejectedTransition(Context context, String candidateStatus) {
         WorkflowRunEntity current = workflowMappers.workflowRunMapper.selectById(
                 context.command().tenantId(), context.workflowRun().getId());
-        String observed = EmptyChecks.isNull(current) ? "MISSING" : current.getRunStatus();
+        String observed = current == null ? "MISSING" : current.getRunStatus();
         if (candidateStatus.equals(observed) || WorkflowRunStatus.PAUSED.code().equals(observed)) {
             // DAG 的 END 可在同一 REPORT 事务中先完成根运行；相同终态是幂等收口。
             // PAUSED 仍保留人工暂停，在途结果不能把它当成取消/终止竞争，也不能自动恢复。

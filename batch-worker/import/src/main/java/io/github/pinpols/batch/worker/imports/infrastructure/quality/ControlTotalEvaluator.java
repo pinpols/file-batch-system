@@ -5,8 +5,7 @@ import static io.github.pinpols.batch.worker.imports.infrastructure.quality.Vali
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.firstNonNull;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.stringValue;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import java.math.BigDecimal;
 import java.util.List;
@@ -37,7 +36,7 @@ public class ControlTotalEvaluator {
     /** 每个 chunk 调用:按 amountField 累加金额到 running sum(仅 controlTotalCheck 启用且配了 amountField 时)。 */
     public void accumulate(ValidationSession session, List<Map<String, Object>> rows) {
         boolean accumulationInputIsIncomplete =
-                EmptyChecks.isNull(session) || EmptyChecks.isNull(session.context()) || EmptyChecks.isEmpty(rows);
+                session == null || session.context() == null || EmptyValues.isEmpty(rows);
         if (accumulationInputIsIncomplete) {
             return;
         }
@@ -46,7 +45,7 @@ public class ControlTotalEvaluator {
             return;
         }
         String amountField = amountField(rule);
-        if (!Texts.hasText(amountField)) {
+        if (!EmptyValues.hasText(amountField)) {
             return;
         }
         BigDecimal sum = runningSum(session);
@@ -72,7 +71,7 @@ public class ControlTotalEvaluator {
             return null;
         }
         String amountField = amountField(rule);
-        if (!Texts.hasText(amountField)) {
+        if (!EmptyValues.hasText(amountField)) {
             session.appliedChecks().add(CONTROL_TOTAL_CHECK);
             return new ValidationIssue(
                     null,

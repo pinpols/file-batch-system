@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.file.view;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -112,7 +111,7 @@ public record FileTemplateConfigQueryView(
     }
 
     private static void put(Map<String, Object> map, String key, Object value) {
-        if (EmptyChecks.isNotNull(value)) {
+        if (value != null) {
             map.put(key, value);
         }
     }

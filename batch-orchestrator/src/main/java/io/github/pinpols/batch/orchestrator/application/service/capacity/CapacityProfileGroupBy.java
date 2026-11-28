@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.capacity;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /** P2 cost profile 聚合维度。只做容量画像，不承载账单或成本分摊语义。 */
 public enum CapacityProfileGroupBy {
@@ -10,7 +11,7 @@ public enum CapacityProfileGroupBy {
     WORKER;
 
     public static CapacityProfileGroupBy fromNullable(String raw) {
-        if (raw == null || raw.isBlank()) {
+        if (EmptyValues.isBlank(raw)) {
             return TENANT;
         }
         try {

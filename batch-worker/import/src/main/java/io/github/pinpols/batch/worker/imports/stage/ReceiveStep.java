@@ -13,9 +13,8 @@ import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.service.DryRunGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
 import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam.FileRecordParamBuilder;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRunFence;
@@ -112,7 +111,9 @@ public class ReceiveStep implements ImportStageStep {
 
     @Override
     public ImportStageResult execute(ImportJobContext context) {
-        if (context == null || !Texts.hasText(context.getTenantId()) || !Texts.hasText(context.getRawPayload())) {
+        if (context == null
+                || !EmptyValues.hasText(context.getTenantId())
+                || !EmptyValues.hasText(context.getRawPayload())) {
             return ImportStageResult.failure(
                     stage(),
                     "IMPORT_RECEIVE_INVALID",
@@ -145,10 +146,9 @@ public class ReceiveStep implements ImportStageStep {
                     stage(), TaskErrorCodes.FROZEN_FILE_TEMPLATE_INVALID, invalidTemplate, objectMapper);
         }
         Long existingFileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
-        if (EmptyChecks.isNull(existingFileId)
-                && !DryRunGuard.fromAttributes(attrs).isDryRun()) {
+        if (existingFileId == null && !DryRunGuard.fromAttributes(attrs).isDryRun()) {
             createAndBindReceivedFile(context, importPayload, templateConfig, payloadLength, attrs);
-        } else if (EmptyChecks.isNotNull(existingFileId)) {
+        } else if (existingFileId != null) {
             // ADR-046 文件束:复用 scanner 预建的 file_record(orchestrator 把 partition.source_file_id
             // 落进 task payload 的 sourceFileId,worker-core 据此设了 FILE_ID,基类已加载 FILE_RECORD)。
             // 束的 task payload 只带 sourceFileId/templateCode,不带存储坐标——从 file_record 回填
@@ -156,7 +156,7 @@ public class ReceiveStep implements ImportStageStep {
             // 仅填 payload 中为空的字段,对「payload 自带完整存储信息」的既有 existing-file 流是无副作用的幂等回填。
             importPayload = enrichFromFileRecord(importPayload, attrs.get(PipelineRuntimeKeys.FILE_RECORD));
         }
-        if (EmptyChecks.isNotEmpty(templateConfig)) {
+        if (EmptyValues.isNotEmpty(templateConfig)) {
             attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
         }
         attrs.put(PipelineRuntimeKeys.IMPORT_PAYLOAD, importPayload);
@@ -248,7 +248,7 @@ public class ReceiveStep implements ImportStageStep {
             return importPayload.templateCode();
         }
         String rawPayload = context.getRawPayload();
-        if (!Texts.hasText(rawPayload)) {
+        if (!EmptyValues.hasText(rawPayload)) {
             return null;
         }
         try (JsonParser parser = objectMapper.getFactory().createParser(rawPayload)) {
@@ -275,7 +275,7 @@ public class ReceiveStep implements ImportStageStep {
                     parser.skipChildren();
                 }
             }
-            if (EmptyChecks.isNotNull(parser.nextToken())) {
+            if (parser.nextToken() != null) {
                 throw new IllegalArgumentException("Import replay payload contains trailing content");
             }
             return templateCode;
@@ -313,14 +313,14 @@ public class ReceiveStep implements ImportStageStep {
             return;
         }
         Object current = map.get(key);
-        boolean currentBlank = current == null || (current instanceof String s && !Texts.hasText(s));
+        boolean currentBlank = current == null || (current instanceof String s && !EmptyValues.hasText(s));
         if (currentBlank) {
             map.put(key, value);
         }
     }
 
     private Map<String, Object> resolveTemplateSecurity(Map<String, Object> template) {
-        if (EmptyChecks.isEmpty(template)) {
+        if (EmptyValues.isEmpty(template)) {
             return Map.of();
         }
         Map<String, Object> security = new LinkedHashMap<>();
@@ -347,7 +347,7 @@ public class ReceiveStep implements ImportStageStep {
             return importPayload;
         }
         String rawPayload = context.getRawPayload();
-        if (!Texts.hasText(rawPayload) || !rawPayload.trim().startsWith("{")) {
+        if (!EmptyValues.hasText(rawPayload) || !rawPayload.trim().startsWith("{")) {
             return ImportPayload.empty();
         }
         try {
@@ -357,10 +357,10 @@ public class ReceiveStep implements ImportStageStep {
             }
 
             // content 可能不在顶层（例如 params/content）。当解析出来的 content 为空时做一次递归回填。
-            if (!Texts.hasText(importPayload.content()) && !Texts.hasText(importPayload.contentBase64())) {
+            if (!EmptyValues.hasText(importPayload.content()) && !EmptyValues.hasText(importPayload.contentBase64())) {
                 JsonNode root = objectMapper.readTree(rawPayload);
                 String extracted = findFirstText(root, "content");
-                if (Texts.hasText(extracted)) {
+                if (EmptyValues.hasText(extracted)) {
                     String trimmed = extracted.trim();
                     // 仅接受看起来像 JSON 内容（数组或对象）的提取值。
                     if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) {
@@ -388,7 +388,7 @@ public class ReceiveStep implements ImportStageStep {
     private static final int MAX_FIND_DEPTH = 50;
 
     private String findFirstText(JsonNode node, String fieldName) {
-        if (node == null || !Texts.hasText(fieldName)) {
+        if (node == null || !EmptyValues.hasText(fieldName)) {
             return null;
         }
         // 迭代 BFS：用显式 Deque 替代递归调用栈，深度由 MAX_FIND_DEPTH 硬上限
@@ -421,11 +421,11 @@ public class ReceiveStep implements ImportStageStep {
     private record NodeAtDepth(JsonNode node, int depth) {}
 
     private String resolveFileName(ImportPayload payload, String fileFormatType, String traceId) {
-        if (Texts.hasText(payload.fileName())) {
+        if (EmptyValues.hasText(payload.fileName())) {
             return payload.fileName();
         }
         FileTemplateFormat format = DictEnum.fromCode(FileTemplateFormat.class, fileFormatType);
-        if (EmptyChecks.isNull(format)) {
+        if (format == null) {
             return "import-" + traceId + BatchFileConstants.DAT_SUFFIX;
         }
         return "import-"
@@ -445,7 +445,7 @@ public class ReceiveStep implements ImportStageStep {
     }
 
     private String normalizeFileFormat(String fileFormatType, String rawPayload) {
-        if (Texts.hasText(fileFormatType)) {
+        if (EmptyValues.hasText(fileFormatType)) {
             return fileFormatType.toUpperCase();
         }
         if (rawPayload != null && rawPayload.trim().startsWith("{")) {
@@ -458,7 +458,7 @@ public class ReceiveStep implements ImportStageStep {
     }
 
     private LocalDate parseBizDate(String bizDate) {
-        if (!Texts.hasText(bizDate)) {
+        if (!EmptyValues.hasText(bizDate)) {
             return null;
         }
         try {
@@ -471,11 +471,11 @@ public class ReceiveStep implements ImportStageStep {
     }
 
     private String defaultText(String value, String fallback) {
-        return Texts.hasText(value) ? value : fallback;
+        return EmptyValues.hasText(value) ? value : fallback;
     }
 
     private void mergeUserMetadata(Map<String, Object> target, Map<String, Object> source) {
-        if (source == null || source.isEmpty()) {
+        if (EmptyValues.isEmpty(source)) {
             return;
         }
         for (Map.Entry<String, Object> entry : source.entrySet()) {
@@ -487,7 +487,7 @@ public class ReceiveStep implements ImportStageStep {
     }
 
     private void mergeSecurityMetadata(Map<String, Object> target, Map<String, Object> security) {
-        if (security == null || security.isEmpty()) {
+        if (EmptyValues.isEmpty(security)) {
             return;
         }
         target.putAll(security);

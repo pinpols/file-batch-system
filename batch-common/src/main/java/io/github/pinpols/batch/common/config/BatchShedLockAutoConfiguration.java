@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.micrometer.core.instrument.MeterRegistry;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
@@ -94,12 +93,12 @@ public class BatchShedLockAutoConfiguration {
     static String redisEnvironmentName(
             String configuredEnvironment, String applicationName, String deploymentNamespace) {
         String serviceEnvironment =
-                Texts.hasText(configuredEnvironment) ? configuredEnvironment.trim() : applicationName;
-        if (!Texts.hasText(deploymentNamespace)) {
-            return Texts.hasText(serviceEnvironment) ? serviceEnvironment : "default";
+                EmptyValues.hasText(configuredEnvironment) ? configuredEnvironment.trim() : applicationName;
+        if (!EmptyValues.hasText(deploymentNamespace)) {
+            return EmptyValues.hasText(serviceEnvironment) ? serviceEnvironment : "default";
         }
         String namespace = deploymentNamespace.trim();
-        return namespace + ":" + (Texts.hasText(serviceEnvironment) ? serviceEnvironment : "default");
+        return namespace + ":" + (EmptyValues.hasText(serviceEnvironment) ? serviceEnvironment : "default");
     }
 
     // 不加 @ConditionalOnBean(LockProvider.class)：condition 评估发生在 bean 注册前，
@@ -116,8 +115,6 @@ public class BatchShedLockAutoConfiguration {
     private static LockProvider observe(
             LockProvider provider, String providerType, ObjectProvider<MeterRegistry> meterRegistryProvider) {
         MeterRegistry meterRegistry = meterRegistryProvider.getIfAvailable();
-        return EmptyChecks.isNull(meterRegistry)
-                ? provider
-                : new MeteredLockProvider(provider, providerType, meterRegistry);
+        return meterRegistry == null ? provider : new MeteredLockProvider(provider, providerType, meterRegistry);
     }
 }

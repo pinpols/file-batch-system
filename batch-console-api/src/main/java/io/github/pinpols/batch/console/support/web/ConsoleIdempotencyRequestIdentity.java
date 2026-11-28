@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.support.web;
 
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -15,7 +15,7 @@ public final class ConsoleIdempotencyRequestIdentity {
     private ConsoleIdempotencyRequestIdentity() {}
 
     public static String tenantId(String tenantHeader) {
-        return Texts.hasText(tenantHeader) ? tenantHeader.trim() : "_";
+        return EmptyValues.hasText(tenantHeader) ? tenantHeader.trim() : "_";
     }
 
     public static String redisKey(String tenantHeader, String method, String requestUri, String idempotencyKey) {

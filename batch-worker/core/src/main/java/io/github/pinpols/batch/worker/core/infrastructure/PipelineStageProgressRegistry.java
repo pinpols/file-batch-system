@@ -1,8 +1,7 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import io.github.pinpols.batch.common.dto.WorkerPipelineProgressDto;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.support.ExecutionContext;
 import java.util.Comparator;
 import java.util.List;
@@ -23,7 +22,7 @@ public class PipelineStageProgressRegistry {
 
     public void publish(ExecutionContext context, String stageCode, long rowsProcessed, Long totalRowsHint) {
         Key key = key(context, stageCode);
-        if (EmptyChecks.isNull(key)) {
+        if (key == null) {
             return;
         }
         snapshots.put(
@@ -40,7 +39,7 @@ public class PipelineStageProgressRegistry {
 
     public void clear(ExecutionContext context, String stageCode) {
         Key key = key(context, stageCode);
-        if (EmptyChecks.isNotNull(key)) {
+        if (key != null) {
             snapshots.remove(key);
         }
     }
@@ -54,12 +53,12 @@ public class PipelineStageProgressRegistry {
     }
 
     private static Key key(ExecutionContext context, String stageCode) {
-        if (EmptyChecks.isNull(context) || !Texts.hasText(stageCode)) {
+        if (context == null || !EmptyValues.hasText(stageCode)) {
             return null;
         }
         Long taskId = longValue(context.getAttributes().get(PipelineRuntimeKeys.TASK_ID));
         Long pipelineInstanceId = longValue(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
-        if (EmptyChecks.isNull(taskId) || EmptyChecks.isNull(pipelineInstanceId)) {
+        if (taskId == null || pipelineInstanceId == null) {
             return null;
         }
         Object invocation = context.getAttributes().get(PipelineRuntimeKeys.PARTITION_INVOCATION_ID);
@@ -68,7 +67,7 @@ public class PipelineStageProgressRegistry {
                 taskId,
                 pipelineInstanceId,
                 stageCode,
-                EmptyChecks.isNull(invocation) ? null : String.valueOf(invocation),
+                invocation == null ? null : String.valueOf(invocation),
                 stepRunId);
     }
 
@@ -76,7 +75,7 @@ public class PipelineStageProgressRegistry {
         if (value instanceof Number number) {
             return number.longValue();
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         try {

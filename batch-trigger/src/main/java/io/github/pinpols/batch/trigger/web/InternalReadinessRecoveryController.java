@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.trigger.web;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.service.readiness.ReadinessRecoveryService;
 import io.github.pinpols.batch.trigger.service.readiness.ReadinessRecoveryService.RecoveryLaunchOutcome;
 import java.time.Instant;
@@ -28,7 +27,7 @@ public class InternalReadinessRecoveryController {
 
     @PostMapping("/recover")
     public ResponseEntity<RecoverResponse> recover(@RequestBody RecoverRequest request) {
-        if (EmptyChecks.isNull(request)) {
+        if (request == null) {
             RecoverResponse invalidRequest = new RecoverResponse(RecoveryLaunchOutcome.INVALID_REQUEST.name());
             return ResponseEntity.badRequest().body(invalidRequest);
         }

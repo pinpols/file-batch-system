@@ -2,9 +2,8 @@ package io.github.pinpols.batch.orchestrator.application.service.asset;
 
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.AssetFreshnessPolicyEntity;
@@ -46,7 +45,7 @@ public class AssetFreshnessPolicyService {
             return 0;
         }
         List<AssetFreshnessPolicyEntity> policies = policyMapper.selectEnabledPolicies(policyLimit);
-        if (EmptyChecks.isEmpty(policies)) {
+        if (EmptyValues.isEmpty(policies)) {
             return 0;
         }
         Instant now = dateTimeSupport.nowInstant();
@@ -129,8 +128,8 @@ public class AssetFreshnessPolicyService {
     private boolean validPolicy(AssetFreshnessPolicyEntity policy) {
         return policy != null
                 && Boolean.TRUE.equals(policy.enabled())
-                && Texts.hasText(policy.tenantId())
-                && Texts.hasText(policy.assetCode())
+                && EmptyValues.hasText(policy.tenantId())
+                && EmptyValues.hasText(policy.assetCode())
                 && "JOB".equals(policy.assetType())
                 && policy.expectedByLocalTime() != null;
     }
@@ -145,7 +144,7 @@ public class AssetFreshnessPolicyService {
     }
 
     private ZoneId resolveZone(String timezone) {
-        if (!Texts.hasText(timezone)) {
+        if (!EmptyValues.hasText(timezone)) {
             return ZoneId.of(DEFAULT_TIMEZONE);
         }
         try {
@@ -157,7 +156,7 @@ public class AssetFreshnessPolicyService {
     }
 
     private String safeSeverity(String severity) {
-        return Texts.hasText(severity) ? severity : DEFAULT_SEVERITY;
+        return EmptyValues.hasText(severity) ? severity : DEFAULT_SEVERITY;
     }
 
     private String escalateSeverity(String severity) {

@@ -2,9 +2,8 @@ package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.domain.workflow.CrossDayDependencySpec;
@@ -74,7 +73,7 @@ public class CrossDayDependencyResolver {
             String crossDayDependenciesJson,
             boolean dryRun,
             Map<String, List<Long>> resultVersionIdsByAlias) {
-        if (EmptyChecks.isNull(resultVersionIdsByAlias)) {
+        if (resultVersionIdsByAlias == null) {
             return ResolutionResult.failed("CROSS_DAY_DEP_SNAPSHOT_INVALID");
         }
         return resolveInternal(tenantId, workflowBizDate, crossDayDependenciesJson, dryRun, resultVersionIdsByAlias);
@@ -86,7 +85,7 @@ public class CrossDayDependencyResolver {
             String crossDayDependenciesJson,
             boolean dryRun,
             Map<String, List<Long>> pinnedResultIdsByAlias) {
-        if (!Texts.hasText(crossDayDependenciesJson)) {
+        if (!EmptyValues.hasText(crossDayDependenciesJson)) {
             return ResolutionResult.resolvedPayload(Map.of(), Map.of());
         }
         List<CrossDayDependencySpec> specs;
@@ -100,10 +99,10 @@ public class CrossDayDependencyResolver {
                     SwallowedExceptionLogger.summary(parseFailure));
             return ResolutionResult.failed("CROSS_DAY_DEPS_PARSE_FAILED");
         }
-        if (specs == null || specs.isEmpty()) {
+        if (EmptyValues.isEmpty(specs)) {
             return ResolutionResult.resolvedPayload(Map.of(), Map.of());
         }
-        if (!Texts.hasText(tenantId) || EmptyChecks.isNull(workflowBizDate)) {
+        if (!EmptyValues.hasText(tenantId) || workflowBizDate == null) {
             return ResolutionResult.failed("CROSS_DAY_DEP_INVALID_CONTEXT");
         }
 
@@ -123,38 +122,38 @@ public class CrossDayDependencyResolver {
                 .build();
 
         for (CrossDayDependencySpec spec : specs) {
-            boolean specIsMissingOrHasNoJobCode = EmptyChecks.isNull(spec) || !Texts.hasText(spec.jobCode());
+            boolean specIsMissingOrHasNoJobCode = spec == null || !EmptyValues.hasText(spec.jobCode());
             if (specIsMissingOrHasNoJobCode) {
                 return ResolutionResult.failed("CROSS_DAY_DEP_INVALID_SPEC");
             }
             if (!spec.hasSupportedStrategy() || !spec.hasValidVersionSelector()) {
                 return ResolutionResult.failed("CROSS_DAY_DEP_INVALID_STRATEGY");
             }
-            boolean dependencyScopeIsUnsupported = EmptyChecks.isNotNull(spec.scope())
+            boolean dependencyScopeIsUnsupported = spec.scope() != null
                     && !CrossDayDependencySpec.SCOPE_REQUIRED.equalsIgnoreCase(spec.scope())
                     && !CrossDayDependencySpec.SCOPE_OPTIONAL.equalsIgnoreCase(spec.scope());
             if (dependencyScopeIsUnsupported) {
                 return ResolutionResult.failed("CROSS_DAY_DEP_INVALID_SCOPE");
             }
-            String alias = Texts.hasText(spec.alias()) ? spec.alias() : defaultAlias(spec);
+            String alias = EmptyValues.hasText(spec.alias()) ? spec.alias() : defaultAlias(spec);
             if (!aliases.add(alias)) {
                 return ResolutionResult.failed("CROSS_DAY_DEP_DUPLICATE_ALIAS");
             }
-            if (EmptyChecks.isNotNull(pinnedResultIdsByAlias) && !pinnedResultIdsByAlias.containsKey(alias)) {
+            if (pinnedResultIdsByAlias != null && !pinnedResultIdsByAlias.containsKey(alias)) {
                 return ResolutionResult.failed("CROSS_DAY_DEP_SNAPSHOT_INVALID");
             }
 
             ResolutionResult failure = resolveDependencySpec(spec, alias, context);
-            if (EmptyChecks.isNotNull(failure)) {
+            if (failure != null) {
                 return failure;
             }
         }
 
-        if (EmptyChecks.isNotNull(pinnedResultIdsByAlias) && !aliases.equals(pinnedResultIdsByAlias.keySet())) {
+        if (pinnedResultIdsByAlias != null && !aliases.equals(pinnedResultIdsByAlias.keySet())) {
             return ResolutionResult.failed("CROSS_DAY_DEP_SNAPSHOT_INVALID");
         }
 
-        if (EmptyChecks.isNotEmpty(waitingReasons)) {
+        if (EmptyValues.isNotEmpty(waitingReasons)) {
             return ResolutionResult.waiting(waitingReasons, resolved, resultVersionIdsByAlias);
         }
         return ResolutionResult.resolvedPayload(resolved, resultVersionIdsByAlias);
@@ -178,15 +177,15 @@ public class CrossDayDependencyResolver {
         try {
             if (spec.isRangeMode()) {
                 List<Map<String, Object>> rangeOutputs;
-                if (EmptyChecks.isNull(context.pinnedResultIdsByAlias())) {
+                if (context.pinnedResultIdsByAlias() == null) {
                     RangeResolution rangeResolution =
                             resolveRange(context.tenantId(), context.workflowBizDate(), spec, context.dryRun());
-                    if (EmptyChecks.isNull(rangeResolution)) {
+                    if (rangeResolution == null) {
                         return ResolutionResult.failed("CROSS_DAY_DEP_INVALID_RANGE");
                     }
                     rangeOutputs = rangeResolution.outputs();
                     if (spec.isRequired()
-                            && !EmptyChecks.isEmpty(Objects.requireNonNull(rangeResolution.missingDates()))) {
+                            && !EmptyValues.isEmpty(Objects.requireNonNull(rangeResolution.missingDates()))) {
                         String missingDateList = String.join(",", rangeResolution.missingDates());
                         String missingRangeReason = "RANGE_MISSING:" + missingDateList;
                         context.waitingReasons().add(missingReason(alias, spec, missingRangeReason));
@@ -198,7 +197,7 @@ public class CrossDayDependencyResolver {
                             spec,
                             context.dryRun(),
                             context.pinnedResultIdsByAlias().get(alias));
-                    if (EmptyChecks.isNull(rangeOutputs)) {
+                    if (rangeOutputs == null) {
                         return ResolutionResult.failed("CROSS_DAY_DEP_SNAPSHOT_INVALID");
                     }
                 }
@@ -207,11 +206,11 @@ public class CrossDayDependencyResolver {
                 context.resultVersionIdsByAlias().put(alias, resultIds(rangeOutputs));
             } else {
                 LocalDate target = computeOffsetDate(context.workflowBizDate(), spec);
-                if (EmptyChecks.isNull(target)) {
+                if (target == null) {
                     return ResolutionResult.failed("CROSS_DAY_DEP_INVALID_OFFSET");
                 }
                 Optional<ResultVersionEntity> hit;
-                if (EmptyChecks.isNull(context.pinnedResultIdsByAlias())) {
+                if (context.pinnedResultIdsByAlias() == null) {
                     hit = lookup(context.tenantId(), spec, target, context.dryRun());
                 } else {
                     hit = resolvePinnedSingle(
@@ -223,7 +222,7 @@ public class CrossDayDependencyResolver {
                 }
                 if (!hit.isPresent()) {
                     context.resultVersionIdsByAlias().put(alias, List.of());
-                    if (EmptyChecks.isNotNull(context.pinnedResultIdsByAlias()) && spec.isRequired()) {
+                    if (context.pinnedResultIdsByAlias() != null && spec.isRequired()) {
                         return ResolutionResult.failed("CROSS_DAY_DEP_SNAPSHOT_INVALID");
                     }
                     if (spec.isRequired()) {
@@ -256,7 +255,7 @@ public class CrossDayDependencyResolver {
         if (spec.isOffsetMode()) {
             return bizDateArithmetic.resolveOffset(bizDate, spec.bizDateOffset());
         }
-        if (Texts.hasText(spec.bizDateRange())) {
+        if (EmptyValues.hasText(spec.bizDateRange())) {
             return bizDateArithmetic.resolveNamedOffset(bizDate, spec.bizDateRange());
         }
         return null;
@@ -293,12 +292,12 @@ public class CrossDayDependencyResolver {
             boolean dryRun,
             List<Long> pinnedResultIds) {
         List<LocalDate> dates = bizDateArithmetic.resolveRange(bizDate, spec.bizDateRange());
-        if (EmptyChecks.isNull(dates) || EmptyChecks.isNull(pinnedResultIds)) {
+        if (dates == null || pinnedResultIds == null) {
             return null;
         }
         Map<String, ResultVersionEntity> selectedByBusinessKey = new LinkedHashMap<>();
         for (Long resultVersionId : pinnedResultIds) {
-            if (EmptyChecks.isNull(resultVersionId) || resultVersionId <= 0) {
+            if (resultVersionId == null || resultVersionId <= 0) {
                 return null;
             }
             ResultVersionEntity selected = resultVersionQueryService
@@ -314,7 +313,7 @@ public class CrossDayDependencyResolver {
                 return null;
             }
             boolean resultVersionWasAlreadySelected =
-                    EmptyChecks.isNotNull(selectedByBusinessKey.putIfAbsent(selectedBusinessKey, selected));
+                    selectedByBusinessKey.putIfAbsent(selectedBusinessKey, selected) != null;
             if (resultVersionWasAlreadySelected) {
                 return null;
             }
@@ -323,7 +322,7 @@ public class CrossDayDependencyResolver {
         for (LocalDate date : dates) {
             String dateBusinessKey = businessKey(spec.jobCode(), date);
             ResultVersionEntity selected = selectedByBusinessKey.get(dateBusinessKey);
-            if (EmptyChecks.isNull(selected)) {
+            if (selected == null) {
                 if (spec.isRequired()) {
                     return null;
                 }
@@ -341,14 +340,14 @@ public class CrossDayDependencyResolver {
             LocalDate targetDate,
             boolean dryRun,
             List<Long> pinnedResultIds) {
-        if (EmptyChecks.isNull(pinnedResultIds) || pinnedResultIds.size() > 1) {
+        if (pinnedResultIds == null || pinnedResultIds.size() > 1) {
             return Optional.empty();
         }
-        if (EmptyChecks.isEmpty(Objects.requireNonNull(pinnedResultIds))) {
+        if (EmptyValues.isEmpty(Objects.requireNonNull(pinnedResultIds))) {
             return Optional.empty();
         }
         Long resultVersionId = pinnedResultIds.getFirst();
-        if (EmptyChecks.isNull(resultVersionId) || resultVersionId <= 0) {
+        if (resultVersionId == null || resultVersionId <= 0) {
             return Optional.empty();
         }
         ResultVersionEntity selected =
@@ -361,9 +360,9 @@ public class CrossDayDependencyResolver {
     }
 
     private boolean isPinnedVersionUsable(ResultVersionEntity selected, boolean dryRun) {
-        return EmptyChecks.isNotNull(selected)
-                && EmptyChecks.isNotNull(selected.id())
-                && EmptyChecks.isNotNull(selected.jobInstanceId())
+        return selected != null
+                && selected.id() != null
+                && selected.jobInstanceId() != null
                 && "INLINE_JSON".equals(selected.payloadStorage())
                 && (dryRun == "DRY_RUN".equals(selected.status()));
     }
@@ -414,7 +413,7 @@ public class CrossDayDependencyResolver {
     }
 
     private Map<String, Object> toEntry(ResultVersionEntity row) {
-        if (!PAYLOAD_STORAGE_INLINE_JSON.equals(row.payloadStorage()) || !Texts.hasText(row.payloadJson())) {
+        if (!PAYLOAD_STORAGE_INLINE_JSON.equals(row.payloadStorage()) || !EmptyValues.hasText(row.payloadJson())) {
             throw new UnsupportedCrossDayPayloadException();
         }
         Object output;
@@ -447,7 +446,7 @@ public class CrossDayDependencyResolver {
             String sign = n < 0 ? "minus_" : "plus_";
             return "t_" + sign + Math.abs(n);
         }
-        if (Texts.hasText(spec.bizDateRange())) {
+        if (EmptyValues.hasText(spec.bizDateRange())) {
             return spec.bizDateRange().toLowerCase(Locale.ROOT);
         }
         return spec.jobCode().toLowerCase(Locale.ROOT);

@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
@@ -61,12 +61,12 @@ public class BatchDayCutoffScheduler {
         List<String> tracked = List.of("OPEN");
 
         List<BatchDayInstanceEntity> candidates = batchDayInstanceMapper.selectByDayStatusIn(tracked);
-        if (EmptyChecks.isEmpty(candidates)) {
+        if (EmptyValues.isEmpty(candidates)) {
             return;
         }
 
         for (BatchDayInstanceEntity candidate : candidates) {
-            boolean cutoffCandidateIncomplete = EmptyChecks.isNull(candidate)
+            boolean cutoffCandidateIncomplete = candidate == null
                     || candidate.tenantId() == null
                     || candidate.calendarCode() == null
                     || candidate.bizDate() == null
@@ -86,10 +86,10 @@ public class BatchDayCutoffScheduler {
 
     private void advanceCandidateInTenant(BatchDayInstanceEntity candidate, Instant now) {
         Instant cutoffAt = candidate.cutoffAt();
-        if (EmptyChecks.isNull(cutoffAt)) {
+        if (cutoffAt == null) {
             cutoffAt = resolveCutoffAt(candidate.tenantId(), candidate.calendarCode(), candidate.bizDate());
         }
-        if (EmptyChecks.isNull(cutoffAt)) {
+        if (cutoffAt == null) {
             return;
         }
         if (!now.isBefore(cutoffAt)) {

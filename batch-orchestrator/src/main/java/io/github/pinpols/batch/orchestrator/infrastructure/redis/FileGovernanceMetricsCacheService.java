@@ -4,8 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceLatencyMetrics;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
@@ -39,7 +38,7 @@ public class FileGovernanceMetricsCacheService {
             long processingThresholdSeconds,
             long processingMaxAgeSeconds,
             int sampleSize) {
-        if (!Texts.hasText(tenantId)) {
+        if (!EmptyValues.hasText(tenantId)) {
             return FileGovernanceLatencyMetrics.empty(null);
         }
         String key = BatchRedisKeys.fileGovernanceMetrics(tenantId);
@@ -84,7 +83,7 @@ public class FileGovernanceMetricsCacheService {
     }
 
     public void write(String tenantId, FileGovernanceLatencyMetrics metrics) {
-        if (!Texts.hasText(tenantId) || EmptyChecks.isNull(metrics)) {
+        if (!EmptyValues.hasText(tenantId) || metrics == null) {
             return;
         }
         Map<String, String> hash = new LinkedHashMap<>();

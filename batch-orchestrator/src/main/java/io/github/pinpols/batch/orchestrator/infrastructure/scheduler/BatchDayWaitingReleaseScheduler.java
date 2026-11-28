@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -75,7 +75,7 @@ public class BatchDayWaitingReleaseScheduler {
             return;
         }
         List<BatchDayWaitingLaunchEntity> waiting = waitingLaunchMapper.selectWaiting(null, WAITING_SCAN_LIMIT);
-        if (EmptyChecks.isEmpty(waiting)) {
+        if (EmptyValues.isEmpty(waiting)) {
             return;
         }
         Set<PreviousDayKey> seen = new HashSet<>();
@@ -86,7 +86,7 @@ public class BatchDayWaitingReleaseScheduler {
                 continue;
             }
             String tenantId = entity.tenantId();
-            if (tenantId == null || tenantId.isBlank()) {
+            if (EmptyValues.isBlank(tenantId)) {
                 continue;
             }
             LocalDate previousBizDate = entity.bizDate().minusDays(1);
@@ -130,7 +130,7 @@ public class BatchDayWaitingReleaseScheduler {
     private int releasePreviousDayInTenant(BatchDayWaitingLaunchEntity waiting, LocalDate previousBizDate) {
         BatchDayInstanceEntity previousDay = batchDayInstanceMapper.selectByTenantCalendarBizDate(
                 waiting.tenantId(), waiting.calendarCode(), previousBizDate);
-        if (EmptyChecks.isNull(previousDay) || !isReleasable(previousDay.dayStatus())) {
+        if (previousDay == null || !isReleasable(previousDay.dayStatus())) {
             return 0;
         }
         int released = batchDayOperationService.releaseWaitingLaunchesForBatchDay(previousDay, AUTO_RELEASE_OPERATOR);

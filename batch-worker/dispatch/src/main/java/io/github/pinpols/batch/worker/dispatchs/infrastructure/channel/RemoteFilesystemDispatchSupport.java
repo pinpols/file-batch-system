@@ -10,9 +10,8 @@ import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectStoreAccessException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.SecretMasking;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import java.io.ByteArrayInputStream;
@@ -83,7 +82,7 @@ final class RemoteFilesystemDispatchSupport {
         try {
             Map<String, Object> channelConfig = command.channelConfig();
             String remoteDir = resolveEndpointOrFail(channelConfig, "nas_remote_directory", KEY_TARGET_ENDPOINT);
-            if (!Texts.hasText(remoteDir)) {
+            if (!EmptyValues.hasText(remoteDir)) {
                 return DispatchResult.failureWithoutReceipt("nas_remote_directory missing");
             }
             // R-4.2: normalize 只处理 . 和 ..，不解析 symlink；恶意配置 /tmp/link_to_parent
@@ -176,7 +175,7 @@ final class RemoteFilesystemDispatchSupport {
             }
         }
         String sandboxRootRaw = properties.getNasSandboxRoot();
-        if (Texts.hasText(sandboxRootRaw)) {
+        if (EmptyValues.hasText(sandboxRootRaw)) {
             Path configuredSandboxRoot = Path.of(sandboxRootRaw);
             Path absoluteSandboxRoot = configuredSandboxRoot.toAbsolutePath();
             Path normalizedSandboxRoot = absoluteSandboxRoot.normalize();
@@ -208,7 +207,7 @@ final class RemoteFilesystemDispatchSupport {
         try {
             Map<String, Object> channelConfig = command.channelConfig();
             String bucket = firstText(channelConfig, "oss_bucket", "storage_bucket", s3Properties.getBucket());
-            if (!Texts.hasText(bucket)) {
+            if (!EmptyValues.hasText(bucket)) {
                 return DispatchResult.failureWithoutReceipt("oss_bucket missing");
             }
             String objectPrefix = firstText(channelConfig, "oss_object_prefix", KEY_TARGET_ENDPOINT, "");
@@ -281,7 +280,7 @@ final class RemoteFilesystemDispatchSupport {
             return true;
         }
         Throwable cause = failure.getCause();
-        while (EmptyChecks.isNotNull(cause)) {
+        while (cause != null) {
             if (cause instanceof AtomicMoveNotSupportedException) {
                 return true;
             }
@@ -298,7 +297,7 @@ final class RemoteFilesystemDispatchSupport {
             Map<String, Object> channelConfig, DispatchRuntimeProperties properties) {
         try {
             String remoteDir = resolveEndpointOrFail(channelConfig, "nas_remote_directory", KEY_TARGET_ENDPOINT);
-            if (!Texts.hasText(remoteDir)) {
+            if (!EmptyValues.hasText(remoteDir)) {
                 return new DispatchChannelProbeResult(false, "nas_remote_directory missing", null);
             }
             // R-4.2: probe 与 dispatch 走同一路径解析，保证两者对"可写性"的判断一致，
@@ -328,7 +327,7 @@ final class RemoteFilesystemDispatchSupport {
             Map<String, Object> channelConfig, S3StorageProperties s3Properties, BatchObjectStore objectStore) {
         try {
             String bucket = firstText(channelConfig, "oss_bucket", "storage_bucket", s3Properties.getBucket());
-            if (!Texts.hasText(bucket)) {
+            if (!EmptyValues.hasText(bucket)) {
                 return new DispatchChannelProbeResult(false, "oss_bucket missing", null);
             }
             String prefix = firstText(channelConfig, "oss_object_prefix", KEY_TARGET_ENDPOINT, "");
@@ -363,7 +362,7 @@ final class RemoteFilesystemDispatchSupport {
             Map<String, Object> channelConfig, boolean dnsGuardEnabled, DispatchRuntimeProperties properties) {
         try {
             String host = resolveEndpointOrFail(channelConfig, "sftp_host", KEY_TARGET_ENDPOINT);
-            if (!Texts.hasText(host)) {
+            if (!EmptyValues.hasText(host)) {
                 return new DispatchChannelProbeResult(false, "sftp_host missing", null);
             }
             int port = intProp(channelConfig, "sftp_port", 22);
@@ -395,7 +394,7 @@ final class RemoteFilesystemDispatchSupport {
             Map<String, Object> channelConfig, boolean dnsGuardEnabled, DispatchRuntimeProperties properties) {
         try {
             String host = resolveEndpointOrFail(channelConfig, "smtp_host", KEY_TARGET_ENDPOINT);
-            if (!Texts.hasText(host)) {
+            if (!EmptyValues.hasText(host)) {
                 return new DispatchChannelProbeResult(false, "smtp_host missing", null);
             }
             int port = intProp(channelConfig, "smtp_port", 25);
@@ -426,7 +425,7 @@ final class RemoteFilesystemDispatchSupport {
             OkHttpClient baseClient) {
         try {
             String endpoint = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
-            if (!Texts.hasText(endpoint)) {
+            if (!EmptyValues.hasText(endpoint)) {
                 return new DispatchChannelProbeResult(false, "target_endpoint missing", null);
             }
             // S-2.6: resolve-then-connect — 校验目标 IP 后把 HTTP 客户端 DNS 钉到该地址,
@@ -469,7 +468,7 @@ final class RemoteFilesystemDispatchSupport {
         String rawChannelType = String.valueOf(channelTypeValue);
         String channelType = rawChannelType.toUpperCase(Locale.ROOT);
         FileChannelType type = DictEnum.fromCode(FileChannelType.class, channelType);
-        if (EmptyChecks.isNull(type)) {
+        if (type == null) {
             return new DispatchChannelProbeResult(false, "unsupported health probe channel type: " + channelType, null);
         }
         return switch (type) {
@@ -558,11 +557,11 @@ final class RemoteFilesystemDispatchSupport {
     private static String resolveRemoteFileName(
             Map<String, Object> channelConfig, Map<String, Object> fileRecord, String overrideKey) {
         String explicit = firstText(channelConfig, overrideKey, null);
-        if (Texts.hasText(explicit)) {
+        if (EmptyValues.hasText(explicit)) {
             return sanitizeFileName(explicit);
         }
-        Object originalFileName = EmptyChecks.isNull(fileRecord) ? null : fileRecord.get("original_file_name");
-        Object fileName = EmptyChecks.isNull(fileRecord) ? null : fileRecord.get("file_name");
+        Object originalFileName = fileRecord == null ? null : fileRecord.get("original_file_name");
+        Object fileName = fileRecord == null ? null : fileRecord.get("file_name");
         Object original = firstNonNull(originalFileName, fileName);
         String fallback = original == null ? BatchFileConstants.DEFAULT_FILE_NAME : String.valueOf(original);
         return sanitizeFileName(fallback);
@@ -576,7 +575,7 @@ final class RemoteFilesystemDispatchSupport {
         String withoutParentTraversal = trimmedName.replace("..", "_");
         String withoutForwardSlashes = withoutParentTraversal.replace('/', '_');
         String sanitizedName = withoutForwardSlashes.replace('\\', '_');
-        return EmptyChecks.isBlank(Objects.requireNonNull(sanitizedName))
+        return EmptyValues.isBlank(Objects.requireNonNull(sanitizedName))
                 ? BatchFileConstants.DEFAULT_FILE_NAME
                 : sanitizedName;
     }
@@ -604,7 +603,7 @@ final class RemoteFilesystemDispatchSupport {
 
     private static String firstText(Map<String, Object> map, String key1, String key2, String fallback) {
         String v = firstText(map, key1, null);
-        if (Texts.hasText(v)) {
+        if (EmptyValues.hasText(v)) {
             return v;
         }
         return firstText(map, key2, fallback);
@@ -636,7 +635,7 @@ final class RemoteFilesystemDispatchSupport {
     private static String resolveEndpointOrFail(
             Map<String, Object> channelConfig, String primaryKey, String fallbackKey) {
         String value = stringProp(channelConfig, primaryKey);
-        if (Texts.hasText(value)) {
+        if (EmptyValues.hasText(value)) {
             return value;
         }
         return stringProp(channelConfig, fallbackKey);

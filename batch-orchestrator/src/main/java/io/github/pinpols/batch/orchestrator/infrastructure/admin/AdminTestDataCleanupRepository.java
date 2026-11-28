@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.admin;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.mapper.AdminTestDataCleanupMapper;
 import io.github.pinpols.batch.orchestrator.mapper.AdminTestDataCleanupMapper.CleanupTarget;
 import io.github.pinpols.batch.orchestrator.mapper.AdminTestDataCleanupMapper.OutboxEventIdentity;
@@ -155,7 +155,7 @@ public class AdminTestDataCleanupRepository {
 
     /** 按精确 tenantId 列表清理，补充 prefix 模式无法覆盖的纯短名残留。 */
     public Map<String, Integer> cleanupByExactTenantIds(List<String> tenantIds) {
-        if (EmptyChecks.isEmpty(tenantIds)) {
+        if (EmptyValues.isEmpty(tenantIds)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
         }
         for (String id : tenantIds) {
@@ -185,7 +185,7 @@ public class AdminTestDataCleanupRepository {
     }
 
     private static String escapeLike(String input) {
-        if (EmptyChecks.isEmpty(input)) {
+        if (EmptyValues.isEmpty(input)) {
             return input;
         }
         String escapedBackslashes = input.replace("\\", "\\\\");

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.testing;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.InvocationHandler;
@@ -80,7 +80,7 @@ public final class PlatformWorkerRoleDrill {
             .map(Map.Entry::getValue)
             .sorted()
             .toList();
-    private static final boolean SHARED_CONTROL_PLANE_CONTEXT = EmptyChecks.isNotEmpty(PRESENT_CONTROL_PLANE);
+    private static final boolean SHARED_CONTROL_PLANE_CONTEXT = EmptyValues.isNotEmpty(PRESENT_CONTROL_PLANE);
 
     private static final Set<String> REPORTED = ConcurrentHashMap.newKeySet();
     private static final Map<String, AtomicLong> RESTRICTED = new ConcurrentHashMap<>();
@@ -107,13 +107,13 @@ public final class PlatformWorkerRoleDrill {
     record Target(String report, String worker) {
 
         boolean controlPlane() {
-            return EmptyChecks.isNull(worker);
+            return worker == null;
         }
     }
 
     static Optional<Target> configuredTarget() {
         String worker = System.getProperty(WORKER_PROPERTY);
-        if (EmptyChecks.isNotBlank(worker)) {
+        if (EmptyValues.isNotBlank(worker)) {
             String trimmedWorker = worker.trim();
             return Optional.of(new Target(trimmedWorker, trimmedWorker));
         }
@@ -145,7 +145,7 @@ public final class PlatformWorkerRoleDrill {
     }
 
     static boolean isPrepared() {
-        return EmptyChecks.isNotNull(preparedRoles);
+        return preparedRoles != null;
     }
 
     /**
@@ -159,7 +159,7 @@ public final class PlatformWorkerRoleDrill {
     }
 
     private static synchronized void prepareRoles(Target target) {
-        if (EmptyChecks.isNotNull(preparedRoles)) {
+        if (preparedRoles != null) {
             return;
         }
         Map<String, String> roles = new LinkedHashMap<>();
@@ -242,10 +242,10 @@ public final class PlatformWorkerRoleDrill {
 
     private static Path repositoryRoot() {
         Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath();
-        while (EmptyChecks.isNotNull(current) && !Files.exists(current.resolve(WORKER_SCRIPT))) {
+        while (current != null && !Files.exists(current.resolve(WORKER_SCRIPT))) {
             current = current.getParent();
         }
-        if (EmptyChecks.isNull(current)) {
+        if (current == null) {
             throw new IllegalStateException("找不到 " + WORKER_SCRIPT);
         }
         return current;
@@ -323,7 +323,7 @@ public final class PlatformWorkerRoleDrill {
             return Caller.of(Kind.UNKNOWN);
         }
         CodeSource source = type.getProtectionDomain().getCodeSource();
-        String location = EmptyChecks.isNull(source) ? "" : source.getLocation().toString();
+        String location = source == null ? "" : source.getLocation().toString();
         if (location.contains("/test-classes/") || location.contains("batch-test-support")) {
             return Caller.of(Kind.FIXTURE);
         }
@@ -349,17 +349,12 @@ public final class PlatformWorkerRoleDrill {
     }
 
     private static void report(String file, String kind, String sql, String detail) {
-        String normalized =
-                EmptyChecks.isNull(sql) ? "-" : sql.replaceAll("\\s+", " ").trim();
+        String normalized = sql == null ? "-" : sql.replaceAll("\\s+", " ").trim();
         if (normalized.length() > 500) {
             normalized = normalized.substring(0, 500) + "…";
         }
         String line = String.join(
-                "\t",
-                kind,
-                productionFrame(),
-                normalized,
-                EmptyChecks.isNull(detail) ? "-" : detail.replaceAll("\\s+", " "));
+                "\t", kind, productionFrame(), normalized, detail == null ? "-" : detail.replaceAll("\\s+", " "));
         if (!REPORTED.add(line)) {
             return;
         }
@@ -413,13 +408,13 @@ public final class PlatformWorkerRoleDrill {
             String name = method.getName();
             boolean executes = delegate instanceof Statement && EXECUTE_METHODS.contains(name);
             String firstArg = firstStringArg(args);
-            String statementSql = executes && EmptyChecks.isNotNull(firstArg) ? firstArg : sql;
+            String statementSql = executes && firstArg != null ? firstArg : sql;
             String module = null;
             if (executes) {
                 module = restrictedModule(target);
                 applyRole(((Statement) delegate).getConnection(), module, statementSql);
                 Map<String, String> roles = preparedRoles;
-                if (EmptyChecks.isNotNull(module) && EmptyChecks.isNotNull(roles)) {
+                if (module != null && roles != null) {
                     RESTRICTED.get(module).incrementAndGet();
                 }
             }
@@ -428,7 +423,7 @@ public final class PlatformWorkerRoleDrill {
                 result = method.invoke(delegate, args);
             } catch (InvocationTargetException failure) {
                 Throwable cause = failure.getCause();
-                if (EmptyChecks.isNotNull(module)
+                if (module != null
                         && cause instanceof SQLException sqlFailure
                         && PERMISSION_DENIED.equals(sqlFailure.getSQLState())) {
                     report(target.report(), denialKind(module), statementSql, sqlFailure.getMessage());
@@ -457,18 +452,18 @@ public final class PlatformWorkerRoleDrill {
 
         /** Statement 的 execute(String…) 与 Connection 的 prepare*(String…) 首个实参是 SQL。 */
         private static String firstStringArg(Object[] args) {
-            return EmptyChecks.isNotEmpty(args) && args[0] instanceof String text ? text : null;
+            return EmptyValues.isNotEmpty(args) && args[0] instanceof String text ? text : null;
         }
 
         private void applyRole(Connection connection, String module, String sql) throws SQLException {
             Map<String, String> roles = preparedRoles;
-            String role = EmptyChecks.isNull(module) || EmptyChecks.isNull(roles) ? null : roles.get(module);
-            if (EmptyChecks.isNotNull(module) && EmptyChecks.isNull(role)) {
+            String role = module == null || roles == null ? null : roles.get(module);
+            if (module != null && role == null) {
                 report(target.report(), "BEFORE_GRANT", sql, "授权前执行，未按受限角色校验");
             }
             // SET 不是事务局部的，但会随事务回滚撤销，因此每条语句前都重新设定。
             try (Statement switcher = connection.createStatement()) {
-                switcher.execute(EmptyChecks.isNotNull(role) ? "SET ROLE " + role : "RESET ROLE");
+                switcher.execute(role != null ? "SET ROLE " + role : "RESET ROLE");
             } catch (SQLException failure) {
                 if (!IN_FAILED_TRANSACTION.equals(failure.getSQLState())) {
                     throw failure;

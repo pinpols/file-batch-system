@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.sdk.handler.atomic;
 
 import io.github.pinpols.batch.sdk.handler.SdkAbstractAtomicHandler;
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import java.net.InetAddress;
 import java.net.URI;
@@ -77,7 +77,7 @@ public class HttpAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obje
         return headers.entrySet().stream()
                 .anyMatch(entry -> "Idempotency-Key".equalsIgnoreCase(String.valueOf(entry.getKey()))
                         && entry.getValue() instanceof String value
-                        && EmptyChecks.isNotBlank(value));
+                        && SdkEmptyValues.isNotBlank(value));
     }
 
     @Override
@@ -85,7 +85,7 @@ public class HttpAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obje
     protected Map<String, Object> doInvoke(SdkTaskContext ctx) throws Exception {
         Map<String, Object> params = ctx.parameters();
         String url = asString(params.get("url"));
-        if (url == null || url.isBlank()) {
+        if (SdkEmptyValues.isBlank(url)) {
             throw new IllegalArgumentException("missing required parameter: url");
         }
         Object methodValue = params.get("method");
@@ -101,7 +101,7 @@ public class HttpAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obje
 
         URI uri = URI.create(url);
         String host = uri.getHost();
-        if (host == null || host.isBlank()) {
+        if (SdkEmptyValues.isBlank(host)) {
             throw new IllegalArgumentException("invalid url, no host: " + url);
         }
 

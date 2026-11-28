@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -40,15 +40,15 @@ final class TaskOutcomeSummaryBuilder {
 
     static String buildOutputSummary(TaskOutcomeCommand command, JobTaskEntity task) {
         Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("taskId", EmptyChecks.isNull(command) ? null : command.taskId());
-        summary.put("tenantId", EmptyChecks.isNull(command) ? null : command.tenantId());
-        summary.put("success", EmptyChecks.isNotNull(command) && command.success());
-        summary.put("resultSummary", EmptyChecks.isNull(command) ? null : command.resultSummary());
-        summary.put("errorCode", EmptyChecks.isNull(command) ? null : command.errorCode());
-        summary.put("errorMessage", EmptyChecks.isNull(command) ? null : command.errorMessage());
-        summary.put("outputs", EmptyChecks.isNull(command) ? null : command.outputs());
-        summary.put("verifierFailures", EmptyChecks.isNull(command) ? null : command.verifierFailures());
-        summary.put("taskPayload", EmptyChecks.isNull(task) ? null : task.getTaskPayload());
+        summary.put("taskId", command == null ? null : command.taskId());
+        summary.put("tenantId", command == null ? null : command.tenantId());
+        summary.put("success", command != null && command.success());
+        summary.put("resultSummary", command == null ? null : command.resultSummary());
+        summary.put("errorCode", command == null ? null : command.errorCode());
+        summary.put("errorMessage", command == null ? null : command.errorMessage());
+        summary.put("outputs", command == null ? null : command.outputs());
+        summary.put("verifierFailures", command == null ? null : command.verifierFailures());
+        summary.put("taskPayload", task == null ? null : task.getTaskPayload());
         summary.put("recordedAt", BatchDateTimeSupport.utcNow().toString());
         return JsonUtils.toJson(summary);
     }
@@ -69,23 +69,23 @@ final class TaskOutcomeSummaryBuilder {
     static String buildJobInstanceResultSummary(
             JobInstanceEntity jobInstance, long successPartitions, long failedPartitions, TaskOutcomeCommand command) {
         Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("jobInstanceId", EmptyChecks.isNull(jobInstance) ? null : jobInstance.getId());
-        summary.put("lastTaskId", EmptyChecks.isNull(command) ? null : command.taskId());
+        summary.put("jobInstanceId", jobInstance == null ? null : jobInstance.getId());
+        summary.put("lastTaskId", command == null ? null : command.taskId());
         summary.put("successPartitions", successPartitions);
         summary.put("failedPartitions", failedPartitions);
-        summary.put("lastErrorCode", EmptyChecks.isNull(command) ? null : command.errorCode());
-        summary.put("lastErrorMessage", EmptyChecks.isNull(command) ? null : command.errorMessage());
+        summary.put("lastErrorCode", command == null ? null : command.errorCode());
+        summary.put("lastErrorMessage", command == null ? null : command.errorMessage());
         summary.put("updatedAt", BatchDateTimeSupport.utcNow().toString());
         return JsonUtils.toJson(summary);
     }
 
     /** perf(#5): FAILED/CANCELLED/TERMINATED 之和,供计数版 result summary 复用同一失败口径。 */
     static long countBroadFailed(List<PartitionStatusRef> statusRefs) {
-        if (EmptyChecks.isNull(statusRefs)) {
+        if (statusRefs == null) {
             return 0L;
         }
         return statusRefs.stream()
-                .filter(r -> EmptyChecks.isNotNull(r) && BROAD_FAILED_STATUSES.contains(r.partitionStatus()))
+                .filter(r -> r != null && BROAD_FAILED_STATUSES.contains(r.partitionStatus()))
                 .count();
     }
 
@@ -94,7 +94,7 @@ final class TaskOutcomeSummaryBuilder {
      * 列。null/empty 直接返回 null(不写空对象),让 DSL 解析按"无产出"语义 fallback。
      */
     static String serializeOutputs(Map<String, Object> outputs) {
-        if (EmptyChecks.isEmpty(outputs)) {
+        if (EmptyValues.isEmpty(outputs)) {
             return null;
         }
         return JsonUtils.toJson(outputs);
@@ -112,12 +112,12 @@ final class TaskOutcomeSummaryBuilder {
     static Map<String, Object> aggregateSuccessfulPartitionOutputs(
             List<JobPartitionEntity> partitions, TaskOutcomeCommand command) {
         List<JobPartitionEntity> successful = successfulPartitions(partitions);
-        if (EmptyChecks.isEmpty(successful)) {
+        if (EmptyValues.isEmpty(successful)) {
             return successfulCommandOutputs(command);
         }
         if (successful.size() == 1) {
             Map<String, Object> outputs = extractOutputs(successful.get(0));
-            if (EmptyChecks.isEmpty(outputs)) {
+            if (EmptyValues.isEmpty(outputs)) {
                 return successfulCommandOutputs(command);
             }
             return outputs;
@@ -125,7 +125,7 @@ final class TaskOutcomeSummaryBuilder {
 
         Map<String, Object> aggregated = new LinkedHashMap<>();
         aggregated.put("partitioned", true);
-        aggregated.put("partitionCount", EmptyChecks.isNull(partitions) ? 0 : partitions.size());
+        aggregated.put("partitionCount", partitions == null ? 0 : partitions.size());
         aggregated.put("successPartitionCount", successful.size());
         aggregated.put("failedPartitionCount", countFailedPartitions(partitions));
         List<Map<String, Object>> partitionedOutputs = new ArrayList<>(successful.size());
@@ -142,13 +142,13 @@ final class TaskOutcomeSummaryBuilder {
     }
 
     static List<JobPartitionEntity> filterPartitionsByIds(List<JobPartitionEntity> partitions, Set<Long> partitionIds) {
-        if (EmptyChecks.isEmpty(partitions) || EmptyChecks.isEmpty(partitionIds)) {
+        if (EmptyValues.isEmpty(partitions) || EmptyValues.isEmpty(partitionIds)) {
             return List.of();
         }
         Set<Long> selectedIds = new LinkedHashSet<>(partitionIds);
         List<JobPartitionEntity> selected = new ArrayList<>();
         for (JobPartitionEntity partition : partitions) {
-            if (EmptyChecks.isNotNull(partition) && selectedIds.contains(partition.getId())) {
+            if (partition != null && selectedIds.contains(partition.getId())) {
                 selected.add(partition);
             }
         }
@@ -156,7 +156,7 @@ final class TaskOutcomeSummaryBuilder {
     }
 
     private static long countByStatus(List<JobPartitionEntity> partitions, String status) {
-        if (EmptyChecks.isNull(partitions)) {
+        if (partitions == null) {
             return 0L;
         }
         return partitions.stream()
@@ -165,22 +165,21 @@ final class TaskOutcomeSummaryBuilder {
     }
 
     private static long countFailedPartitions(List<JobPartitionEntity> partitions) {
-        if (EmptyChecks.isNull(partitions)) {
+        if (partitions == null) {
             return 0L;
         }
         return partitions.stream()
-                .filter(p -> EmptyChecks.isNotNull(p) && BROAD_FAILED_STATUSES.contains(p.getPartitionStatus()))
+                .filter(p -> p != null && BROAD_FAILED_STATUSES.contains(p.getPartitionStatus()))
                 .count();
     }
 
     private static List<JobPartitionEntity> successfulPartitions(List<JobPartitionEntity> partitions) {
-        if (EmptyChecks.isEmpty(partitions)) {
+        if (EmptyValues.isEmpty(partitions)) {
             return List.of();
         }
         List<JobPartitionEntity> successful = new ArrayList<>();
         for (JobPartitionEntity partition : partitions) {
-            if (EmptyChecks.isNotNull(partition)
-                    && PartitionStatus.SUCCESS.code().equals(partition.getPartitionStatus())) {
+            if (partition != null && PartitionStatus.SUCCESS.code().equals(partition.getPartitionStatus())) {
                 successful.add(partition);
             }
         }
@@ -189,11 +188,11 @@ final class TaskOutcomeSummaryBuilder {
 
     @SuppressWarnings("unchecked")
     private static Map<String, Object> extractOutputs(JobPartitionEntity partition) {
-        if (EmptyChecks.isNull(partition)) {
+        if (partition == null) {
             return null;
         }
         String outputSummary = partition.getOutputSummary();
-        if (EmptyChecks.isBlank(outputSummary)) {
+        if (EmptyValues.isBlank(outputSummary)) {
             return null;
         }
         Object parsed = JsonUtils.fromJson(outputSummary, Object.class);
@@ -208,11 +207,11 @@ final class TaskOutcomeSummaryBuilder {
     }
 
     private static Map<String, Object> successfulCommandOutputs(TaskOutcomeCommand command) {
-        if (EmptyChecks.isNull(command) || !command.success()) {
+        if (command == null || !command.success()) {
             return Collections.emptyMap();
         }
         Map<String, Object> outputs = command.outputs();
-        if (EmptyChecks.isEmpty(outputs)) {
+        if (EmptyValues.isEmpty(outputs)) {
             return Collections.emptyMap();
         }
         return outputs;

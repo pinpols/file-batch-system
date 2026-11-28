@@ -5,10 +5,9 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.ConfigBatchOperationContext;
 import io.github.pinpols.batch.console.application.config.ConfigBatchOperationRequest;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigBatchOperationService;
@@ -153,7 +152,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     public TenantConfigBatchInitResponse copy(
             TenantConfigCopyRequest request, String operator, String batchOperationId, String requestHash) {
         // 复制会剥离环境端点与凭据，禁止把处理后的包回写源租户。
-        if (EmptyChecks.isNotEmpty(request.getTargetTenantIds())
+        if (EmptyValues.isNotEmpty(request.getTargetTenantIds())
                 && request.getTargetTenantIds().contains(request.getSourceTenantId())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.config_copy.source_target_overlap");
         }
@@ -182,11 +181,11 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
                 dryRunForLog,
                 batchOperationIdForLog);
 
-        if (EmptyChecks.isNull(requestHash) || request.isDryRun()) {
+        if (requestHash == null || request.isDryRun()) {
             return initService.batchInit(initRequest, operator, batchOperationId);
         }
         List<String> targets = request.getTargetTenantIds();
-        if (EmptyChecks.isEmpty(targets) || targets.stream().anyMatch(EmptyChecks::isBlank)) {
+        if (EmptyValues.isEmpty(targets) || targets.stream().anyMatch(EmptyValues::isBlank)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
         }
         ConfigBatchOperationRequest operation = new ConfigBatchOperationRequest(
@@ -201,7 +200,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     }
 
     private List<FileChannelSpec> channelsWithoutEnvironmentCredentials(List<FileChannelSpec> source) {
-        if (EmptyChecks.isEmpty(source)) {
+        if (EmptyValues.isEmpty(source)) {
             return source;
         }
         return source.stream()
@@ -228,7 +227,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     public ConfigSyncBundlePayload buildBundle(String sourceTenantId, Set<ConfigType> configTypes) {
         return RlsTenantContextHolder.runWithTenant(sourceTenantId, () -> {
             jobDefinitionMapper.setTenantContext(sourceTenantId);
-            boolean allTypes = EmptyChecks.isEmpty(configTypes);
+            boolean allTypes = EmptyValues.isEmpty(configTypes);
             ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
             for (ConfigTypeTransfer<?> t : typeTransfers()) {
                 if (allTypes || configTypes.contains(t.type())) {
@@ -250,7 +249,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
         }
 
         JobDefinitionSpec job = jobs.get(0);
-        Predicate<WorkflowDefinitionSpec> workflowIncludesJob = workflow -> EmptyChecks.isNotNull(workflow.getNodes())
+        Predicate<WorkflowDefinitionSpec> workflowIncludesJob = workflow -> workflow.getNodes() != null
                 && workflow.getNodes().stream().anyMatch(node -> jobCode.equals(node.getRelatedJobCode()));
         List<WorkflowDefinitionSpec> relatedWorkflows = filter(all.getWorkflowDefinitions(), workflowIncludesJob);
         TenantConfigReferenceResolver.References refs = referenceResolver.resolve(job, relatedWorkflows);
@@ -266,12 +265,12 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
                 filter(all.getBusinessCalendars(), c -> hasReference(refs.calendarCodes(), c.getCalendarCode())));
         Predicate<FileTemplateSpec> isReferencedTemplateOrJobTypeFallback =
                 template -> hasReference(refs.templateCodes(), template.getTemplateCode())
-                        || (EmptyChecks.isEmpty(refs.templateCodes())
+                        || (EmptyValues.isEmpty(refs.templateCodes())
                                 && equalsNullable(job.getBizType(), template.getBizType()));
         bundle.setFileTemplates(filter(all.getFileTemplates(), isReferencedTemplateOrJobTypeFallback));
         Predicate<FileChannelSpec> isReferencedChannelOrJobTypeFallback =
                 channel -> hasReference(refs.channelCodes(), channel.getChannelCode())
-                        || (EmptyChecks.isEmpty(refs.channelCodes())
+                        || (EmptyValues.isEmpty(refs.channelCodes())
                                 && equalsNullable(job.getBizType(), channel.getChannelCode()));
         bundle.setFileChannels(filter(all.getFileChannels(), isReferencedChannelOrJobTypeFallback));
         bundle.setQuotaPolicies(all.getQuotaPolicies());
@@ -297,7 +296,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     }
 
     private ConfigSyncBundlePayload requestedBundle(TenantConfigPreviewRequest request) {
-        if (EmptyChecks.isEmpty(request.getJobCodes())) {
+        if (EmptyValues.isEmpty(request.getJobCodes())) {
             return buildBundle(request.getSourceTenantId(), request.getConfigTypes());
         }
         ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
@@ -309,7 +308,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     }
 
     private ConfigSyncBundlePayload requestedCopyBundle(TenantConfigCopyRequest request) {
-        if (EmptyChecks.isEmpty(request.getJobCodes())) {
+        if (EmptyValues.isEmpty(request.getJobCodes())) {
             return buildBundle(request.getSourceTenantId(), request.getConfigTypes());
         }
         ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
@@ -321,7 +320,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     }
 
     private ConfigSyncBundlePayload requestedBundleForTenant(String tenantId, TenantConfigPreviewRequest request) {
-        if (EmptyChecks.isEmpty(request.getJobCodes())) {
+        if (EmptyValues.isEmpty(request.getJobCodes())) {
             return buildBundle(tenantId, request.getConfigTypes());
         }
         ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
@@ -502,8 +501,8 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
             List<JobDependencyRuleRequest> dependencyRules = e.getJobDependencyRules().stream()
                     .map(rule -> new JobDependencyRuleRequest(rule.upstreamJobCode(), rule.bizDateAlignment()))
                     .toList();
-            boolean legacyDependencyFallbackIsRequired = EmptyChecks.isEmpty(Objects.requireNonNull(dependencyRules))
-                    && Texts.hasText(e.getDependsOnJobCode());
+            boolean legacyDependencyFallbackIsRequired = EmptyValues.isEmpty(Objects.requireNonNull(dependencyRules))
+                    && EmptyValues.hasText(e.getDependsOnJobCode());
             if (legacyDependencyFallbackIsRequired) {
                 dependencyRules = List.of(new JobDependencyRuleRequest(e.getDependsOnJobCode(), "SAME_DAY"));
             }
@@ -515,7 +514,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
             s.setScheduleExpr(e.getScheduleExpr());
             s.setTimezone(e.getTimezone());
             s.setTriggerMode(e.getTriggerMode());
-            String primaryDependencyCode = EmptyChecks.isEmpty(Objects.requireNonNull(dependencyRules))
+            String primaryDependencyCode = EmptyValues.isEmpty(Objects.requireNonNull(dependencyRules))
                     ? null
                     : dependencyRules.getFirst().upstreamJobCode();
             s.setDependsOnJobCode(primaryDependencyCode);
@@ -565,9 +564,9 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
             s.setTriggerMode(e.getTriggerMode());
             s.setCalendarCode(e.getCalendarCode());
             s.setDependsOnJobCode(e.getDependsOnJobCode());
-            if (EmptyChecks.isNotNull(e.getSingleJobDefinitionId())) {
+            if (e.getSingleJobDefinitionId() != null) {
                 JobDefinitionView singleJob = jobDefinitionMapper.selectById(tenantId, e.getSingleJobDefinitionId());
-                if (EmptyChecks.isNull(singleJob)) {
+                if (singleJob == null) {
                     throw new IllegalStateException(
                             "Managed single-job Workflow references a missing tenant Job definition");
                 }
@@ -637,8 +636,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
             s.setChannelType(e.channelType());
             s.setTargetEndpoint(e.targetEndpoint());
             s.setAuthType(e.authType());
-            s.setConfigJson(
-                    EmptyChecks.isNull(e.configJson()) ? null : e.configJson().toString());
+            s.setConfigJson(e.configJson() == null ? null : e.configJson().toString());
             s.setReceiptPolicy(e.receiptPolicy());
             s.setTimeoutSeconds(e.timeoutSeconds());
             s.setEnabled(e.enabled());
@@ -756,10 +754,10 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
             Long calendarId = r.id();
             if (calendarId != null) {
                 List<CalendarHolidayRow> holidays = calendarHolidayMapper.selectByCalendarId(calendarId);
-                if (EmptyChecks.isNotEmpty(holidays)) {
+                if (EmptyValues.isNotEmpty(holidays)) {
                     List<String> dates = new ArrayList<>(holidays.size());
                     for (CalendarHolidayRow h : holidays) {
-                        if (EmptyChecks.isNotNull(h.bizDate())) {
+                        if (h.bizDate() != null) {
                             dates.add(h.bizDate().toString());
                         }
                     }
@@ -824,11 +822,11 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     }
 
     private static String str(Object value) {
-        return EmptyChecks.isNull(value) ? null : value.toString();
+        return value == null ? null : value.toString();
     }
 
     private ConfigSyncBundlePayload filterBundle(ConfigSyncBundlePayload bundle, Set<ConfigType> configTypes) {
-        if (EmptyChecks.isEmpty(configTypes)) {
+        if (EmptyValues.isEmpty(configTypes)) {
             return bundle;
         }
         ConfigSyncBundlePayload filtered = new ConfigSyncBundlePayload();
@@ -848,7 +846,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     }
 
     private List<ConfigType> selectedTypes(Set<ConfigType> configTypes) {
-        if (EmptyChecks.isEmpty(configTypes)) {
+        if (EmptyValues.isEmpty(configTypes)) {
             return List.of(ConfigType.values());
         }
         return List.copyOf(configTypes);
@@ -864,7 +862,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
 
     private Map<String, Object> indexByKey(ConfigType type, Collection<?> items) {
         Map<String, Object> byKey = new LinkedHashMap<>();
-        if (EmptyChecks.isEmpty(items)) {
+        if (EmptyValues.isEmpty(items)) {
             return byKey;
         }
         for (Object item : items) {
@@ -915,7 +913,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     }
 
     private void setList(ConfigSyncBundlePayload bundle, ConfigType type, List<?> values) {
-        List<?> safeValues = EmptyChecks.isEmpty(values) ? null : values;
+        List<?> safeValues = EmptyValues.isEmpty(values) ? null : values;
         bundleAccessors().get(type).set(bundle, safeValues);
     }
 
@@ -992,7 +990,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     }
 
     private static <T> T first(List<T> values) {
-        return EmptyChecks.isEmpty(values) ? null : values.get(0);
+        return EmptyValues.isEmpty(values) ? null : values.get(0);
     }
 
     private static Boolean bool(Map<String, Object> map, String key) {
@@ -1020,15 +1018,15 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     }
 
     private static boolean equalsNullable(String left, String right) {
-        return left != null && !left.isBlank() && left.equals(right);
+        return EmptyValues.isNotBlank(left) && left.equals(right);
     }
 
     private static boolean hasReference(List<String> references, String code) {
-        return Texts.hasText(code) && references.contains(code);
+        return EmptyValues.hasText(code) && references.contains(code);
     }
 
     private static <T> List<T> filter(List<T> source, Predicate<T> predicate) {
-        if (source == null || source.isEmpty()) {
+        if (EmptyValues.isEmpty(source)) {
             return List.of();
         }
         return source.stream().filter(predicate).toList();

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.imports.stage.format;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -97,12 +97,12 @@ public record FormatParseRequest(
                 throw failure;
             }
         }
-        StringReader payloadReader = new StringReader(EmptyChecks.isNull(payloadText) ? "" : payloadText);
+        StringReader payloadReader = new StringReader(payloadText == null ? "" : payloadText);
         return new BufferedReader(payloadReader);
     }
 
     /** 是否有可消费的文本内容（spool 文件或非空 payloadText）。 */
     public boolean hasText() {
-        return spoolPath != null || (payloadText != null && !payloadText.isEmpty());
+        return spoolPath != null || (EmptyValues.isNotEmpty(payloadText));
     }
 }

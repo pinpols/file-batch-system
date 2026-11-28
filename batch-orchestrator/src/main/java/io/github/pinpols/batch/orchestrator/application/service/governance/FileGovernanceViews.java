@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.DispatchRecordRow;
 import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.FileRecordRow;
 import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.TemplateSecurityRow;
@@ -16,28 +15,26 @@ final class FileGovernanceViews {
     private FileGovernanceViews() {}
 
     static FileRecordView fileRecord(FileRecordRow row) {
-        if (EmptyChecks.isNull(row)) {
+        if (row == null) {
             return FileRecordView.absent();
         }
         return new FileRecordView(true, row.fileStatus(), row.storageBucket(), row.storagePath());
     }
 
     static TemplateSecurityView templateSecurity(TemplateSecurityRow row) {
-        boolean previewMaskingEnabled = EmptyChecks.isNotNull(row) && Boolean.TRUE.equals(row.previewMaskingEnabled());
-        boolean contentEncryptionEnabled =
-                EmptyChecks.isNotNull(row) && Boolean.TRUE.equals(row.contentEncryptionEnabled());
-        boolean downloadRequiresApproval =
-                EmptyChecks.isNotNull(row) && Boolean.TRUE.equals(row.downloadRequiresApproval());
+        boolean previewMaskingEnabled = row != null && Boolean.TRUE.equals(row.previewMaskingEnabled());
+        boolean contentEncryptionEnabled = row != null && Boolean.TRUE.equals(row.contentEncryptionEnabled());
+        boolean downloadRequiresApproval = row != null && Boolean.TRUE.equals(row.downloadRequiresApproval());
         return new TemplateSecurityView(
                 previewMaskingEnabled,
                 contentEncryptionEnabled,
-                EmptyChecks.isNull(row) ? null : row.encryptionKeyRef(),
+                row == null ? null : row.encryptionKeyRef(),
                 downloadRequiresApproval,
-                EmptyChecks.isNull(row) ? null : row.maskingRuleSet());
+                row == null ? null : row.maskingRuleSet());
     }
 
     static DispatchRecordView dispatchRecord(DispatchRecordRow row) {
-        if (EmptyChecks.isNull(row)) {
+        if (row == null) {
             return DispatchRecordView.absent();
         }
         return new DispatchRecordView(true, row.id(), row.pipelineInstanceId(), row.channelCode());

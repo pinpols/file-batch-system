@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowGraphValidator;
@@ -47,14 +47,14 @@ public class WorkflowValidatorReconciler {
             return;
         }
         List<WorkflowDefinitionView> enabled = workflowDefinitionMapper.selectAllEnabled(properties.getBatchSize());
-        if (EmptyChecks.isEmpty(enabled)) {
+        if (EmptyValues.isEmpty(enabled)) {
             return;
         }
         int invalidCount = 0;
         for (WorkflowDefinitionView wf : enabled) {
             if (wf == null || wf.id() == null) continue;
             String tenantId = wf.tenantId();
-            if (tenantId == null || tenantId.isBlank()) {
+            if (EmptyValues.isBlank(tenantId)) {
                 continue;
             }
             try {

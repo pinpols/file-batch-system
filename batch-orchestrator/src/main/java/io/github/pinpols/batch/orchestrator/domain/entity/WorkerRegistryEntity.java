@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.orchestrator.domain.entity;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
 import java.time.Instant;
 import lombok.Builder;
@@ -176,7 +176,7 @@ public record WorkerRegistryEntity(
 
     /** 任务路由使用稳定池代码；历史行没有该列时回退实例 workerCode。 */
     public String routingCode() {
-        return EmptyChecks.isBlank(workerPoolCode) ? workerCode : workerPoolCode;
+        return EmptyValues.isBlank(workerPoolCode) ? workerCode : workerPoolCode;
     }
 
     /** 注册请求可在不改变实例主键的情况下刷新稳定路由池代码。 */

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.exports.stage.format.AbstractExportFormat.ColumnLayout;
 import io.github.pinpols.batch.worker.exports.stage.format.AbstractExportFormat.ColumnType;
 import java.time.Instant;
@@ -188,7 +188,7 @@ final class ExcelSheetWriter {
         }
         // STRING 或上述类型解析失败 → 文本回退。
         String text = helper.textValue(value);
-        String valueToEscape = EmptyChecks.isNull(text) ? String.valueOf(value) : text;
+        String valueToEscape = text == null ? String.valueOf(value) : text;
         String escapedValue = ExcelStyleSupport.escapeFormula(valueToEscape);
         cell.setCellValue(escapedValue);
     }
@@ -196,7 +196,7 @@ final class ExcelSheetWriter {
     /** 取(或建)该列的数字 / 日期格式样式并缓存复用;未声明 format 串则不套样式(默认通用格式)。 */
     private void applyColumnStyle(Cell cell, ColumnLayout column, int columnIndex) {
         String pattern = column.type() == ColumnType.NUMBER ? column.numberFormat() : column.dateFormat();
-        if (pattern == null || pattern.isBlank()) {
+        if (EmptyValues.isBlank(pattern)) {
             return;
         }
         CellStyle style = columnStyleCache.computeIfAbsent(columnIndex, idx -> {

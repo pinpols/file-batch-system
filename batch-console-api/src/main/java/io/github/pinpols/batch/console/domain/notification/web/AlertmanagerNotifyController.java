@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.SecretComparator;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerWebhookPayload;
 import io.github.pinpols.batch.console.domain.notification.service.AlertmanagerNotifyService;
@@ -61,7 +61,7 @@ public class AlertmanagerNotifyController {
     /** fail-closed 共享密钥校验:未配置密钥 / 缺 header / 密钥不匹配一律 401(常量时间比对,不泄漏长度)。 */
     private void authenticate(String authorization) {
         String expected = properties.getBearerToken();
-        if (!Texts.hasText(expected)) {
+        if (!EmptyValues.hasText(expected)) {
             log.warn("am-notify rejected: bearer token not configured (fail-closed)");
             throw BizException.of(
                     ResultCode.UNAUTHORIZED, ResultCode.UNAUTHORIZED.detailKey(), "am-notify not configured");

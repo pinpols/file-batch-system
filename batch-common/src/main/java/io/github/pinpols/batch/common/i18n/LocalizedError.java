@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.common.i18n;
 
+import io.github.pinpols.batch.common.utils.EmptyValues;
+
 /**
  * 持久化层的 i18n-aware 错误三元组。配合 {@code error_key VARCHAR + error_args JSONB + error_message} 三列存储:
  *
@@ -24,10 +26,10 @@ public record LocalizedError(String key, String argsJson, String renderedMessage
     public static final LocalizedError EMPTY = new LocalizedError(null, null, null);
 
     public boolean hasKey() {
-        return key != null && !key.isBlank();
+        return EmptyValues.isNotBlank(key);
     }
 
     public boolean hasMessage() {
-        return renderedMessage != null && !renderedMessage.isBlank();
+        return EmptyValues.isNotBlank(renderedMessage);
     }
 }

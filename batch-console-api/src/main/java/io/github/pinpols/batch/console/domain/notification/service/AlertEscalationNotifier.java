@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.i18n.BizExceptionUtils;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.config.AlertEscalationNotifyProperties;
@@ -220,7 +220,7 @@ public class AlertEscalationNotifier {
         Throwable current = throwable;
         while (current != null) {
             String message = current.getMessage();
-            boolean isConnectionShutdownMessage = EmptyChecks.isNotNull(message)
+            boolean isConnectionShutdownMessage = message != null
                     && (message.contains("LettuceConnectionFactory is STOPPING")
                             || message.contains("has been closed")
                             || message.contains("Connection pool shut down"));
@@ -238,7 +238,7 @@ public class AlertEscalationNotifier {
         }
         resetStalePublishing();
         List<AlertEventEntity> batch = alertEventMapper.selectEscalatedPendingNotify(properties.getBatchSize());
-        if (EmptyChecks.isNotEmpty(batch)) {
+        if (EmptyValues.isNotEmpty(batch)) {
             log.debug("AlertEscalationNotifier loaded {} escalation notifications", batch.size());
             for (AlertEventEntity alert : batch) {
                 if (stopping.get()) {
@@ -262,7 +262,7 @@ public class AlertEscalationNotifier {
     private void resetStalePublishing() {
         List<AlertEscalationNotificationOutboxEntity> stale = outboxMapper.selectStalePublishing(
                 properties.getBatchSize(), OutboxPublishStatus.PUBLISHING.code(), STALE_PUBLISHING_SECONDS);
-        if (EmptyChecks.isEmpty(stale)) {
+        if (EmptyValues.isEmpty(stale)) {
             return;
         }
         int reset = 0;
@@ -288,7 +288,7 @@ public class AlertEscalationNotifier {
                 properties.getBatchSize(),
                 OutboxPublishStatus.NEW.code(),
                 OutboxPublishStatus.FAILED.code());
-        if (EmptyChecks.isEmpty(pending)) {
+        if (EmptyValues.isEmpty(pending)) {
             return;
         }
         for (AlertEscalationNotificationOutboxEntity row : pending) {
@@ -410,7 +410,7 @@ public class AlertEscalationNotifier {
     }
 
     private static int zeroIfNull(Integer value) {
-        return EmptyChecks.isNull(value) ? 0 : value;
+        return value == null ? 0 : value;
     }
 
     private LockConfiguration lockConfig() {

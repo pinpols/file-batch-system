@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.WebhookRelayProperties;
 import io.github.pinpols.batch.console.domain.notification.mapper.TerminalNotificationArchiveMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.TerminalNotificationArchiveMapper.Family;
@@ -54,7 +54,7 @@ public class TerminalNotificationArchiveService {
         int remaining = Math.max(1, properties.getBatchSize());
         int tenantLimit = Math.min(TENANT_PAGE_SIZE, remaining);
         List<String> tenants = archive.enabledTenants(afterTenant, tenantLimit);
-        if (EmptyChecks.isEmpty(Objects.requireNonNull(tenants))) {
+        if (EmptyValues.isEmpty(Objects.requireNonNull(tenants))) {
             afterTenant = "";
             tenants = archive.enabledTenants(afterTenant, tenantLimit);
         }
@@ -98,7 +98,7 @@ public class TerminalNotificationArchiveService {
         // 锁顺序与 Kafka 接纳一致；锁之后的新语句才能看到已提交的冷热迁移结果。
         receipts.lockReceipt(candidate.tenantId(), candidate.eventKey());
         Boolean cleanupEnabled = archive.lockReadyReceipt(candidate);
-        if (EmptyChecks.isNull(cleanupEnabled)) {
+        if (cleanupEnabled == null) {
             return false;
         }
         for (Family family : COPY_ORDER) {

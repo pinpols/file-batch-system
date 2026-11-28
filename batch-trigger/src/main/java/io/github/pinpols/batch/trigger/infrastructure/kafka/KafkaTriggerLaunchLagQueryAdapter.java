@@ -2,7 +2,7 @@ package io.github.pinpols.batch.trigger.infrastructure.kafka;
 
 import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.application.TriggerLaunchLagQueryPort;
 import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 import jakarta.annotation.PreDestroy;
@@ -52,7 +52,7 @@ public class KafkaTriggerLaunchLagQueryAdapter implements TriggerLaunchLagQueryP
                 .allTopicNames()
                 .get(timeout, TimeUnit.MILLISECONDS)
                 .get(launchTopic);
-        if (EmptyChecks.isNull(topic)) {
+        if (topic == null) {
             return UNKNOWN_LAG;
         }
         Map<TopicPartition, OffsetSpec> requests = new LinkedHashMap<>();
@@ -65,15 +65,14 @@ public class KafkaTriggerLaunchLagQueryAdapter implements TriggerLaunchLagQueryP
         requests.keySet().stream()
                 .filter(partition -> !committed.containsKey(partition))
                 .forEach(partition -> earliestRequests.put(partition, OffsetSpec.earliest()));
-        Map<TopicPartition, ListOffsetsResultInfo> earliestOffsets = EmptyChecks.isEmpty(earliestRequests)
+        Map<TopicPartition, ListOffsetsResultInfo> earliestOffsets = EmptyValues.isEmpty(earliestRequests)
                 ? Map.<TopicPartition, ListOffsetsResultInfo>of()
                 : admin.listOffsets(earliestRequests).all().get(timeout, TimeUnit.MILLISECONDS);
         long lag = 0L;
         for (Map.Entry<TopicPartition, ListOffsetsResultInfo> entry : endOffsets.entrySet()) {
             OffsetAndMetadata offset = committed.get(entry.getKey());
-            long committedOffset = EmptyChecks.isNull(offset)
-                    ? earliestOffsets.get(entry.getKey()).offset()
-                    : offset.offset();
+            long committedOffset =
+                    offset == null ? earliestOffsets.get(entry.getKey()).offset() : offset.offset();
             long endOffset = entry.getValue().offset();
             long partitionLag = Math.max(0L, endOffset - committedOffset);
             lag = Math.addExact(lag, partitionLag);
@@ -86,7 +85,7 @@ public class KafkaTriggerLaunchLagQueryAdapter implements TriggerLaunchLagQueryP
             if (stopping.get()) {
                 throw new IllegalStateException("Trigger launch lag query adapter is stopping");
             }
-            if (EmptyChecks.isNull(adminClient)) {
+            if (adminClient == null) {
                 adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties());
             }
             return adminClient;
@@ -97,7 +96,7 @@ public class KafkaTriggerLaunchLagQueryAdapter implements TriggerLaunchLagQueryP
     void closeAdminClient() {
         stopping.set(true);
         synchronized (adminClientMonitor) {
-            if (EmptyChecks.isNotNull(adminClient)) {
+            if (adminClient != null) {
                 adminClient.close(Duration.ZERO);
                 adminClient = null;
             }

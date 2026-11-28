@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.metrics;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.query.JobDependencyWaitBacklog;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.TenantDirectoryMapper;
@@ -48,12 +48,12 @@ public class JobDependencyWaitMetricsScheduler {
             long totalWaiting = 0L;
             long maxOldestAgeSeconds = 0L;
             for (String tenantId : tenantIds) {
-                if (EmptyChecks.isBlank(tenantId)) {
+                if (EmptyValues.isBlank(tenantId)) {
                     throw new IllegalStateException("tenant directory returned a blank tenant id");
                 }
                 JobDependencyWaitBacklog backlog =
                         RlsTenantContextHolder.runWithTenant(tenantId, () -> metricsQuery.selectForTenant(tenantId));
-                if (EmptyChecks.isNull(backlog)) {
+                if (backlog == null) {
                     throw new IllegalStateException("job dependency wait metrics query returned no row");
                 }
                 totalWaiting = Math.addExact(totalWaiting, Math.max(0, backlog.waitingCount()));

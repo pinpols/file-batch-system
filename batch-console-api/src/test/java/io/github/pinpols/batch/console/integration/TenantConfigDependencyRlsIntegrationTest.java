@@ -8,7 +8,6 @@ import static org.awaitility.Awaitility.await;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigSyncApplicationService;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
@@ -425,7 +424,7 @@ class TenantConfigDependencyRlsIntegrationTest extends AbstractIntegrationTest {
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
         try {
             Throwable failure = catchThrowable(() -> asApplicationRole(() -> syncService.importBundle(request)));
-            if (EmptyChecks.isNotNull(failure)) {
+            if (failure != null) {
                 assertThat(NestedExceptionUtils.getMostSpecificCause(failure))
                         .isInstanceOfSatisfying(
                                 SQLException.class,
@@ -1756,7 +1755,7 @@ class TenantConfigDependencyRlsIntegrationTest extends AbstractIntegrationTest {
             Object result = invocation.proceed();
             SourceReadBarrier barrier = SOURCE_READ_BARRIER.get();
             MappedStatement statement = (MappedStatement) invocation.getArgs()[0];
-            boolean statementMatchesTenantBarrier = EmptyChecks.isNotNull(barrier)
+            boolean statementMatchesTenantBarrier = barrier != null
                     && barrier.tenantId().equals(RlsTenantContextHolder.get())
                     && statement
                             .getId()

@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.domain.file.application.progress;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.file.infrastructure.query.ConsoleFileQueryService;
 import io.github.pinpols.batch.console.domain.file.mapper.FilePipelineStepRunMapper;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
@@ -27,9 +27,9 @@ public class PipelineProgressQueryService {
     private final ConsoleFileQueryService files;
 
     public static List<Long> normalize(List<Long> ids) {
-        if (EmptyChecks.isEmpty(ids)
+        if (EmptyValues.isEmpty(ids)
                 || ids.size() > MAX_IDS_PER_QUERY
-                || ids.stream().anyMatch(id -> EmptyChecks.isNull(id) || id <= 0))
+                || ids.stream().anyMatch(id -> id == null || id <= 0))
             throw BizException.of(
                     ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), "pipelineInstanceIds");
         return ids.stream().distinct().sorted().toList();

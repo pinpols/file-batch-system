@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.application.ops.infrastructure;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.resilience.DownstreamFallback;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.contract.response.ConsoleReplayOperationResponse;
 import io.github.pinpols.batch.console.application.contract.response.ops.AssetPartitionReadinessResponse;
 import io.github.pinpols.batch.console.application.contract.response.ops.CapacityProfileResponse;
@@ -427,17 +427,13 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                         .uri(builder -> {
                             UriBuilder uri = builder.path("/internal/ops/wait-relationships")
                                     .queryParam(PARAM_TENANT_ID, tenantId);
-                            if (EmptyChecks.isNotNull(query.waitType())) uri.queryParam("waitType", query.waitType());
-                            if (EmptyChecks.isNotNull(query.waitStatus()))
-                                uri.queryParam("waitStatus", query.waitStatus());
-                            if (EmptyChecks.isNotNull(query.bizDateFrom()))
-                                uri.queryParam("bizDateFrom", query.bizDateFrom());
-                            if (EmptyChecks.isNotNull(query.bizDateTo()))
-                                uri.queryParam("bizDateTo", query.bizDateTo());
-                            if (EmptyChecks.isNotNull(query.cursorType()))
-                                uri.queryParam("cursorType", query.cursorType());
-                            if (EmptyChecks.isNotNull(query.cursorId())) uri.queryParam("cursorId", query.cursorId());
-                            if (EmptyChecks.isNotNull(query.pageSize())) uri.queryParam("pageSize", query.pageSize());
+                            if (query.waitType() != null) uri.queryParam("waitType", query.waitType());
+                            if (query.waitStatus() != null) uri.queryParam("waitStatus", query.waitStatus());
+                            if (query.bizDateFrom() != null) uri.queryParam("bizDateFrom", query.bizDateFrom());
+                            if (query.bizDateTo() != null) uri.queryParam("bizDateTo", query.bizDateTo());
+                            if (query.cursorType() != null) uri.queryParam("cursorType", query.cursorType());
+                            if (query.cursorId() != null) uri.queryParam("cursorId", query.cursorId());
+                            if (query.pageSize() != null) uri.queryParam("pageSize", query.pageSize());
                             return uri.build();
                         })
                         .retrieve()
@@ -459,17 +455,13 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                                     .queryParam(PARAM_TENANT_ID, resolved)
                                     .queryParam("pageNo", query.pageNo())
                                     .queryParam("pageSize", query.pageSize());
-                            if (EmptyChecks.isNotNull(query.waitType()))
-                                requestUri.queryParam("waitType", query.waitType());
-                            if (EmptyChecks.isNotNull(query.waitStatus()))
-                                requestUri.queryParam("waitStatus", query.waitStatus());
-                            if (EmptyChecks.isNotNull(query.workflowDefinitionId())) {
+                            if (query.waitType() != null) requestUri.queryParam("waitType", query.waitType());
+                            if (query.waitStatus() != null) requestUri.queryParam("waitStatus", query.waitStatus());
+                            if (query.workflowDefinitionId() != null) {
                                 requestUri.queryParam("workflowDefinitionId", query.workflowDefinitionId());
                             }
-                            if (EmptyChecks.isNotNull(query.bizDateFrom()))
-                                requestUri.queryParam("bizDateFrom", query.bizDateFrom());
-                            if (EmptyChecks.isNotNull(query.bizDateTo()))
-                                requestUri.queryParam("bizDateTo", query.bizDateTo());
+                            if (query.bizDateFrom() != null) requestUri.queryParam("bizDateFrom", query.bizDateFrom());
+                            if (query.bizDateTo() != null) requestUri.queryParam("bizDateTo", query.bizDateTo());
                             return requestUri.build();
                         })
                         .retrieve()
@@ -489,7 +481,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         Map<String, Object> body = new LinkedHashMap<>();
         body.put(PARAM_TENANT_ID, resolved);
         body.put("calendarCode", calendarCode);
-        body.put("bizDate", EmptyChecks.isNull(bizDate) ? null : bizDate.toString());
+        body.put("bizDate", bizDate == null ? null : bizDate.toString());
         body.put("action", action);
         body.put("operatorId", operatorId);
         body.put("reason", reason);
@@ -513,7 +505,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         LocalDate bizDateFrom = command.bizDateFrom();
         LocalDate bizDateTo = command.bizDateTo();
         List<String> jobCodes = command.jobCodes();
-        String exportFormat = EmptyChecks.isNull(command.exportFormat()) ? "BUNDLE" : command.exportFormat();
+        String exportFormat = command.exportFormat() == null ? "BUNDLE" : command.exportFormat();
         String requestedBy = command.requestedBy();
         String resolved = tenantGuard.resolveTenant(tenantId);
         Map<String, Object> body = new LinkedHashMap<>();
@@ -579,7 +571,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     @Override
     public List<ConsolePipelineProgressItemResponse> pipelineProgressByInstance(
             String tenantId, Long pipelineInstanceId) {
-        if (EmptyChecks.isNull(pipelineInstanceId) || pipelineInstanceId <= 0) {
+        if (pipelineInstanceId == null || pipelineInstanceId <= 0) {
             return List.of();
         }
         String resolved = tenantGuard.resolveTenant(tenantId);
@@ -764,7 +756,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                                     .path("/internal/orchestrator/batch-day-replay/sessions")
                                     .queryParam(PARAM_TENANT_ID, resolved)
                                     .queryParam(PARAM_LIMIT, limit);
-                            if (EmptyChecks.isNotBlank(status)) {
+                            if (EmptyValues.isNotBlank(status)) {
                                 builder.queryParam("status", status);
                             }
                             return builder.build();
@@ -830,7 +822,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                                     .path("/internal/orchestrator/batch-day-replay/sessions/{id}/entries")
                                     .queryParam(PARAM_TENANT_ID, resolved)
                                     .queryParam(PARAM_LIMIT, limit);
-                            if (EmptyChecks.isNotBlank(status)) {
+                            if (EmptyValues.isNotBlank(status)) {
                                 builder.queryParam("status", status);
                             }
                             return builder.build(sessionId);
@@ -972,10 +964,10 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                                     .queryParam(PARAM_TENANT_ID, resolved)
                                     .queryParam("groupBy", groupBy)
                                     .queryParam(PARAM_LIMIT, limit);
-                            if (EmptyChecks.isNotBlank(from)) {
+                            if (EmptyValues.isNotBlank(from)) {
                                 builder.queryParam("from", from);
                             }
-                            if (EmptyChecks.isNotBlank(to)) {
+                            if (EmptyValues.isNotBlank(to)) {
                                 builder.queryParam("to", to);
                             }
                             return builder.build();
@@ -1036,7 +1028,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                                     .path(path)
                                     .queryParam(PARAM_TENANT_ID, resolved)
                                     .queryParam("businessKey", businessKey);
-                            if (EmptyChecks.isNotNull(limit)) {
+                            if (limit != null) {
                                 builder.queryParam(PARAM_LIMIT, limit);
                             }
                             return builder.build();

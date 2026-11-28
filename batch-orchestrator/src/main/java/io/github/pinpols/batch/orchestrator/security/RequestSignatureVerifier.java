@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.security;
 
 import io.github.pinpols.batch.common.security.RequestSignatures;
 import io.github.pinpols.batch.common.security.SecretComparator;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.time.Duration;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
@@ -49,8 +49,9 @@ public class RequestSignatureVerifier {
     private final NonceStore nonceStore;
 
     public Result verify(SignedRequest req, long nowMillis) {
-        boolean signatureHeadersAreIncomplete =
-                !Texts.hasText(req.timestamp()) || !Texts.hasText(req.nonce()) || !Texts.hasText(req.signature());
+        boolean signatureHeadersAreIncomplete = !EmptyValues.hasText(req.timestamp())
+                || !EmptyValues.hasText(req.nonce())
+                || !EmptyValues.hasText(req.signature());
         if (signatureHeadersAreIncomplete) {
             return Result.MISSING_HEADERS;
         }

@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.common.redis;
 
+import io.github.pinpols.batch.common.utils.EmptyValues;
+
 public final class BatchRedisKeys {
 
     public static final String OUTBOX_CIRCUIT = "circuit:outbox_publish";
@@ -65,7 +67,7 @@ public final class BatchRedisKeys {
     }
 
     private static String safe(String value) {
-        if (value == null || value.isBlank()) {
+        if (EmptyValues.isBlank(value)) {
             return "_";
         }
         return value.replace(':', '_');

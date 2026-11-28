@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.config;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
@@ -55,7 +55,7 @@ public class ProductionRuntimeConfigurationGuard implements SmartInitializingSin
 
         REQUIRED_ENDPOINTS.forEach(this::requireRemoteEndpoint);
 
-        if (EmptyChecks.isBlank(kafkaNamespaceProperties.getNamespace())) {
+        if (EmptyValues.isBlank(kafkaNamespaceProperties.getNamespace())) {
             throw new IllegalStateException(
                     "FATAL: production Kafka topic namespace must be explicitly configured: batch.kafka.namespace");
         }
@@ -86,7 +86,7 @@ public class ProductionRuntimeConfigurationGuard implements SmartInitializingSin
 
     private void requireRemoteEndpoint(String key) {
         String value = environment.getProperty(key);
-        if (value == null || EmptyChecks.isBlank(value)) {
+        if (value == null || EmptyValues.isBlank(value)) {
             throw new IllegalStateException("FATAL: production endpoint is not configured: " + key);
         }
         String trimmedValue = value.trim();

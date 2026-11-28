@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.DispatchTaskKeys;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.plan.BundlePlanParams;
 import io.github.pinpols.batch.orchestrator.domain.view.DispatchSecretBindingView;
 import io.github.pinpols.batch.orchestrator.mapper.DispatchSecretBindingMapper;
@@ -41,7 +41,7 @@ public class DispatchSecretSnapshotResolver {
             channelCodes = new LinkedHashSet<>();
             collectChannels(trustedParams, channelCodes);
         }
-        if (EmptyChecks.isEmpty(channelCodes)) {
+        if (EmptyValues.isEmpty(channelCodes)) {
             return trustedParams;
         }
 
@@ -49,11 +49,9 @@ public class DispatchSecretSnapshotResolver {
         Map<String, Object> bindings = new LinkedHashMap<>();
         for (DispatchSecretBindingView binding :
                 bindingMapper.selectCurrentByChannels(tenantId, new ArrayList<>(channelCodes))) {
-            if (EmptyChecks.isNull(binding.secretVersionId()) || EmptyChecks.isNull(binding.versionNo())) {
+            if (binding.secretVersionId() == null || binding.versionNo() == null) {
                 // 递归候选可能仅存在于业务元数据；仅明确目标或无明确目标时沿原语义阻断。
-                if (!bundleDispatch
-                        && EmptyChecks.isNotNull(selectedChannel)
-                        && !selectedChannel.equals(binding.channelCode())) {
+                if (!bundleDispatch && selectedChannel != null && !selectedChannel.equals(binding.channelCode())) {
                     continue;
                 }
                 throw BizException.of(
@@ -67,15 +65,15 @@ public class DispatchSecretSnapshotResolver {
             reference.put("versionNo", binding.versionNo());
             bindings.put(binding.channelCode(), reference);
         }
-        if (EmptyChecks.isNotEmpty(bindings)) {
+        if (EmptyValues.isNotEmpty(bindings)) {
             pinned.put(DispatchTaskKeys.SECRET_BINDINGS, bindings);
         }
         return pinned;
     }
 
     private Map<String, Object> withoutCallerBindings(Map<String, Object> effectiveParams) {
-        if (EmptyChecks.isNull(effectiveParams) || !effectiveParams.containsKey(DispatchTaskKeys.SECRET_BINDINGS)) {
-            return EmptyChecks.isNull(effectiveParams) ? Map.of() : effectiveParams;
+        if (effectiveParams == null || !effectiveParams.containsKey(DispatchTaskKeys.SECRET_BINDINGS)) {
+            return effectiveParams == null ? Map.of() : effectiveParams;
         }
         Map<String, Object> sanitized = new LinkedHashMap<>(effectiveParams);
         sanitized.remove(DispatchTaskKeys.SECRET_BINDINGS);
@@ -87,9 +85,9 @@ public class DispatchSecretSnapshotResolver {
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 String key = String.valueOf(entry.getKey());
                 Object nested = entry.getValue();
-                if (CHANNEL_KEYS.contains(key) && EmptyChecks.isNotNull(nested)) {
+                if (CHANNEL_KEYS.contains(key) && nested != null) {
                     String checkedChannel = String.valueOf(nested);
-                    if (EmptyChecks.isNotBlank(checkedChannel)) {
+                    if (EmptyValues.isNotBlank(checkedChannel)) {
                         String channel = String.valueOf(nested);
                         channels.add(channel.trim());
                     }

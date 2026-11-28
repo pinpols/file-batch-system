@@ -2,9 +2,8 @@ package io.github.pinpols.batch.orchestrator.application.service.dataquality;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.dataquality.DataQualityGateOutcome.GateStatus;
 import io.github.pinpols.batch.orchestrator.application.service.dataquality.DataQualityGateOutcome.RuleFinding;
 import io.github.pinpols.batch.orchestrator.config.DataQualityProperties;
@@ -72,15 +71,15 @@ public class DataQualityCheckExecutor {
         if (properties.getMode() == DataQualityProperties.Mode.OFF) {
             return DataQualityGateOutcome.noRules();
         }
-        boolean dataQualityInputIsIncomplete = EmptyChecks.isNull(instance)
+        boolean dataQualityInputIsIncomplete = instance == null
                 || instance.getId() == null
-                || !Texts.hasText(instance.getTenantId())
-                || !Texts.hasText(businessKey);
+                || !EmptyValues.hasText(instance.getTenantId())
+                || !EmptyValues.hasText(businessKey);
         if (dataQualityInputIsIncomplete) {
             return DataQualityGateOutcome.noRules();
         }
         List<DataQualityRuleEntity> rules = ruleMapper.selectEnabledByBusinessKey(instance.getTenantId(), businessKey);
-        if (EmptyChecks.isEmpty(rules)) {
+        if (EmptyValues.isEmpty(rules)) {
             return DataQualityGateOutcome.noRules();
         }
 
@@ -168,7 +167,7 @@ public class DataQualityCheckExecutor {
 
     @SuppressWarnings("unchecked")
     private boolean matchThreshold(long actual, String thresholdJson, String ruleCode) {
-        if (!Texts.hasText(thresholdJson)) {
+        if (!EmptyValues.hasText(thresholdJson)) {
             return actual > 0;
         }
         Map<String, Object> threshold;

@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.common.enums;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
@@ -22,9 +21,9 @@ public enum ConfigVersionPolicy implements DictEnum {
 
     /** 解析规范 code，并将早期 OpenAPI 暴露过的两个旧名称归一到当前语义。 */
     public static ConfigVersionPolicy fromCodeOrNull(String value) {
-        String normalized = EmptyChecks.isNull(value) ? null : value.trim();
+        String normalized = value == null ? null : value.trim();
         ConfigVersionPolicy policy = DictEnum.fromCode(ConfigVersionPolicy.class, normalized);
-        if (EmptyChecks.isNotNull(policy)) {
+        if (policy != null) {
             return policy;
         }
         if (LEGACY_USE_CURRENT_CONFIG.equalsIgnoreCase(normalized)) {

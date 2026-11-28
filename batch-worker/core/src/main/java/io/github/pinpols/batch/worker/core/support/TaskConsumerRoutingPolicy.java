@@ -3,7 +3,7 @@ package io.github.pinpols.batch.worker.core.support;
 import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerKafkaSubscribeProperties;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
@@ -42,7 +42,7 @@ final class TaskConsumerRoutingPolicy {
         String configuredWorkerCode = configuration.workerCode();
         String configuredBaseTopic = resolveBaseTopic(configuration);
         String baseTopic = topicNamespace.topic(configuredBaseTopic);
-        if (EmptyChecks.isBlank(configuredWorkerCode)) {
+        if (EmptyValues.isBlank(configuredWorkerCode)) {
             return new String[] {baseTopic};
         }
         String directDispatchTopic = BatchTopics.directDispatchTopic(baseTopic, configuredWorkerCode);
@@ -63,11 +63,10 @@ final class TaskConsumerRoutingPolicy {
         String configuredWorkerCode = configuration.workerCode();
         String nodeDirect = resolveNodeDirectSuffix(baseTopic, configuredWorkerCode);
 
-        WorkerKafkaSubscribeProperties.Mode mode = EmptyChecks.isNull(properties)
-                ? WorkerKafkaSubscribeProperties.Mode.PATTERN
-                : properties.getSubscribeMode();
+        WorkerKafkaSubscribeProperties.Mode mode =
+                properties == null ? WorkerKafkaSubscribeProperties.Mode.PATTERN : properties.getSubscribeMode();
         if (mode == WorkerKafkaSubscribeProperties.Mode.DIRECT_ONLY) {
-            if (EmptyChecks.isNull(nodeDirect)) {
+            if (nodeDirect == null) {
                 throw new IllegalStateException("batch.worker.kafka.subscribe-mode=DIRECT_ONLY requires a worker code");
             }
             return "^" + safeBase + nodeDirect + "$";
@@ -78,22 +77,22 @@ final class TaskConsumerRoutingPolicy {
                     case TENANT_SCOPED -> tenantScopedSuffix(nodeDirect, properties);
                     default -> joinAlt(nodeDirect, "\\.[^.]+");
                 };
-        if (EmptyChecks.isNull(suffixAlt)) {
+        if (suffixAlt == null) {
             return "^" + safeBase + "$";
         }
         return "^" + safeBase + "(" + suffixAlt + ")?$";
     }
 
     private static String tenantScopedSuffix(String nodeDirect, WorkerKafkaSubscribeProperties properties) {
-        List<String> allow = EmptyChecks.isNull(properties) || EmptyChecks.isNull(properties.getTenantAllowlist())
+        List<String> allow = properties == null || properties.getTenantAllowlist() == null
                 ? List.of()
                 : properties.getTenantAllowlist();
         String tenantAlt = allow.stream()
-                .filter(EmptyChecks::isNotBlank)
+                .filter(EmptyValues::isNotBlank)
                 .map(TaskConsumerRoutingPolicy::escapeRegex)
                 .reduce((left, right) -> left + "|" + right)
                 .orElse(null);
-        return joinAlt(nodeDirect, EmptyChecks.isNull(tenantAlt) ? null : "\\.(" + tenantAlt + ")");
+        return joinAlt(nodeDirect, tenantAlt == null ? null : "\\.(" + tenantAlt + ")");
     }
 
     static boolean accepts(
@@ -101,20 +100,20 @@ final class TaskConsumerRoutingPolicy {
             WorkerRegistration registration,
             WorkerConfiguration configuration,
             BiPredicate<WorkerConfiguration, TaskDispatchMessage> tenantScope) {
-        boolean dispatchMessageIdentityIsIncomplete = EmptyChecks.isNull(message)
-                || EmptyChecks.isNull(message.taskId())
-                || EmptyChecks.isNull(message.tenantId())
-                || EmptyChecks.isNull(message.workerType());
+        boolean dispatchMessageIdentityIsIncomplete = message == null
+                || message.taskId() == null
+                || message.tenantId() == null
+                || message.workerType() == null;
         if (dispatchMessageIdentityIsIncomplete) {
             return false;
         }
-        boolean configuredWorkerTypeDoesNotMatchMessage = EmptyChecks.isNull(configuration.workerType())
+        boolean configuredWorkerTypeDoesNotMatchMessage = configuration.workerType() == null
                 || !configuration.workerType().equalsIgnoreCase(message.workerType());
         if (configuredWorkerTypeDoesNotMatchMessage) {
             return false;
         }
-        boolean selectedWorkerDoesNotMatchRegistration = EmptyChecks.isNotNull(message.selectedWorkerId())
-                && (EmptyChecks.isNull(registration)
+        boolean selectedWorkerDoesNotMatchRegistration = message.selectedWorkerId() != null
+                && (registration == null
                         || (!message.selectedWorkerId().equals(registration.getWorkerCode())
                                 && !message.selectedWorkerId().equals(registration.getWorkerId())));
         if (selectedWorkerDoesNotMatchRegistration) {
@@ -126,17 +125,17 @@ final class TaskConsumerRoutingPolicy {
     static String resolveBaseTopic(WorkerConfiguration configuration) {
         String configuredWorkerCode = configuration.workerCode();
         String baseTopic = configuration.topic();
-        if (EmptyChecks.isBlank(baseTopic)) {
+        if (EmptyValues.isBlank(baseTopic)) {
             baseTopic = resolveTopicByWorkerType(configuration.workerType());
-            if (EmptyChecks.isBlank(baseTopic)) {
+            if (EmptyValues.isBlank(baseTopic)) {
                 baseTopic = resolveTopicByWorkerCode(configuredWorkerCode);
             }
         }
-        return EmptyChecks.isBlank(baseTopic) ? BatchTopics.TASK_DISPATCH_DISPATCH : baseTopic;
+        return EmptyValues.isBlank(baseTopic) ? BatchTopics.TASK_DISPATCH_DISPATCH : baseTopic;
     }
 
     private static String resolveTopicByWorkerType(String workerType) {
-        if (EmptyChecks.isBlank(workerType)) {
+        if (EmptyValues.isBlank(workerType)) {
             return null;
         }
         String normalizedWorkerType = workerType.toUpperCase(Locale.ROOT);
@@ -144,7 +143,7 @@ final class TaskConsumerRoutingPolicy {
     }
 
     private static String resolveTopicByWorkerCode(String workerCode) {
-        String normalized = EmptyChecks.isNull(workerCode) ? "" : workerCode.toLowerCase(Locale.ROOT);
+        String normalized = workerCode == null ? "" : workerCode.toLowerCase(Locale.ROOT);
         return WORKER_CODE_KEYWORD_TOPIC.entrySet().stream()
                 .filter(entry -> normalized.contains(entry.getKey()))
                 .map(Map.Entry::getValue)
@@ -163,17 +162,17 @@ final class TaskConsumerRoutingPolicy {
     }
 
     private static String joinAlt(String left, String right) {
-        if (EmptyChecks.isNull(left)) {
+        if (left == null) {
             return right;
         }
-        if (EmptyChecks.isNull(right)) {
+        if (right == null) {
             return left;
         }
         return left + "|" + right;
     }
 
     private static String resolveNodeDirectSuffix(String baseTopic, String workerCode) {
-        if (EmptyChecks.isBlank(workerCode)) {
+        if (EmptyValues.isBlank(workerCode)) {
             return null;
         }
         String directTopic = BatchTopics.directDispatchTopic(baseTopic, workerCode);

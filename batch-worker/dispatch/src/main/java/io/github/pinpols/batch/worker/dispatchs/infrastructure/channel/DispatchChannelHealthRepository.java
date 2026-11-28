@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelConfigView;
 import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelHealthMapper;
 import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelHealthView;
@@ -23,7 +23,7 @@ public class DispatchChannelHealthRepository {
     private final DispatchChannelHealthMapper mapper;
 
     public List<DispatchChannelConfigView> findEnabledProbeChannels(List<String> types, int limit, Instant now) {
-        if (types == null || types.isEmpty()) {
+        if (EmptyValues.isEmpty(types)) {
             return List.of();
         }
         return mapper.findEnabledProbeChannels(types, limit, toTimestamp(now));
@@ -131,7 +131,7 @@ public class DispatchChannelHealthRepository {
     }
 
     private DispatchChannelHealthSnapshot toSnapshot(DispatchChannelHealthView row) {
-        int consecutiveFailures = EmptyChecks.isNull(row.consecutiveFailures()) ? 0 : row.consecutiveFailures();
+        int consecutiveFailures = row.consecutiveFailures() == null ? 0 : row.consecutiveFailures();
         return new DispatchChannelHealthSnapshot(
                 row.tenantId(),
                 row.channelCode(),

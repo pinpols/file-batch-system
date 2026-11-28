@@ -5,8 +5,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
@@ -46,7 +46,7 @@ public class ParseSupport {
         }
         Object fm = map.get("field_mappings");
         String text = jsonText(fm);
-        if (Texts.hasText(text)) {
+        if (EmptyValues.hasText(text)) {
             try {
                 return objectMapper.readValue(text, new TypeReference<List<Object>>() {});
             } catch (Exception ignored) {
@@ -79,7 +79,7 @@ public class ParseSupport {
             return out;
         }
         String text = jsonText(value);
-        if (Texts.hasText(text)) {
+        if (EmptyValues.hasText(text)) {
             try {
                 return objectMapper.readValue(text, new TypeReference<Map<String, Object>>() {});
             } catch (Exception ignored) {
@@ -107,7 +107,7 @@ public class ParseSupport {
             if (value instanceof Number number) {
                 return number.intValue();
             }
-            if (value != null && Texts.hasText(String.valueOf(value))) {
+            if (value != null && EmptyValues.hasText(String.valueOf(value))) {
                 String text = String.valueOf(value);
                 return Integer.parseInt(text);
             }
@@ -125,7 +125,7 @@ public class ParseSupport {
     }
 
     public void collectSchemaFields(ImportJobContext context, Map<String, ?> row) {
-        if (context == null || row == null || row.isEmpty()) {
+        if (context == null || EmptyValues.isEmpty(row)) {
             return;
         }
         LinkedHashSet<String> fields = existingSchemaFields(context);
@@ -138,7 +138,7 @@ public class ParseSupport {
         LinkedHashSet<String> fields = new LinkedHashSet<>();
         if (existing instanceof List<?> list) {
             for (Object item : list) {
-                if (item != null && Texts.hasText(String.valueOf(item))) {
+                if (item != null && EmptyValues.hasText(String.valueOf(item))) {
                     fields.add(String.valueOf(item));
                 }
             }
@@ -232,7 +232,7 @@ public class ParseSupport {
             return 0L;
         }
         String text = String.valueOf(value);
-        if (!Texts.hasText(text)) {
+        if (!EmptyValues.hasText(text)) {
             return 0L;
         }
         return Long.parseLong(text);
@@ -269,7 +269,7 @@ public class ParseSupport {
                     .filter(Map.class::isInstance)
                     .map(Map.class::cast)
                     .map(mapping -> mapping.get("name"))
-                    .filter(name -> name != null && Texts.hasText(String.valueOf(name)))
+                    .filter(name -> name != null && EmptyValues.hasText(String.valueOf(name)))
                     .map(name -> {
                         String rawName = String.valueOf(name);
                         return rawName.trim();

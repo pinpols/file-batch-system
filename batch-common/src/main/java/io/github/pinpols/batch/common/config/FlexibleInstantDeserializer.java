@@ -3,6 +3,7 @@ package io.github.pinpols.batch.common.config;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.deser.std.StdScalarDeserializer;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -45,7 +46,7 @@ public class FlexibleInstantDeserializer extends StdScalarDeserializer<Instant> 
             return Instant.ofEpochMilli(p.getLongValue());
         }
         String raw = p.getValueAsString();
-        if (raw == null || raw.isBlank()) {
+        if (EmptyValues.isBlank(raw)) {
             return null;
         }
         String text = raw.trim();

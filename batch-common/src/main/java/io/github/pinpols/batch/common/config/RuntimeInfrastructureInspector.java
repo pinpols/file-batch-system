@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.common.config;
 
 import io.github.pinpols.batch.common.stateful.StatefulBackendIdentity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.ObjectProvider;
@@ -46,26 +45,26 @@ public class RuntimeInfrastructureInspector {
     /** Redis定位与Boot客户端模式选择一致；无有效连接信息时拒绝伪造默认位置。 */
     public String redisBackendIdentity() {
         DataRedisConnectionDetails details = redisConnectionDetails.getIfAvailable();
-        if (EmptyChecks.isNull(details)) {
+        if (details == null) {
             throw new IllegalStateException("Redis connection details are required for stateful backend identity");
         }
         DataRedisConnectionDetails.Sentinel sentinel = details.getSentinel();
-        if (EmptyChecks.isNotNull(sentinel)) {
+        if (sentinel != null) {
             String nodes = formatNodes(sentinel.getNodes());
             return StatefulBackendIdentity.redisSentinel(sentinel.getMaster(), nodes, sentinel.getDatabase());
         }
         DataRedisConnectionDetails.Cluster cluster = details.getCluster();
-        if (EmptyChecks.isNotNull(cluster)) {
+        if (cluster != null) {
             String nodes = formatNodes(cluster.getNodes());
             return StatefulBackendIdentity.redisCluster(nodes);
         }
         DataRedisConnectionDetails.MasterReplica masterReplica = details.getMasterReplica();
-        if (EmptyChecks.isNotNull(masterReplica)) {
+        if (masterReplica != null) {
             String nodes = formatNodes(masterReplica.getNodes());
             return StatefulBackendIdentity.redisMasterReplica(nodes);
         }
         DataRedisConnectionDetails.Standalone standalone = details.getStandalone();
-        if (EmptyChecks.isNull(standalone)) {
+        if (standalone == null) {
             throw new IllegalStateException("Redis standalone connection details are unavailable");
         }
         return StatefulBackendIdentity.redisStandalone(

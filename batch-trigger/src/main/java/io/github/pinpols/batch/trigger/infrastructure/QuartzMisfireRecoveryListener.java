@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
 import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
@@ -67,9 +67,9 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
             return;
         }
         Date originalFireTime = trigger.getNextFireTime();
-        if (EmptyChecks.isNull(originalFireTime)) {
+        if (originalFireTime == null) {
             originalFireTime = trigger.getPreviousFireTime();
-            if (EmptyChecks.isNull(originalFireTime)) {
+            if (originalFireTime == null) {
                 log.warn(
                         "skipping Quartz misfire recovery because original fire time is unavailable:"
                                 + " triggerKey={}, jobKey={}",
@@ -92,7 +92,7 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
         Long workflowDefinitionId = data.containsKey(QuartzLaunchJob.WORKFLOW_DEFINITION_ID)
                 ? data.getLong(QuartzLaunchJob.WORKFLOW_DEFINITION_ID)
                 : null;
-        if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isNull(workflowDefinitionId)) {
+        if (EmptyValues.isBlank(tenantId) || workflowDefinitionId == null) {
             log.error(
                     "cannot persist Quartz misfire without Workflow identity: triggerKey={}, jobKey={}",
                     recoveryTriggerKey,
@@ -148,7 +148,7 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
             occurrenceRecorder.recoverUnobservedPlannedFires(
                     descriptor.getTenantId(),
                     descriptor.getWorkflowDefinitionId(),
-                    EmptyChecks.isNull(descriptor.getWorkflowVersion()) ? 0 : descriptor.getWorkflowVersion(),
+                    descriptor.getWorkflowVersion() == null ? 0 : descriptor.getWorkflowVersion(),
                     recoveryCutoff,
                     RECOVERY_BATCH_SIZE);
         }
@@ -162,11 +162,11 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
         Scheduler scheduler = schedulerSupplier.get();
         try {
             JobKey durableJobKey = ensureDurableRecoveryJob(scheduler, jobKey, workflowDefinitionId);
-            if (EmptyChecks.isNull(durableJobKey)) {
+            if (durableJobKey == null) {
                 return;
             }
             JobDetail source = scheduler.getJobDetail(jobKey);
-            if (EmptyChecks.isNull(source)) {
+            if (source == null) {
                 return;
             }
             // 共享恢复 Job 可以承载多个版本；每个 fire 必须覆盖全部原描述，避免继承其它 fire 的元数据。
@@ -199,9 +199,8 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
             try {
                 Trigger existing = scheduler.getTrigger(recoveryKey);
                 JobKey durableJobKey = ensureDurableRecoveryJob(scheduler, jobKey, workflowDefinitionId);
-                boolean existingMisfireUsesDurableJobKey = EmptyChecks.isNotNull(durableJobKey)
-                        && EmptyChecks.isNotNull(existing)
-                        && (durableJobKey.equals(existing.getJobKey()));
+                boolean existingMisfireUsesDurableJobKey =
+                        durableJobKey != null && existing != null && (durableJobKey.equals(existing.getJobKey()));
                 if (existingMisfireUsesDurableJobKey) {
                     scheduler.resumeTrigger(recoveryKey);
                     log.debug(
@@ -232,7 +231,7 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
             throws SchedulerException {
         if (scheduler.checkExists(recoveryKey)) {
             Trigger existing = scheduler.getTrigger(recoveryKey);
-            if (EmptyChecks.isNotNull(existing)) {
+            if (existing != null) {
                 JobKey existingJobKey = existing.getJobKey();
                 if (durableJobKey.equals(existingJobKey)) {
                     scheduler.resumeTrigger(recoveryKey);
@@ -249,7 +248,7 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
                         .withSchedule(SimpleScheduleBuilder.simpleSchedule().withMisfireHandlingInstructionFireNow())
                         .build();
                 Date nextFireTime = scheduler.rescheduleJob(recoveryKey, rebound);
-                if (EmptyChecks.isNotNull(nextFireTime)) {
+                if (nextFireTime != null) {
                     scheduler.resumeTrigger(recoveryKey);
                     log.info(
                             "rebound Quartz misfire recovery to durable JobDetail: triggerKey={},"
@@ -272,7 +271,7 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
             return sourceJobKey;
         }
         JobDetail sourceJob = scheduler.getJobDetail(sourceJobKey);
-        if (EmptyChecks.isNull(sourceJob)) {
+        if (sourceJob == null) {
             log.warn(
                     "cannot register misfire recovery without source Workflow JobDetail: jobKey={},"
                             + " workflowDefinitionId={}",
@@ -281,7 +280,7 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
             return null;
         }
         String tenantId = sourceJob.getJobDataMap().getString(QuartzLaunchJob.TENANT_ID);
-        if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isNull(workflowDefinitionId)) {
+        if (EmptyValues.isBlank(tenantId) || workflowDefinitionId == null) {
             log.error(
                     "cannot register durable misfire recovery without Workflow identity: jobKey={},"
                             + " tenantId={}, workflowDefinitionId={}",
@@ -309,7 +308,7 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
     }
 
     private boolean isDedicatedRecoveryJob(JobKey jobKey) {
-        return EmptyChecks.isNotNull(jobKey) && jobKey.getName().contains(":RECOVERY:");
+        return jobKey != null && jobKey.getName().contains(":RECOVERY:");
     }
 
     @Override

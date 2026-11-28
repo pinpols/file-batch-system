@@ -19,12 +19,11 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
@@ -178,7 +177,7 @@ public class DefaultCompensationService implements CompensationService {
         PreInsertAttempt attempt = new PreInsertAttempt();
         try {
             CompensationCommandEntity priorCommand = prepareBeforeInsert(command, attempt);
-            if (EmptyChecks.isNotNull(priorCommand)) {
+            if (priorCommand != null) {
                 return resolvePriorApprovedCommand(priorCommand, attempt.requestFingerprint);
             }
         } catch (RuntimeException pre) {
@@ -195,7 +194,7 @@ public class DefaultCompensationService implements CompensationService {
             transactionExecutor.requiresNew(() -> compensationCommandMapper.insert(entity));
         } catch (DataIntegrityViolationException ex) {
             CompensationCommandEntity concurrentCommand = findPriorApprovedCommand(command);
-            if (EmptyChecks.isNotNull(concurrentCommand)) {
+            if (concurrentCommand != null) {
                 return resolvePriorApprovedCommand(concurrentCommand, attempt.requestFingerprint);
             }
             BizException wrapped = BizException.of(ResultCode.CONFLICT, "error.compensation.already_running", ex);
@@ -207,7 +206,7 @@ public class DefaultCompensationService implements CompensationService {
             executed = transactionExecutor.required(() -> {
                 Long locked = compensationCommandMapper.lockRunningCommand(
                         command.tenantId(), entity.getId(), CompensationCommandStatus.RUNNING.code());
-                if (EmptyChecks.isNull(locked)) {
+                if (locked == null) {
                     return false;
                 }
                 executeAndMarkSuccess(command, resolvedCommandNo, resolvedTraceId, entity);
@@ -235,15 +234,15 @@ public class DefaultCompensationService implements CompensationService {
         validate(command);
         attempt.requestFingerprint = fingerprintApprovedRequest(command);
         CompensationCommandEntity priorCommand = findPriorApprovedCommand(command);
-        if (EmptyChecks.isNotNull(priorCommand)) {
+        if (priorCommand != null) {
             return priorCommand;
         }
         attempt.commandNo = IdGenerator.newBusinessNo("cmp");
         String normalizedType = normalizeType(command.compensationType());
         String resolvedTraceId = resolveTraceIdFromTarget(command, normalizedType);
-        attempt.traceId = Texts.hasText(resolvedTraceId)
+        attempt.traceId = EmptyValues.hasText(resolvedTraceId)
                 ? resolvedTraceId
-                : (Texts.hasText(command.traceId()) ? command.traceId() : IdGenerator.newTraceId());
+                : (EmptyValues.hasText(command.traceId()) ? command.traceId() : IdGenerator.newTraceId());
         assertNoRunningConflict(command);
         return null;
     }
@@ -285,8 +284,7 @@ public class DefaultCompensationService implements CompensationService {
     public void rejectWorkflowNodeReplayApproval(String tenantId, Long replayOperationId) {
         replayOperationMapper.setTenantContext(tenantId);
         ReplayOperationEntity operation = replayOperationMapper.selectForUpdate(tenantId, replayOperationId);
-        if (EmptyChecks.isNull(operation)
-                || !ReplayOperationType.WORKFLOW_NODE.code().equals(operation.operationType())) {
+        if (operation == null || !ReplayOperationType.WORKFLOW_NODE.code().equals(operation.operationType())) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.replay_operation_not_found");
         }
         if (ReplayOperationStatus.REJECTED.code().equals(operation.status())) {
@@ -302,7 +300,7 @@ public class DefaultCompensationService implements CompensationService {
     }
 
     private CompensationCommandEntity findPriorApprovedCommand(CompensationSubmitCommand command) {
-        if (!Texts.hasText(command.approvalId())) {
+        if (!EmptyValues.hasText(command.approvalId())) {
             return null;
         }
         return compensationCommandMapper.selectByTenantAndApprovalId(command.tenantId(), command.approvalId());
@@ -319,7 +317,7 @@ public class DefaultCompensationService implements CompensationService {
     }
 
     private String fingerprintApprovedRequest(CompensationSubmitCommand command) {
-        if (!Texts.hasText(command.approvalId())) {
+        if (!EmptyValues.hasText(command.approvalId())) {
             return null;
         }
         Map<String, Object> payload = JsonUtils.toMap(command);
@@ -416,7 +414,7 @@ public class DefaultCompensationService implements CompensationService {
         statusUpdateBuilder.finishedAt(finishedAt);
         UpdateCompensationStatusParam statusUpdate = statusUpdateBuilder.build();
         int updated = compensationCommandMapper.updateStatus(statusUpdate);
-        if (updated == 0 && EmptyChecks.isNotNull(relatedJobInstanceId)) {
+        if (updated == 0 && relatedJobInstanceId != null) {
             // 作业可能在业务事务回滚后已归档；保留原目标信息，失败审计不再引用热作业。
             statusUpdateBuilder.relatedJobInstanceId(null);
             updated = compensationCommandMapper.updateStatus(statusUpdateBuilder.build());
@@ -465,7 +463,7 @@ public class DefaultCompensationService implements CompensationService {
     }
 
     private String resolveTraceIdFromTarget(CompensationSubmitCommand command, String normalizedType) {
-        if (!Texts.hasText(command.tenantId()) || command.targetId() == null) {
+        if (!EmptyValues.hasText(command.tenantId()) || command.targetId() == null) {
             return null;
         }
         Function<CompensationSubmitCommand, Long> resolver =
@@ -485,7 +483,7 @@ public class DefaultCompensationService implements CompensationService {
             CompensationSubmitCommand command, String commandNo, String traceId, CompensationCommandEntity entity) {
         String compensationType = normalizeType(command.compensationType());
         CompensationOperation operation = operationsByType.get(compensationType);
-        if (EmptyChecks.isNull(operation)) {
+        if (operation == null) {
             throw BizException.of(
                     ResultCode.INVALID_ARGUMENT,
                     ResultCode.INVALID_ARGUMENT.detailKey(),
@@ -518,8 +516,7 @@ public class DefaultCompensationService implements CompensationService {
         params.put("rerunFlag", true);
         params.put("retryFlag", false);
         params.put("reason", command.reason());
-        if (EmptyChecks.isNotNull(command.sourceWorkflowRunId())
-                && EmptyChecks.isNotNull(command.sourceWorkflowNodeRunId())) {
+        if (command.sourceWorkflowRunId() != null && command.sourceWorkflowNodeRunId() != null) {
             params.put("sourceWorkflowRunId", command.sourceWorkflowRunId());
             params.put("sourceWorkflowNodeRunId", command.sourceWorkflowNodeRunId());
             params.put("sourceJobInstanceId", sourceInstance.getId());
@@ -538,12 +535,12 @@ public class DefaultCompensationService implements CompensationService {
                 .build();
         CompensationLaunchResult launch = launchCompensation(request);
         JobInstanceEntity launched = launch.job();
-        entity.setRelatedJobInstanceId(EmptyChecks.isNull(launched) ? null : launched.getId());
+        entity.setRelatedJobInstanceId(launched == null ? null : launched.getId());
         Map<String, Object> result = new LinkedHashMap<>();
         result.put(KEY_ACTION, "JOB_RERUN");
         result.put("sourceInstanceNo", sourceInstance.getInstanceNo());
         result.put("launchRequestId", launch.requestId());
-        result.put("newInstanceNo", EmptyChecks.isNull(launched) ? null : launched.getInstanceNo());
+        result.put("newInstanceNo", launched == null ? null : launched.getInstanceNo());
         result.put("newTraceId", launch.traceId());
         result.put("targetJobInstanceId", launched == null ? null : launched.getId());
         return result;
@@ -581,7 +578,7 @@ public class DefaultCompensationService implements CompensationService {
                 .build();
         Map<String, Object> result = rerunJob(jobRerun, commandNo, traceId, entity);
         String targetRequestId = String.valueOf(result.get("launchRequestId"));
-        if (!Texts.hasText(targetRequestId) || "null".equals(targetRequestId)) {
+        if (!EmptyValues.hasText(targetRequestId) || "null".equals(targetRequestId)) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.replay_target_request_missing");
         }
         ReplayOperationEntity replayOperation = createWorkflowNodeReplayOperation(command, source, targetRequestId);
@@ -638,7 +635,7 @@ public class DefaultCompensationService implements CompensationService {
         replayOperationMapper.setTenantContext(command.tenantId());
         ReplayOperationEntity pending =
                 replayOperationMapper.selectForUpdate(command.tenantId(), command.replayOperationId());
-        boolean exactSourceMatches = EmptyChecks.isNotNull(pending)
+        boolean exactSourceMatches = pending != null
                 && source.sourceRun().getId().equals(pending.sourceWorkflowRunId())
                 && source.sourceNodeRun().getId().equals(pending.sourceWorkflowNodeRunId())
                 && source.sourceJobInstance().getId().equals(pending.sourceJobInstanceId());
@@ -647,7 +644,7 @@ public class DefaultCompensationService implements CompensationService {
                 && previewHashes.snapshotHash().equals(pending.snapshotHash());
         boolean replayApprovalIsNoLongerValid = !frozenPreviewMatches
                 || !ReplayOperationStatus.PENDING_APPROVAL.code().equals(pending.status())
-                || EmptyChecks.isNull(approval);
+                || approval == null;
         if (replayApprovalIsNoLongerValid) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.replay_preview_changed");
         }
@@ -665,7 +662,7 @@ public class DefaultCompensationService implements CompensationService {
     }
 
     private ApprovalCommandEntity findReplayApproval(CompensationSubmitCommand command) {
-        if (!Texts.hasText(command.approvalId())) {
+        if (!EmptyValues.hasText(command.approvalId())) {
             return null;
         }
         return approvalCommandMapper.selectByTenantAndApprovalNo(command.tenantId(), command.approvalId());
@@ -685,13 +682,14 @@ public class DefaultCompensationService implements CompensationService {
     private Map<String, Object> rerunStep(
             CompensationSubmitCommand command, String commandNo, String traceId, CompensationCommandEntity entity) {
         Long stepId = command.targetId();
-        Guard.require(stepId != null, "step targetId is required");
+        Preconditions.require(stepId != null, "step targetId is required");
         JobStepInstanceEntity loadedStepInstance =
                 jobMappers.jobStepInstanceMapper.selectById(command.tenantId(), stepId);
-        JobStepInstanceEntity stepInstance = Guard.requireFound(loadedStepInstance, "job step instance not found");
+        JobStepInstanceEntity stepInstance =
+                Preconditions.requireFound(loadedStepInstance, "job step instance not found");
         entity.setRelatedJobInstanceId(stepInstance.getJobInstanceId());
         Long taskId = stepInstance.getJobTaskId();
-        Guard.require(taskId != null, "step jobTaskId is required");
+        Preconditions.require(taskId != null, "step jobTaskId is required");
         String tenantId = command.tenantId();
         String compensationEventKey = OutboxEventKeyGenerator.forCompensation(tenantId, commandNo, taskId);
         retryGovernanceService.retryTask(tenantId, taskId, compensationEventKey);
@@ -711,7 +709,7 @@ public class DefaultCompensationService implements CompensationService {
     private Map<String, Object> retryPartition(
             CompensationSubmitCommand command, String commandNo, String traceId, CompensationCommandEntity entity) {
         Long partitionId = command.targetId();
-        if (EmptyChecks.isNull(partitionId)) {
+        if (partitionId == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.partition.target_id_required");
         }
         String tenantId = command.tenantId();
@@ -727,7 +725,7 @@ public class DefaultCompensationService implements CompensationService {
     private Map<String, Object> reprocessFile(
             CompensationSubmitCommand command, String traceId, CompensationCommandEntity entity) {
         Long fileId = firstNonNull(command.relatedFileId(), command.targetId());
-        Guard.require(fileId != null, "file targetId is required");
+        Preconditions.require(fileId != null, "file targetId is required");
         FileGovernanceCommand redispatchCommand = FileGovernanceCommand.builder()
                 .tenantId(command.tenantId())
                 .fileId(fileId)
@@ -749,7 +747,7 @@ public class DefaultCompensationService implements CompensationService {
 
     private Map<String, Object> rerunBatch(
             CompensationSubmitCommand command, String commandNo, String traceId, CompensationCommandEntity entity) {
-        if (!Texts.hasText(command.jobCode()) || command.bizDate() == null) {
+        if (!EmptyValues.hasText(command.jobCode()) || command.bizDate() == null) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.job.batch_rerun_args_required");
         }
         boolean targetHasUnknownExternalOutcome = jobMappers.jobTaskMapper.existsUnknownExternalOutcomeForJobBizDate(
@@ -787,7 +785,7 @@ public class DefaultCompensationService implements CompensationService {
         result.put("bizDate", command.bizDate());
         result.put("batchNo", command.batchNo());
         result.put("launchRequestId", launch.requestId());
-        result.put("newInstanceNo", EmptyChecks.isNull(launched) ? null : launched.getInstanceNo());
+        result.put("newInstanceNo", launched == null ? null : launched.getInstanceNo());
         result.put("newTraceId", launch.traceId());
         return result;
     }
@@ -804,12 +802,12 @@ public class DefaultCompensationService implements CompensationService {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.dead_letter.target_id_required");
         }
         if (Boolean.TRUE.equals(command.externalActionVerifiedNotExecuted())
-                || Texts.hasText(command.externalOutcomeEvidenceReference())) {
+                || EmptyValues.hasText(command.externalOutcomeEvidenceReference())) {
             boolean externalOutcomeResolutionRequestIsIncomplete =
                     !Boolean.TRUE.equals(command.externalActionVerifiedNotExecuted())
-                            || !Texts.hasText(command.externalOutcomeEvidenceReference())
-                            || !Texts.hasText(command.operatorId())
-                            || !Texts.hasText(command.reason());
+                            || !EmptyValues.hasText(command.externalOutcomeEvidenceReference())
+                            || !EmptyValues.hasText(command.operatorId())
+                            || !EmptyValues.hasText(command.reason());
             if (externalOutcomeResolutionRequestIsIncomplete) {
                 throw BizException.of(
                         ResultCode.INVALID_ARGUMENT, "error.dead_letter.external_outcome_evidence_required");
@@ -836,7 +834,7 @@ public class DefaultCompensationService implements CompensationService {
         String tenantId = command.tenantId();
         Long deadLetterId = command.targetId();
         DeadLetterTaskEntity deadLetter = deadLetterTaskMapper.selectById(tenantId, deadLetterId);
-        if (EmptyChecks.isNull(deadLetter)) {
+        if (deadLetter == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.dead_letter.not_found");
         }
         boolean deadLetterCannotReplayJobPartition = !"JOB_PARTITION".equals(deadLetter.getSourceType())
@@ -846,12 +844,12 @@ public class DefaultCompensationService implements CompensationService {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.dead_letter.not_replayable");
         }
         JobPartitionEntity partition = jobMappers.jobPartitionMapper.selectById(tenantId, deadLetter.getSourceId());
-        if (EmptyChecks.isNull(partition)) {
+        if (partition == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.partition.retry_not_found");
         }
         JobInstanceEntity sourceInstance =
                 jobMappers.jobInstanceMapper.selectById(tenantId, partition.getJobInstanceId());
-        if (EmptyChecks.isNull(sourceInstance)) {
+        if (sourceInstance == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.job.instance_not_found");
         }
         JobTaskMapper taskMapper = jobMappers.jobTaskMapper;
@@ -905,8 +903,8 @@ public class DefaultCompensationService implements CompensationService {
         String launchRequestId = (String) result.get("launchRequestId");
         TriggerRequestEntity retryRequest =
                 jobMappers.triggerRequestMapper.selectByTenantAndRequestId(tenantId, launchRequestId);
-        boolean externalOutcomeResolutionWasNotBound = EmptyChecks.isNull(retryRequest)
-                || EmptyChecks.isNull(retryRequest.getId())
+        boolean externalOutcomeResolutionWasNotBound = retryRequest == null
+                || retryRequest.getId() == null
                 || jobMappers.jobTaskMapper.bindExternalOutcomeResolutionToWorkflowRequest(
                                 tenantId, task.getId(), task.getVersion(), retryRequest.getId())
                         <= 0;
@@ -938,12 +936,12 @@ public class DefaultCompensationService implements CompensationService {
         boolean replayEntry = request.replaySessionId() != null && request.replayEntryId() != null;
         JobDefinitionView job = configCacheService.findEnabledJobDefinition(
                 request.target().tenantId(), request.target().jobCode());
-        if (EmptyChecks.isNull(job) || EmptyChecks.isNull(job.id())) {
+        if (job == null || job.id() == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
         }
         WorkflowDefinitionView workflow = configCacheService.findEnabledSingleJobWorkflowDefinition(
                 request.target().tenantId(), job.id());
-        if (EmptyChecks.isNull(workflow) || EmptyChecks.isNull(workflow.id())) {
+        if (workflow == null || workflow.id() == null) {
             throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.single_job_definition_not_found");
         }
         String requestId = replayEntry
@@ -979,9 +977,8 @@ public class DefaultCompensationService implements CompensationService {
         else jobMappers.triggerRequestMapper.insert(triggerRequest);
         TriggerRequestEntity accepted = jobMappers.triggerRequestMapper.selectByTenantAndRequestId(
                 request.target().tenantId(), requestId);
-        boolean acceptedReplayLaunchIsIncomplete = EmptyChecks.isNull(accepted)
-                || EmptyChecks.isNull(accepted.getId())
-                || EmptyChecks.isBlank(accepted.getLaunchPayload());
+        boolean acceptedReplayLaunchIsIncomplete =
+                accepted == null || accepted.getId() == null || EmptyValues.isBlank(accepted.getLaunchPayload());
         if (acceptedReplayLaunchIsIncomplete) {
             throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.trigger_target_mismatch");
         }
@@ -1036,7 +1033,7 @@ public class DefaultCompensationService implements CompensationService {
                 return validateRequestedJobInstance(command, entity);
             }
         }
-        if (Texts.hasText(command.targetInstanceNo())) {
+        if (EmptyValues.hasText(command.targetInstanceNo())) {
             JobInstanceEntity entity =
                     jobMappers.jobInstanceMapper.selectByInstanceNo(command.tenantId(), command.targetInstanceNo());
             if (entity != null) {
@@ -1049,9 +1046,9 @@ public class DefaultCompensationService implements CompensationService {
     private JobInstanceEntity validateRequestedJobInstance(
             CompensationSubmitCommand command, JobInstanceEntity instance) {
         boolean jobCodeMismatch =
-                Texts.hasText(command.jobCode()) && !command.jobCode().equals(instance.getJobCode());
+                EmptyValues.hasText(command.jobCode()) && !command.jobCode().equals(instance.getJobCode());
         boolean bizDateMismatch =
-                EmptyChecks.isNotNull(command.bizDate()) && !command.bizDate().equals(instance.getBizDate());
+                command.bizDate() != null && !command.bizDate().equals(instance.getBizDate());
         if (jobCodeMismatch || bizDateMismatch) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.compensation.target_instance_mismatch");
         }
@@ -1156,33 +1153,33 @@ public class DefaultCompensationService implements CompensationService {
 
     private Long resolveConflictTargetId(CompensationSubmitCommand command) {
         String type = normalizeType(command.compensationType());
-        if (EmptyChecks.isNull(type)) {
+        if (type == null) {
             return null;
         }
         NullableLongResolver resolver = conflictTargetResolvers().get(type);
-        return EmptyChecks.isNull(resolver) ? null : resolver.apply(command);
+        return resolver == null ? null : resolver.apply(command);
     }
 
     private void validate(CompensationSubmitCommand command) {
-        Guard.require(EmptyChecks.isNotNull(command), "compensation command is required");
-        if (!Texts.hasText(command.tenantId())) {
+        Preconditions.require(command != null, "compensation command is required");
+        if (!EmptyValues.hasText(command.tenantId())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
         }
-        if (!Texts.hasText(command.compensationType())) {
+        if (!EmptyValues.hasText(command.compensationType())) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.compensation.type_required");
         }
         String normalizedCompensationType = normalizeType(command.compensationType());
         boolean workflowNodeReplaySourceIsIncomplete = "WORKFLOW_NODE".equals(normalizedCompensationType)
-                && (EmptyChecks.isNull(command.targetId())
-                        || EmptyChecks.isNull(command.sourceWorkflowRunId())
-                        || EmptyChecks.isNull(command.sourceWorkflowNodeRunId())
-                        || EmptyChecks.isNull(command.replayOperationId())
+                && (command.targetId() == null
+                        || command.sourceWorkflowRunId() == null
+                        || command.sourceWorkflowNodeRunId() == null
+                        || command.replayOperationId() == null
                         || !command.targetId().equals(command.sourceWorkflowNodeRunId()));
         if (workflowNodeReplaySourceIsIncomplete) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.replay_source_required");
         }
         boolean workflowNodeReplayApprovalContextIsIncomplete = "WORKFLOW_NODE".equals(normalizedCompensationType)
-                && (!Texts.hasText(command.operatorId()) || !Texts.hasText(command.reason()));
+                && (!EmptyValues.hasText(command.operatorId()) || !EmptyValues.hasText(command.reason()));
         if (workflowNodeReplayApprovalContextIsIncomplete) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.replay_operator_reason_required");
         }
@@ -1190,7 +1187,7 @@ public class DefaultCompensationService implements CompensationService {
     }
 
     private String normalizeType(String compensationType) {
-        if (EmptyChecks.isNull(compensationType)) {
+        if (compensationType == null) {
             return null;
         }
         String trimmedType = compensationType.trim();
@@ -1205,7 +1202,7 @@ public class DefaultCompensationService implements CompensationService {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> extractEffectiveParams(String paramsSnapshot) {
-        if (!Texts.hasText(paramsSnapshot)) {
+        if (!EmptyValues.hasText(paramsSnapshot)) {
             return new LinkedHashMap<>();
         }
         Object snapshotObject = JsonUtils.fromJson(paramsSnapshot, Object.class);
@@ -1220,7 +1217,7 @@ public class DefaultCompensationService implements CompensationService {
     }
 
     private String firstText(String left, String right) {
-        return Texts.hasText(left) ? left : right;
+        return EmptyValues.hasText(left) ? left : right;
     }
 
     private Long firstNonNull(Long left, Long right) {
@@ -1232,10 +1229,10 @@ public class DefaultCompensationService implements CompensationService {
      * buildRerunPolicySnapshot 时会读取这些键并写到 job_instance.rerun_policy_snapshot。
      */
     private void applyRerunPolicyParams(Map<String, Object> params, CompensationSubmitCommand command) {
-        if (Texts.hasText(command.resultPolicy())) {
+        if (EmptyValues.hasText(command.resultPolicy())) {
             params.put("_rerunResultPolicy", command.resultPolicy());
         }
-        if (Texts.hasText(command.configVersionPolicy())) {
+        if (EmptyValues.hasText(command.configVersionPolicy())) {
             params.put("_rerunConfigVersionPolicy", command.configVersionPolicy());
         }
         if (command.configVersion() != null) {
@@ -1246,7 +1243,7 @@ public class DefaultCompensationService implements CompensationService {
     private Map<String, Object> externalOutcomeResolutionLaunchParams(
             Map<String, Object> suppliedParams, Long sourceTaskId, Long sourceVersion) {
         Map<String, Object> launchParams = new LinkedHashMap<>();
-        if (EmptyChecks.isNotNull(suppliedParams)) {
+        if (suppliedParams != null) {
             launchParams.putAll(suppliedParams);
         }
         launchParams.put(PARAM_EXTERNAL_OUTCOME_RESOLUTION_TASK_ID, sourceTaskId);
@@ -1256,12 +1253,12 @@ public class DefaultCompensationService implements CompensationService {
 
     private void copyExternalOutcomeResolutionIdentity(
             Map<String, Object> targetParams, Map<String, Object> launchParams) {
-        if (EmptyChecks.isNull(launchParams)) {
+        if (launchParams == null) {
             return;
         }
         Object sourceTaskId = launchParams.get(PARAM_EXTERNAL_OUTCOME_RESOLUTION_TASK_ID);
         Object sourceVersion = launchParams.get(PARAM_EXTERNAL_OUTCOME_RESOLUTION_VERSION);
-        if (EmptyChecks.isNotNull(sourceTaskId) && EmptyChecks.isNotNull(sourceVersion)) {
+        if (sourceTaskId != null && sourceVersion != null) {
             targetParams.put(PARAM_EXTERNAL_OUTCOME_RESOLUTION_TASK_ID, sourceTaskId);
             targetParams.put(PARAM_EXTERNAL_OUTCOME_RESOLUTION_VERSION, sourceVersion);
         }

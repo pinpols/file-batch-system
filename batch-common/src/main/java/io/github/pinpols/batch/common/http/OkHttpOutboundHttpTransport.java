@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.common.http;
 
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -73,7 +73,7 @@ public class OkHttpOutboundHttpTransport implements OutboundHttpTransport {
             case GET -> builder.get();
             case HEAD -> builder.head();
             case POST -> {
-                boolean bodyIsNull = EmptyChecks.isNull(request.body());
+                boolean bodyIsNull = request.body() == null;
                 String bodyText = bodyIsNull ? "" : request.body();
                 MediaType mediaType = MediaType.get(request.mediaType());
                 RequestBody requestBody = RequestBody.create(bodyText, mediaType);
@@ -89,8 +89,7 @@ public class OkHttpOutboundHttpTransport implements OutboundHttpTransport {
             throw new IOException("outbound HTTP response exceeds " + MAX_RESPONSE_BYTES + " bytes");
         }
         MediaType contentType = responseBody.contentType();
-        Charset charset =
-                EmptyChecks.isNull(contentType) ? StandardCharsets.UTF_8 : contentType.charset(StandardCharsets.UTF_8);
+        Charset charset = contentType == null ? StandardCharsets.UTF_8 : contentType.charset(StandardCharsets.UTF_8);
         return new String(bytes, charset);
     }
 
@@ -99,7 +98,7 @@ public class OkHttpOutboundHttpTransport implements OutboundHttpTransport {
         String requestHost = request.uri().getHost();
         List<InetAddress> resolvedAddresses = guardedDns.lookup(requestHost);
         List<InetAddress> validatedAddresses = List.copyOf(resolvedAddresses);
-        if (EmptyChecks.isEmpty(validatedAddresses)) {
+        if (EmptyValues.isEmpty(validatedAddresses)) {
             throw new UnknownHostException("guarded DNS returned no address for " + requestHost);
         }
         clientBuilder

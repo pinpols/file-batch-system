@@ -5,9 +5,8 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.IdGenerator;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.config.OrchestratorTaskClientProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerBatchClaimProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
@@ -108,7 +107,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
     @Override
     public Optional<EffectiveTaskConfig> claim(String tenantId, Long taskId, String workerId) {
         String traceId = currentTraceId();
-        String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+        String resolvedTraceId = EmptyValues.hasText(traceId) ? traceId : IdGenerator.newTraceId();
         ClaimOutcome<EffectiveTaskConfig> outcome = executeClaimLike(
                 "claim",
                 () -> client().post()
@@ -127,7 +126,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
 
     @Override
     public List<TaskClaimResult> claimBatch(List<TaskClaimItem> items) {
-        if (items == null || items.isEmpty()) {
+        if (EmptyValues.isEmpty(items)) {
             return List.of();
         }
         List<TaskClaimResult> out = new ArrayList<>(items.size());
@@ -151,7 +150,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
                         .map(it -> new ClaimBatchHttpItem(it.tenantId(), it.taskId(), it.workerId(), null))
                         .toList();
                 String traceId = currentTraceId();
-                String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+                String resolvedTraceId = EmptyValues.hasText(traceId) ? traceId : IdGenerator.newTraceId();
                 ClaimBatchHttpResponse response = client().post()
                         .uri("/internal/tasks/claim-batch")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -199,19 +198,19 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
     }
 
     private List<TaskClaimResult> mapClaimChunkOrFallback(List<TaskClaimItem> chunk, ClaimBatchHttpResponse response) {
-        List<ClaimBatchHttpResult> responseResults = EmptyChecks.isNull(response) ? null : response.results();
-        if (EmptyChecks.isNull(responseResults) || responseResults.size() != chunk.size()) {
+        List<ClaimBatchHttpResult> responseResults = response == null ? null : response.results();
+        if (responseResults == null || responseResults.size() != chunk.size()) {
             log.warn(
                     "claim-batch response mismatch: chunk size {}, response results {}",
                     chunk.size(),
-                    EmptyChecks.isNull(responseResults) ? null : responseResults.size());
+                    responseResults == null ? null : responseResults.size());
             return fallbackClaimChunk(chunk);
         }
         Map<Long, ClaimBatchHttpResult> resultsByTaskId = new LinkedHashMap<>();
         for (ClaimBatchHttpResult row : responseResults) {
-            boolean responseIdentityIsInvalid = EmptyChecks.isNull(row)
-                    || EmptyChecks.isNull(row.taskId())
-                    || EmptyChecks.isNull(row.claimed())
+            boolean responseIdentityIsInvalid = row == null
+                    || row.taskId() == null
+                    || row.claimed() == null
                     || resultsByTaskId.containsKey(row.taskId());
             if (responseIdentityIsInvalid) {
                 return fallbackClaimChunk(chunk);
@@ -222,7 +221,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
         List<TaskClaimResult> out = new ArrayList<>(chunk.size());
         for (TaskClaimItem requested : chunk) {
             ClaimBatchHttpResult row = resultsByTaskId.get(requested.taskId());
-            if (EmptyChecks.isNull(row) || !claimConfigMatchesRequest(requested, row)) {
+            if (row == null || !claimConfigMatchesRequest(requested, row)) {
                 return fallbackClaimChunk(chunk);
             }
             EffectiveTaskConfig claimedConfig = row.claimed() ? row.config() : null;
@@ -233,13 +232,12 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
 
     private boolean claimConfigMatchesRequest(TaskClaimItem requested, ClaimBatchHttpResult result) {
         EffectiveTaskConfig config = result.config();
-        if (EmptyChecks.isNull(config)) {
+        if (config == null) {
             return !Boolean.TRUE.equals(result.claimed());
         }
-        boolean taskIdentityMatches =
-                EmptyChecks.isNull(config.taskId()) || Objects.equals(requested.taskId(), config.taskId());
+        boolean taskIdentityMatches = config.taskId() == null || Objects.equals(requested.taskId(), config.taskId());
         boolean tenantIdentityMatches =
-                EmptyChecks.isNull(config.tenantId()) || Objects.equals(requested.tenantId(), config.tenantId());
+                config.tenantId() == null || Objects.equals(requested.tenantId(), config.tenantId());
         return taskIdentityMatches && tenantIdentityMatches;
     }
 
@@ -264,7 +262,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
     public boolean markNonIdempotentExecutionStarted(
             String tenantId, Long taskId, String workerId, String partitionInvocationId) {
         String traceId = currentTraceId();
-        String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+        String resolvedTraceId = EmptyValues.hasText(traceId) ? traceId : IdGenerator.newTraceId();
         try {
             client().post()
                     .uri("/internal/tasks/{taskId}/non-idempotent-started", taskId)
@@ -287,7 +285,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
 
     private TaskLeaseRenewResult renewLeaseWithResult(TaskLeaseRenewItem item) {
         String traceId = currentTraceId();
-        String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+        String resolvedTraceId = EmptyValues.hasText(traceId) ? traceId : IdGenerator.newTraceId();
         Object request;
         if (item.executionStarted()) {
             // 一次业务执行生成一次身份；下面的 HTTP 重试复用同一个 request。
@@ -308,13 +306,13 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
                         .retrieve()
                         .body(TaskHeartbeatHttpResponse.class));
         TaskHeartbeatHttpResponse heartbeat = outcome.body();
-        boolean cancelRequested = EmptyChecks.isNotNull(heartbeat) && heartbeat.cancelRequested();
+        boolean cancelRequested = heartbeat != null && heartbeat.cancelRequested();
         return new TaskLeaseRenewResult(item.taskId(), outcome.success(), cancelRequested);
     }
 
     @Override
     public Map<Long, TaskLeaseRenewResult> renewLeasesBatch(List<TaskLeaseRenewItem> items) {
-        if (items == null || items.isEmpty()) {
+        if (EmptyValues.isEmpty(items)) {
             return Map.of();
         }
         Map<Long, TaskLeaseRenewResult> out = new LinkedHashMap<>();
@@ -349,7 +347,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
                 List<BatchRenewHttpItem> payload =
                         chunk.stream().map(this::toHttpItem).toList();
                 String traceId = currentTraceId();
-                String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+                String resolvedTraceId = EmptyValues.hasText(traceId) ? traceId : IdGenerator.newTraceId();
                 BatchRenewHttpResponse response = client().post()
                         .uri("/internal/tasks/leases/renew-batch")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -398,19 +396,19 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
 
     private Map<Long, TaskLeaseRenewResult> mapChunkOrFallback(
             List<TaskLeaseRenewItem> chunk, BatchRenewHttpResponse response) {
-        List<BatchRenewHttpResult> responseResults = EmptyChecks.isNull(response) ? null : response.results();
-        if (EmptyChecks.isNull(responseResults) || responseResults.size() != chunk.size()) {
+        List<BatchRenewHttpResult> responseResults = response == null ? null : response.results();
+        if (responseResults == null || responseResults.size() != chunk.size()) {
             log.warn(
                     "renew-batch response mismatch: chunk size {}, response results {}",
                     chunk.size(),
-                    EmptyChecks.isNull(responseResults) ? null : responseResults.size());
+                    responseResults == null ? null : responseResults.size());
             return fallbackRenewChunk(chunk);
         }
         Map<Long, BatchRenewHttpResult> resultsByTaskId = new LinkedHashMap<>();
         for (BatchRenewHttpResult row : responseResults) {
-            boolean responseIdentityOrOutcomeIsInvalid = EmptyChecks.isNull(row)
-                    || EmptyChecks.isNull(row.taskId())
-                    || EmptyChecks.isNull(row.renewed())
+            boolean responseIdentityOrOutcomeIsInvalid = row == null
+                    || row.taskId() == null
+                    || row.renewed() == null
                     || resultsByTaskId.containsKey(row.taskId());
             if (responseIdentityOrOutcomeIsInvalid) {
                 return fallbackRenewChunk(chunk);
@@ -422,7 +420,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
         for (TaskLeaseRenewItem requested : chunk) {
             Long taskId = requested.taskId();
             BatchRenewHttpResult row = resultsByTaskId.get(taskId);
-            if (EmptyChecks.isNull(row)) {
+            if (row == null) {
                 return fallbackRenewChunk(chunk);
             }
             boolean renewed = Boolean.TRUE.equals(row.renewed());
@@ -465,9 +463,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
         long reportStartNanos = System.nanoTime();
         String outcome = "success";
         try {
-            boolean reportCanBeBatched = EmptyChecks.isNotNull(reportBatcher)
-                    && EmptyChecks.isNotNull(report)
-                    && EmptyChecks.isNotNull(report.getTaskId());
+            boolean reportCanBeBatched = reportBatcher != null && report != null && report.getTaskId() != null;
             TaskReportBatcher.SubmissionResult batchResult = reportCanBeBatched
                     ? reportBatcher.submit(report)
                     : TaskReportBatcher.SubmissionResult.NOT_SUBMITTED;
@@ -477,7 +473,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
             }
         } catch (RuntimeException rex) {
             WorkerReportOutboxCoordinator coordinator = reportOutboxCoordinator.getIfAvailable();
-            boolean reportWasDeferredToOutbox = EmptyChecks.isNotNull(coordinator) && coordinator.enqueue(report);
+            boolean reportWasDeferredToOutbox = coordinator != null && coordinator.enqueue(report);
             if (reportWasDeferredToOutbox) {
                 outcome = "deferred_outbox";
             } else {
@@ -501,7 +497,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
     /** 关闭微批接纳，唤醒尚未提交的调用者，使其继续走单条交付而非丢弃内存结果。 */
     @PreDestroy
     void closeReportBatcher() {
-        if (EmptyChecks.isNotNull(reportBatcher)) {
+        if (reportBatcher != null) {
             reportBatcher.close();
         }
     }
@@ -513,7 +509,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
     private Set<Long> submitReportBatchOverHttp(List<TaskExecutionReport> reports) {
         TaskExecutionReport first = reports.getFirst();
         String traceId = firstNonBlank(first.getTraceId(), currentTraceId());
-        String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+        String resolvedTraceId = EmptyValues.hasText(traceId) ? traceId : IdGenerator.newTraceId();
         try {
             ReportBatchHttpRequest request = new ReportBatchHttpRequest(reports);
             ReportBatchHttpResponse response = client().post()
@@ -536,7 +532,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
     }
 
     private Set<Long> confirmedReportTaskIds(List<TaskExecutionReport> reports, ReportBatchHttpResponse response) {
-        if (EmptyChecks.isNull(response) || EmptyChecks.isNull(response.results())) {
+        if (response == null || response.results() == null) {
             return Set.of();
         }
         Set<Long> requestedIds = new HashSet<>();
@@ -547,7 +543,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
         Set<Long> duplicateIds = new HashSet<>();
         Set<Long> acceptedIds = new HashSet<>();
         for (ReportBatchHttpResult item : response.results()) {
-            if (EmptyChecks.isNull(item) || !requestedIds.contains(item.taskId())) {
+            if (item == null || !requestedIds.contains(item.taskId())) {
                 continue;
             }
             if (!seenIds.add(item.taskId())) {
@@ -585,7 +581,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
         String traceFallback = currentTraceId();
         while (state.canAttempt()) {
             String traceId = firstNonBlank(report.getTraceId(), traceFallback);
-            if (!Texts.hasText(traceId)) {
+            if (!EmptyValues.hasText(traceId)) {
                 traceId = IdGenerator.newTraceId();
             }
             try {
@@ -767,14 +763,14 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
 
     private String currentTraceId() {
         String value = MDC.get(StructuredLogField.TRACE_ID);
-        return Texts.hasText(value) ? value : null;
+        return EmptyValues.hasText(value) ? value : null;
     }
 
     private static String firstNonBlank(String value, String fallback) {
-        if (Texts.hasText(value)) {
+        if (EmptyValues.hasText(value)) {
             return value;
         }
-        return Texts.hasText(fallback) ? fallback : null;
+        return EmptyValues.hasText(fallback) ? fallback : null;
     }
 
     private RestClient client() {
@@ -824,23 +820,23 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
         if (properties.getBaseUrls() != null) {
             properties.getBaseUrls().stream()
                     .map(HttpTaskExecutionClient::normalizeBaseUrl)
-                    .filter(Texts::hasText)
+                    .filter(EmptyValues::hasText)
                     .forEach(resolved::add);
         }
         String configuredBaseUrl = properties.getBaseUrl();
-        if (EmptyChecks.isEmpty(resolved)) {
+        if (EmptyValues.isEmpty(resolved)) {
             String normalizedBaseUrl = normalizeBaseUrl(configuredBaseUrl);
-            if (Texts.hasText(normalizedBaseUrl)) {
+            if (EmptyValues.hasText(normalizedBaseUrl)) {
                 resolved.add(normalizedBaseUrl);
             }
         }
-        if (EmptyChecks.isEmpty(resolved)) {
+        if (EmptyValues.isEmpty(resolved)) {
             String localPort = environment.getProperty("local.server.port");
-            if (Texts.hasText(localPort)) {
+            if (EmptyValues.hasText(localPort)) {
                 resolved.add("http://127.0.0.1:" + localPort);
             }
         }
-        if (EmptyChecks.isEmpty(resolved)) {
+        if (EmptyValues.isEmpty(resolved)) {
             throw new IllegalStateException(
                     "Unable to resolve batch.worker.task-client.base-url/base-urls for task execution client");
         }
@@ -848,7 +844,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient, Orchestrato
     }
 
     private static String normalizeBaseUrl(String value) {
-        if (!Texts.hasText(value) || value.contains("${")) {
+        if (!EmptyValues.hasText(value) || value.contains("${")) {
             return null;
         }
         String normalized = value.trim();

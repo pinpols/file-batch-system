@@ -137,7 +137,7 @@ public class PlatformHttpClient {
                         "executionAttemptId",
                         UUID.randomUUID().toString()));
         TaskRenewResponse response = renew(taskId, body);
-        if (EmptyChecks.isNull(response)) {
+        if (response == null) {
             throw new IOException("execution start response was empty");
         }
         return response.cancelRequested();
@@ -151,7 +151,7 @@ public class PlatformHttpClient {
             String path, Object body, String idempotencyKey, Class<T> responseType, Duration timeoutOverride)
             throws IOException {
         String url = config.getBaseUrl() + path;
-        Object requestBody = EmptyChecks.isNull(body) ? Map.of() : body;
+        Object requestBody = body == null ? Map.of() : body;
         // 注册时间遵循 OpenAPI date-time 字符串格式，不依赖 ObjectMapper 的全局时间戳默认值。
         byte[] payload = body instanceof RegisterRequest
                 ? objectMapper
@@ -167,7 +167,7 @@ public class PlatformHttpClient {
                 .header("X-Batch-Tenant-Id", config.getTenantId())
                 .post(RequestBody.create(payload, JSON));
         String apiKey = config.getApiKey();
-        if (EmptyChecks.isNotBlank(apiKey)) {
+        if (SdkEmptyValues.isNotBlank(apiKey)) {
             req.header("X-Batch-Api-Key", apiKey);
             // 请求签名(方案 A,opt-in):HMAC + 时间戳 + nonce 防重放;须服务端 batch.request-signing.enabled 配合。
             if (config.isRequestSigningEnabled()) {
@@ -180,12 +180,12 @@ public class PlatformHttpClient {
                         .header("X-Batch-Signature", signature);
             }
         }
-        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+        if (SdkEmptyValues.isNotBlank(idempotencyKey)) {
             req.header("Idempotency-Key", idempotencyKey);
         }
 
         Call call = httpClient.newCall(req.build());
-        if (EmptyChecks.isNotNull(timeoutOverride)) {
+        if (timeoutOverride != null) {
             long requestedTimeoutMillis = timeoutOverride.toMillis();
             long configuredTimeoutMillis = config.getHttpTimeout().toMillis();
             long boundedTimeoutMillis = Math.min(requestedTimeoutMillis, configuredTimeoutMillis);
@@ -196,7 +196,7 @@ public class PlatformHttpClient {
             ResponseBody responseBody = resp.body();
             byte[] responseBytes = responseBody.bytes();
             if (resp.code() >= 200 && resp.code() < 300) {
-                if (responseType == Void.class || EmptyChecks.isEmpty(responseBytes)) {
+                if (responseType == Void.class || SdkEmptyValues.isEmpty(responseBytes)) {
                     return null;
                 }
                 return objectMapper.readValue(responseBytes, responseType);
@@ -215,7 +215,7 @@ public class PlatformHttpClient {
             String partitionInvocationId, String payload, List<SdkDependencyResultReference> dependencyResultSnapshot) {
         public TaskClaimResponse {
             dependencyResultSnapshot =
-                    EmptyChecks.isNull(dependencyResultSnapshot) ? List.of() : List.copyOf(dependencyResultSnapshot);
+                    dependencyResultSnapshot == null ? List.of() : List.copyOf(dependencyResultSnapshot);
         }
 
         public TaskClaimResponse(String partitionInvocationId) {

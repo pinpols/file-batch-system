@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.contract.request.WorkflowNodeReplayPreviewRequest;
 import io.github.pinpols.batch.console.application.contract.request.WorkflowRunReplayRequest;
@@ -109,7 +109,7 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
     @Override
     public String delegateLaunch(ConsoleLaunchCommand command) {
         boolean workflowTargetIsMissingOrInvalid =
-                EmptyChecks.isNull(command.workflowDefinitionId()) || command.workflowDefinitionId() <= 0;
+                command.workflowDefinitionId() == null || command.workflowDefinitionId() <= 0;
         if (workflowTargetIsMissingOrInvalid) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.trigger.workflow_target_required");
         }
@@ -128,7 +128,7 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
                 workflowDefinitionId,
                 businessDate,
                 triggerType,
-                EmptyChecks.isNull(command.params()) ? Map.of() : command.params());
+                command.params() == null ? Map.of() : command.params());
         CommonResponse<LaunchResponse> response = restClient
                 .post()
                 .uri("/api/triggers/launch")
@@ -138,11 +138,11 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
                 .body(launchPayload)
                 .retrieve()
                 .body(new ParameterizedTypeReference<CommonResponse<LaunchResponse>>() {});
-        if (EmptyChecks.isNull(response)) {
+        if (response == null) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.trigger.empty_response");
         }
         LaunchResponse launchResponse = response.data();
-        if (EmptyChecks.isNull(launchResponse)) {
+        if (launchResponse == null) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.trigger.empty_response");
         }
         return launchResponse.instanceNo();
@@ -157,7 +157,7 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
                 command.workflowDefinitionId(),
                 command.bizDate(),
                 command.triggerType(),
-                EmptyChecks.isNull(command.params()) ? Map.of() : command.params());
+                command.params() == null ? Map.of() : command.params());
         CommonResponse<LaunchResponse> response = restClient
                 .post()
                 .uri("/api/triggers/launch")
@@ -167,11 +167,11 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
                 .body(launchPayload)
                 .retrieve()
                 .body(new ParameterizedTypeReference<CommonResponse<LaunchResponse>>() {});
-        if (EmptyChecks.isNull(response)) {
+        if (response == null) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.trigger.empty_response");
         }
         LaunchResponse launchResponse = response.data();
-        if (EmptyChecks.isNull(launchResponse)) {
+        if (launchResponse == null) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.trigger.empty_response");
         }
         return launchResponse.instanceNo();
@@ -197,11 +197,11 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
                         command.reason()))
                 .retrieve()
                 .body(new ParameterizedTypeReference<>() {});
-        if (EmptyChecks.isNull(response)) {
+        if (response == null) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.trigger.empty_response");
         }
         ScheduledOccurrenceCatchUpResponse catchUpResponse = response.data();
-        if (EmptyChecks.isNull(catchUpResponse)) {
+        if (catchUpResponse == null) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.trigger.empty_response");
         }
         return catchUpResponse;
@@ -306,7 +306,7 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
                 .body(command)
                 .retrieve()
                 .body(WorkflowNodeReplayAdmissionResponse.class);
-        if (EmptyChecks.isNull(response) || EmptyChecks.isNull(response.replayOperationId())) {
+        if (response == null || response.replayOperationId() == null) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.workflow.replay_operation_not_persisted");
         }
         return response.replayOperationId();
@@ -325,7 +325,7 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
                 .body(command)
                 .retrieve()
                 .body(new ParameterizedTypeReference<>() {});
-        if (EmptyChecks.isNull(response) || EmptyChecks.isNull(response.data())) {
+        if (response == null || response.data() == null) {
             throw BizException.of(
                     ResultCode.SYSTEM_ERROR, "error.workflow.workflow_run_replay_operation_not_persisted");
         }
@@ -346,9 +346,9 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
                 .body(command)
                 .retrieve()
                 .body(new ParameterizedTypeReference<>() {});
-        ConsoleReplayOperationResponse replayOperation = EmptyChecks.isNull(response) ? null : response.data();
-        Long replayOperationId = EmptyChecks.isNull(replayOperation) ? null : replayOperation.id();
-        if (EmptyChecks.isNull(replayOperationId)) {
+        ConsoleReplayOperationResponse replayOperation = response == null ? null : response.data();
+        Long replayOperationId = replayOperation == null ? null : replayOperation.id();
+        if (replayOperationId == null) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.workflow.replay_operation_not_persisted");
         }
         return replayOperationId;
@@ -441,8 +441,8 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
                 .body(Map.of("tenantId", tenantId))
                 .retrieve()
                 .body(RecoveryOperationResponse.class);
-        String operationNo = EmptyChecks.isNull(response) ? null : response.operationNo();
-        if (EmptyChecks.isBlank(operationNo)) {
+        String operationNo = response == null ? null : response.operationNo();
+        if (EmptyValues.isBlank(operationNo)) {
             throw BizException.of(ResultCode.SYSTEM_ERROR, "error.orchestrator.empty_recovery");
         }
         return operationNo;
@@ -481,12 +481,12 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
 
     @Override
     public boolean hasText(String text) {
-        return text != null && !text.isBlank();
+        return EmptyValues.isNotBlank(text);
     }
 
     @Override
     public TriggerType resolveTriggerType(String triggerTypeValue, TriggerType defaultTriggerType) {
-        if (triggerTypeValue == null || triggerTypeValue.isBlank()) {
+        if (EmptyValues.isBlank(triggerTypeValue)) {
             return defaultTriggerType;
         }
         try {
@@ -512,7 +512,7 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
 
     @Override
     public LocalDate parseOptionalBizDate(String bizDate) {
-        if (bizDate == null || bizDate.isBlank()) {
+        if (EmptyValues.isBlank(bizDate)) {
             return null;
         }
         return parseBizDate(bizDate);
@@ -521,7 +521,7 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
     @SuppressWarnings("unchecked")
     @Override
     public Map<String, Object> parsePayload(String payloadJson) {
-        if (payloadJson == null || payloadJson.isBlank()) {
+        if (EmptyValues.isBlank(payloadJson)) {
             return Map.of();
         }
         Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);

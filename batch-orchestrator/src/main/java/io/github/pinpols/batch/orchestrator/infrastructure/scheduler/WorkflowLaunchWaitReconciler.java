@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowLaunchWaitProperties;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowLaunchWaitService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
@@ -99,7 +99,7 @@ public class WorkflowLaunchWaitReconciler {
         long retryDelaySeconds = properties.getRetryDelaySeconds();
         Instant claimLease = retryCutoffBaseTime.plusSeconds(properties.getClaimLeaseSeconds());
         List<WorkflowLaunchWaitClaim> waiting = waitingService.claimDue(tenantId, limit, claimLease);
-        if (EmptyChecks.isEmpty(waiting)) {
+        if (EmptyValues.isEmpty(waiting)) {
             return CompletableFuture.completedFuture(null);
         }
         List<CompletableFuture<Void>> launches = new ArrayList<>(waiting.size());

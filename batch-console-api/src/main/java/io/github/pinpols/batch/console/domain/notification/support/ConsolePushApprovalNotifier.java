@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ApprovalCommandStatus;
 import io.github.pinpols.batch.common.enums.ApprovalType;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushApprovalNotificationEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushApprovalNotificationMapper;
@@ -132,7 +132,7 @@ public class ConsolePushApprovalNotifier {
         String typeLabel = typeLabel(p.getApprovalType());
         String title = String.format("%s 申请%s", typeLabel, statusLabel);
         String reason = "REJECTED".equals(p.getApprovalStatus()) ? p.getRejectionReason() : p.getApprovalReason();
-        boolean reasonMissing = EmptyChecks.isBlank(reason);
+        boolean reasonMissing = EmptyValues.isBlank(reason);
         String approverId = nullToDash(p.getApproverId());
         String body = reasonMissing
                 ? String.format("approver=%s · %s", approverId, p.getApprovalNo())
@@ -146,13 +146,13 @@ public class ConsolePushApprovalNotifier {
 
     private static String typeLabel(String type) {
         ApprovalType approvalType = DictEnum.fromCode(ApprovalType.class, type);
-        return EmptyChecks.isNull(approvalType) ? type : approvalType.label();
+        return approvalType == null ? type : approvalType.label();
     }
 
     /** 推送标题使用面向结果的措辞（已批准/已驳回），与审批台账字典标签分开维护。 */
     private static String statusLabel(String status) {
         ApprovalCommandStatus approvalStatus = DictEnum.fromCode(ApprovalCommandStatus.class, status);
-        if (EmptyChecks.isNull(approvalStatus)) {
+        if (approvalStatus == null) {
             return status;
         }
         return switch (approvalStatus) {
@@ -164,7 +164,7 @@ public class ConsolePushApprovalNotifier {
     }
 
     private static String nullToDash(String s) {
-        return s == null || s.isBlank() ? "-" : s;
+        return EmptyValues.isBlank(s) ? "-" : s;
     }
 
     private static String truncate(String s, int max) {
@@ -175,7 +175,7 @@ public class ConsolePushApprovalNotifier {
         Throwable current = throwable;
         while (current != null) {
             String message = current.getMessage();
-            boolean isConnectionShutdownMessage = EmptyChecks.isNotNull(message)
+            boolean isConnectionShutdownMessage = message != null
                     && (message.contains("has been closed")
                             || message.contains("Connection pool shut down")
                             || message.contains("Interrupted"));

@@ -10,9 +10,8 @@ import io.github.pinpols.batch.common.enums.SkipThresholdMode;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.ContentMaskingUtils;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam.FileAuditParamBuilder;
 import io.github.pinpols.batch.worker.core.infrastructure.FileErrorRecordParam;
@@ -77,7 +76,7 @@ public class ImportRecordGovernanceService {
     }
 
     public boolean isSkippable(String errorCode) {
-        if (!isSkipEnabled() || !Texts.hasText(errorCode)) {
+        if (!isSkipEnabled() || !EmptyValues.hasText(errorCode)) {
             return false;
         }
         Set<String> allowedErrorCodes = resolveAllowedErrorCodes();
@@ -170,7 +169,7 @@ public class ImportRecordGovernanceService {
     }
 
     public void finalizeErrorOutput(ImportJobContext context) {
-        if (EmptyChecks.isNotNull(context)
+        if (context != null
                 && DryRunGuard.fromAttributes(context.getAttributes()).isDryRun()) {
             return;
         }
@@ -181,7 +180,7 @@ public class ImportRecordGovernanceService {
         Map<String, Object> attrs = context.getAttributes();
         Object fileIdValue = attrs.get(PipelineRuntimeKeys.FILE_ID);
         Long fileId = PlatformRuntimeValues.toLong(fileIdValue);
-        boolean hasRequiredFileContext = EmptyChecks.isNotNull(fileId) && Texts.hasText(context.getTenantId());
+        boolean hasRequiredFileContext = fileId != null && EmptyValues.hasText(context.getTenantId());
         if (!hasRequiredFileContext) {
             return;
         }
@@ -222,7 +221,7 @@ public class ImportRecordGovernanceService {
         boolean manualReviewRequired =
                 Boolean.TRUE.equals(attrs.get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED)) || shouldManualReview();
         metadata.put(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED, manualReviewRequired);
-        if (Texts.hasText(errorOutputPath)) {
+        if (EmptyValues.hasText(errorOutputPath)) {
             metadata.put("errorOutputPath", errorOutputPath);
         }
         fileRecords.updateFileMetadata(fileId, metadata);
@@ -283,7 +282,7 @@ public class ImportRecordGovernanceService {
         Long sourceRowNum = locator == null ? null : locator.rowNum();
         String sourceColumn = locator == null ? null : locator.column();
         Map<String, Object> attrs = context.getAttributes();
-        String badRecordStage = EmptyChecks.isNull(stage) ? null : stage.name();
+        String badRecordStage = stage == null ? null : stage.name();
         String badRecordSkipActionCode = resolveSkipAction().code();
         ImportBadRecord badRecord = new ImportBadRecord(
                 recordNo,
@@ -340,8 +339,8 @@ public class ImportRecordGovernanceService {
         Object rawRecord = brc.rawRecord();
         boolean skipped = brc.skipped();
         SourceLocator locator = brc.locator();
-        Long sourceRowNum = EmptyChecks.isNull(locator) ? null : locator.rowNum();
-        String sourceColumn = EmptyChecks.isNull(locator) ? null : locator.column();
+        Long sourceRowNum = locator == null ? null : locator.rowNum();
+        String sourceColumn = locator == null ? null : locator.column();
         Map<String, Object> attrs = context.getAttributes();
         Object fileIdValue = attrs.get(PipelineRuntimeKeys.FILE_ID);
         Long fileId = PlatformRuntimeValues.toLong(fileIdValue);
@@ -388,7 +387,7 @@ public class ImportRecordGovernanceService {
             boolean textFlagEnabled = !booleanFlagEnabled && "true".equalsIgnoreCase(String.valueOf(flag));
             errorLineMask = booleanFlagEnabled || textFlagEnabled;
             Object rule = templateMap.get("masking_rule_set");
-            maskingRuleSet = EmptyChecks.isNull(rule) ? null : String.valueOf(rule);
+            maskingRuleSet = rule == null ? null : String.valueOf(rule);
         }
         if (batchSecurityProperties.isBypassMode()) {
             errorLineMask = false;
@@ -463,20 +462,20 @@ public class ImportRecordGovernanceService {
             return 0L;
         }
         String text = String.valueOf(value);
-        if (!Texts.hasText(text)) {
+        if (!EmptyValues.hasText(text)) {
             return 0L;
         }
         return Long.parseLong(text);
     }
 
     private Set<String> resolveAllowedErrorCodes() {
-        if (!Texts.hasText(skipProperties.skipErrorCodes())) {
+        if (!EmptyValues.hasText(skipProperties.skipErrorCodes())) {
             return Set.of();
         }
         Set<String> codes = new HashSet<>();
         for (String item : skipProperties.skipErrorCodes().split(",")) {
             String code = item.trim();
-            if (Texts.hasText(code)) {
+            if (EmptyValues.hasText(code)) {
                 codes.add(code);
             }
         }

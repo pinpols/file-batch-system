@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.sdk.handler.atomic;
 
-import io.github.pinpols.batch.sdk.internal.EmptyChecks;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -113,7 +113,7 @@ final class MySqlStatementSplitter {
     private static void flush(StringBuilder buffer, List<String> statements) {
         String rawStatement = buffer.toString();
         String statement = rawStatement.trim();
-        if (!EmptyChecks.isEmpty(statement)) {
+        if (!SdkEmptyValues.isEmpty(statement)) {
             statements.add(statement);
         }
         buffer.setLength(0);

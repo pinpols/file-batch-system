@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -87,7 +87,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
         this.redisTemplate = redisTemplate;
         this.redisNamespace = redisNamespace;
         this.cacheService = cacheService;
-        if (EmptyChecks.isNull(meterRegistry)) {
+        if (meterRegistry == null) {
             this.receivedCounter = null;
             this.staleCounter = null;
             this.failureCounter = null;
@@ -115,7 +115,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
             return;
         }
         RedisConnectionFactory connectionFactory = redisTemplate.getConnectionFactory();
-        if (EmptyChecks.isNull(connectionFactory)) {
+        if (connectionFactory == null) {
             throw new IllegalStateException("redis connection factory is required for config invalidation subscriber");
         }
         listenerContainer = new RedisMessageListenerContainer();
@@ -130,11 +130,11 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
 
     @Override
     public void onMessage(Message message, byte[] pattern) {
-        if (EmptyChecks.isNull(message)) {
+        if (message == null) {
             return;
         }
         byte[] body = message.getBody();
-        if (EmptyChecks.isNull(body) || body.length == 0) {
+        if (body == null || body.length == 0) {
             return;
         }
         ConfigCacheInvalidationEvent event;
@@ -160,7 +160,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
                     SwallowedExceptionLogger.summary(exception));
             return;
         }
-        if (EmptyChecks.isBlank(rawRevision)) {
+        if (EmptyValues.isBlank(rawRevision)) {
             return;
         }
         long publishedRevision;
@@ -194,8 +194,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
     }
 
     private synchronized void apply(ConfigCacheInvalidationEvent event) {
-        boolean invalidationRevisionIsInvalid =
-                EmptyChecks.isNull(event) || event.revision() <= 0 || event.keyRevision() <= 0;
+        boolean invalidationRevisionIsInvalid = event == null || event.revision() <= 0 || event.keyRevision() <= 0;
         if (invalidationRevisionIsInvalid) {
             increment(failureCounter);
             return;
@@ -213,7 +212,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
         }
         String key = eventKey(event);
         Long previous = keyRevisions.getIfPresent(key);
-        if (EmptyChecks.isNotNull(previous) && event.keyRevision() <= previous) {
+        if (previous != null && event.keyRevision() <= previous) {
             increment(staleCounter);
             return;
         }
@@ -228,7 +227,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
     }
 
     private void recordLag(Instant changedAt) {
-        if (EmptyChecks.isNull(eventLagTimer) || EmptyChecks.isNull(changedAt)) {
+        if (eventLagTimer == null || changedAt == null) {
             return;
         }
         Instant observedAt = Instant.now();
@@ -242,7 +241,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
         if (!running.compareAndSet(true, false)) {
             return;
         }
-        if (EmptyChecks.isNull(listenerContainer)) {
+        if (listenerContainer == null) {
             return;
         }
         log.info("orchestrator config invalidation subscriber stopping: source={}", source);
@@ -272,7 +271,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
     }
 
     private void increment(Counter counter) {
-        if (EmptyChecks.isNotNull(counter)) {
+        if (counter != null) {
             counter.increment();
         }
     }

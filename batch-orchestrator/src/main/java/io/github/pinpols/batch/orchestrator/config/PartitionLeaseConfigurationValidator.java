@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.config;
 
 import io.github.pinpols.batch.common.config.KafkaConsumerTimingProperties;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import jakarta.annotation.PostConstruct;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +41,6 @@ public class PartitionLeaseConfigurationValidator {
     private int maxPollIntervalMillis() {
         Map<String, String> properties = kafkaConsumerTimingProperties.getProperties();
         String value = properties.get("max-poll-interval-ms");
-        return EmptyChecks.isNull(value) ? DEFAULT_MAX_POLL_INTERVAL_MILLIS : Integer.parseInt(value);
+        return value == null ? DEFAULT_MAX_POLL_INTERVAL_MILLIS : Integer.parseInt(value);
     }
 }

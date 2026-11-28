@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
@@ -90,7 +89,7 @@ public class ActiveTaskLeaseRegistry {
 
     /** 注册带具体租约身份的移除监听器，避免旧租约清理新 invocation 的状态。 */
     public void registerLeaseRemovalListener(Consumer<ActiveTaskLease> listener) {
-        if (EmptyChecks.isNotNull(listener)) {
+        if (listener != null) {
             leaseRemovalListeners.add(listener);
         }
     }
@@ -127,13 +126,13 @@ public class ActiveTaskLeaseRegistry {
     /** 登记 CLAIM 请求开始时采集的单调时钟，令远程调用和返回后暂停都计入租约年龄。 */
     boolean registerClaimedAt(
             String taskId, String tenantId, String workerId, String partitionInvocationId, long claimedAtNanos) {
-        if (EmptyChecks.isNull(taskId) || EmptyChecks.isNull(tenantId) || EmptyChecks.isNull(workerId)) {
+        if (taskId == null || tenantId == null || workerId == null) {
             return false;
         }
         shutdownLock.writeLock().lock();
         try {
             ActiveTaskLease existing = activeTaskLeases.get(taskId);
-            if (EmptyChecks.isNotNull(existing)) {
+            if (existing != null) {
                 return sameOwner(existing, tenantId, workerId, partitionInvocationId) && !existing.isExecutionStarted();
             }
             activeTaskLeases.put(
@@ -158,13 +157,13 @@ public class ActiveTaskLeaseRegistry {
      * 将已登记 claim 转为执行中；单条 CLAIM 则在此首次登记。相同 taskId 只能有一个执行调用取得启动权。
      */
     public boolean beginExecution(String taskId, String tenantId, String workerId, String partitionInvocationId) {
-        if (EmptyChecks.isNull(taskId) || EmptyChecks.isNull(tenantId) || EmptyChecks.isNull(workerId)) {
+        if (taskId == null || tenantId == null || workerId == null) {
             return false;
         }
         shutdownLock.writeLock().lock();
         try {
             ActiveTaskLease existing = activeTaskLeases.get(taskId);
-            if (EmptyChecks.isNull(existing)) {
+            if (existing == null) {
                 long executionStartedNanos = nanoTime.getAsLong();
                 ActiveTaskLease newLease = new ActiveTaskLease(
                         taskId, tenantId, workerId, partitionInvocationId, true, executionStartedNanos);
@@ -183,15 +182,15 @@ public class ActiveTaskLeaseRegistry {
 
     /** 续租成功后更新时间戳，供任务排队后在启动前判断是否需要同步确认所有权。 */
     public void markRenewed(String taskId) {
-        ActiveTaskLease lease = EmptyChecks.isNull(taskId) ? null : activeTaskLeases.get(taskId);
-        if (EmptyChecks.isNotNull(lease)) {
+        ActiveTaskLease lease = taskId == null ? null : activeTaskLeases.get(taskId);
+        if (lease != null) {
             lease.markRenewed(nanoTime.getAsLong());
         }
     }
 
     /** 只刷新发起续租请求时的租约实例，忽略已被替换的旧快照响应。 */
     public boolean markRenewedIfCurrent(ActiveTaskLease lease) {
-        if (EmptyChecks.isNull(lease)) {
+        if (lease == null) {
             return false;
         }
         String taskId = lease.getTaskId();
@@ -205,8 +204,8 @@ public class ActiveTaskLeaseRegistry {
 
     /** 没有在给定窗口内得到 CLAIM/续租确认时返回 true。 */
     public boolean isRenewalDue(String taskId, long maxAgeMillis) {
-        ActiveTaskLease lease = EmptyChecks.isNull(taskId) ? null : activeTaskLeases.get(taskId);
-        if (EmptyChecks.isNull(lease)) {
+        ActiveTaskLease lease = taskId == null ? null : activeTaskLeases.get(taskId);
+        if (lease == null) {
             return true;
         }
         long normalizedMaxAgeMillis = Math.max(0L, maxAgeMillis);
@@ -229,10 +228,10 @@ public class ActiveTaskLeaseRegistry {
 
     /** 仅移除本批持有且尚未启动的认领项，防止批次异常退出后无限续租。 */
     public void removeQueuedClaim(String taskId, String tenantId, String workerId, String partitionInvocationId) {
-        if (EmptyChecks.isNull(tenantId) || EmptyChecks.isNull(workerId)) return;
+        if (tenantId == null || workerId == null) return;
         removeIfMatching(
                 taskId,
-                lease -> EmptyChecks.isNotNull(lease)
+                lease -> lease != null
                         && !lease.isExecutionStarted()
                         && sameOwner(lease, tenantId, workerId, partitionInvocationId));
     }
@@ -262,7 +261,7 @@ public class ActiveTaskLeaseRegistry {
                 log.warn("lease removal listener threw, taskId={}: {}", taskId, SwallowedExceptionLogger.summary(ex));
             }
         }
-        if (EmptyChecks.isNotNull(removedLease)) {
+        if (removedLease != null) {
             for (Consumer<ActiveTaskLease> listener : leaseRemovalListeners) {
                 try {
                     listener.accept(removedLease);
@@ -310,7 +309,7 @@ public class ActiveTaskLeaseRegistry {
 
     /** 只把续租快照中的取消要求应用到仍持有该租约实例的 invocation。 */
     public boolean requestCancellationIfCurrent(ActiveTaskLease lease) {
-        if (EmptyChecks.isNull(lease)) {
+        if (lease == null) {
             return false;
         }
         String taskId = lease.getTaskId();
@@ -359,7 +358,7 @@ public class ActiveTaskLeaseRegistry {
 
     /** 只将仍为当前项的续租快照标记为 lost，避免旧响应污染同 taskId 的新 invocation。 */
     public boolean markLostIfCurrent(ActiveTaskLease lease) {
-        if (EmptyChecks.isNull(lease)) {
+        if (lease == null) {
             return false;
         }
         String taskId = lease.getTaskId();

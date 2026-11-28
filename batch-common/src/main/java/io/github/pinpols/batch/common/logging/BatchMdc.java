@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.common.logging;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.Map;
 import org.slf4j.MDC;
 
@@ -10,14 +10,14 @@ public final class BatchMdc {
     private BatchMdc() {}
 
     public static void put(String key, String value) {
-        if (key == null || value == null || value.isBlank()) {
+        if (key == null || EmptyValues.isBlank(value)) {
             return;
         }
         MDC.put(key, value);
     }
 
     public static void putIfAbsent(String key, String value) {
-        if (key == null || value == null || value.isBlank()) {
+        if (key == null || EmptyValues.isBlank(value)) {
             return;
         }
         if (MDC.get(key) == null) {
@@ -26,7 +26,7 @@ public final class BatchMdc {
     }
 
     public static String get(String key) {
-        return EmptyChecks.isNull(key) ? null : MDC.get(key);
+        return key == null ? null : MDC.get(key);
     }
 
     public static void remove(String key) {
@@ -58,7 +58,7 @@ public final class BatchMdc {
 
     /** 恢复之前的完整 MDC，避免 clear() 误删 tracing 或外层 filter 字段。 */
     public static void restore(Map<String, String> previous) {
-        if (EmptyChecks.isEmpty(previous)) {
+        if (EmptyValues.isEmpty(previous)) {
             MDC.clear();
             return;
         }

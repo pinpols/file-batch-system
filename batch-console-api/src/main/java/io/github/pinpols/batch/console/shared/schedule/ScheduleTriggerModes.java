@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.shared.schedule;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 
 /**
  * 调度类型与触发模式的兼容规则。
@@ -15,7 +15,7 @@ public final class ScheduleTriggerModes {
 
     /** 调度类型对应的默认触发模式。 */
     public static String defaultFor(String scheduleType) {
-        if (EmptyChecks.isNull(scheduleType)) {
+        if (scheduleType == null) {
             return "MANUAL";
         }
         return switch (scheduleType) {
@@ -27,13 +27,13 @@ public final class ScheduleTriggerModes {
 
     /** 触发模式是否与调度类型兼容；触发模式为空视为兼容（由 {@link #resolve} 补默认值）。 */
     public static boolean isCompatible(String scheduleType, String triggerMode) {
-        if (EmptyChecks.isBlank(triggerMode)) {
+        if (EmptyValues.isBlank(triggerMode)) {
             return true;
         }
         if ("MIXED".equals(triggerMode)) {
             return true;
         }
-        String type = EmptyChecks.isNull(scheduleType) ? "MANUAL" : scheduleType;
+        String type = scheduleType == null ? "MANUAL" : scheduleType;
         return switch (type) {
             case "CRON", "FIXED_RATE" -> "SCHEDULED".equals(triggerMode);
             case "EVENT" -> "EVENT".equals(triggerMode);
@@ -43,7 +43,7 @@ public final class ScheduleTriggerModes {
 
     /** 兼容时保留原值，空值或不兼容时取调度类型的默认触发模式。 */
     public static String resolve(String scheduleType, String triggerMode) {
-        if (EmptyChecks.isNotBlank(triggerMode) && isCompatible(scheduleType, triggerMode)) {
+        if (EmptyValues.isNotBlank(triggerMode) && isCompatible(scheduleType, triggerMode)) {
             return triggerMode;
         }
         return defaultFor(scheduleType);

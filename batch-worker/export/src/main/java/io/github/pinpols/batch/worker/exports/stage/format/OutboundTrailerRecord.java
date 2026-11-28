@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -27,7 +26,7 @@ public final class OutboundTrailerRecord {
 
     /** {@code trailer_template.present=true} 时启用出站 trailer。 */
     public static boolean enabled(Map<String, Object> trailerTemplate) {
-        return trailerTemplate != null && !trailerTemplate.isEmpty() && boolOr(trailerTemplate.get("present"), false);
+        return EmptyValues.isNotEmpty(trailerTemplate) && boolOr(trailerTemplate.get("present"), false);
     }
 
     /** 控制总额累加的明细列名(amountField / amount_field);未配则不累加金额。 */
@@ -40,11 +39,11 @@ public final class OutboundTrailerRecord {
             raw = trailerTemplate.get("amount_field");
         }
         String text = null;
-        if (EmptyChecks.isNotNull(raw)) {
+        if (raw != null) {
             String rawText = String.valueOf(raw);
             text = rawText.trim();
         }
-        return Texts.hasText(text) ? text : null;
+        return EmptyValues.hasText(text) ? text : null;
     }
 
     /**
@@ -85,7 +84,7 @@ public final class OutboundTrailerRecord {
         }
         String rawText = String.valueOf(value);
         String text = rawText.trim();
-        return Texts.hasText(text) ? text : fallback;
+        return EmptyValues.hasText(text) ? text : fallback;
     }
 
     private static Integer intOrNull(Object value) {
@@ -113,7 +112,7 @@ public final class OutboundTrailerRecord {
         if (value instanceof Boolean bool) {
             return bool;
         }
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return fallback;
         }
         String textValue = String.valueOf(value);

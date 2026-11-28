@@ -2,7 +2,7 @@ package io.github.pinpols.batch.trigger.support;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.text.ParseException;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -63,12 +63,12 @@ public class CronExpressionAdapter {
         // setTimeZone 不再调（已在构建时固化），避免跨线程写
         Date afterDate = Date.from(after);
         Date nextFire = expression.getNextValidTimeAfter(afterDate);
-        return EmptyChecks.isNull(nextFire) ? null : nextFire.toInstant();
+        return nextFire == null ? null : nextFire.toInstant();
     }
 
     /** 校验 cron 表达式合法。Reconciler 同步前预检用。 */
     public boolean isValid(String cronExpr) {
-        if (EmptyChecks.isBlank(cronExpr)) {
+        if (EmptyValues.isBlank(cronExpr)) {
             return false;
         }
         return CronExpression.isValidExpression(cronExpr);

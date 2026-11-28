@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.application.ops.infrastructure;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.ops.ConsoleKafkaLagQueryPort;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleKafkaConsumerLagResponse;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
@@ -68,7 +68,7 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
             Collection<GroupListing> groups = admin.listGroups().all().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
             for (GroupListing group : groups) {
                 String groupId = group.groupId();
-                if (EmptyChecks.isNotEmpty(groupIdFilter) && !groupId.contains(groupIdFilter)) {
+                if (EmptyValues.isNotEmpty(groupIdFilter) && !groupId.contains(groupIdFilter)) {
                     continue;
                 }
                 if (!groupId.startsWith(topicNamespace.consumerGroup("batch"))) {
@@ -108,7 +108,7 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
             if (stopping.get()) {
                 throw new IllegalStateException("Kafka lag query service is stopping");
             }
-            if (EmptyChecks.isNull(adminClient)) {
+            if (adminClient == null) {
                 adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties());
             }
             return adminClient;
@@ -119,7 +119,7 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
     void closeAdminClient() {
         stopping.set(true);
         synchronized (adminClientMonitor) {
-            if (EmptyChecks.isNotNull(adminClient)) {
+            if (adminClient != null) {
                 adminClient.close(Duration.ZERO);
                 adminClient = null;
             }
@@ -127,7 +127,7 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
     }
 
     private static String cacheSegment(String value) {
-        return EmptyChecks.isBlank(value) ? "all" : ConsoleQueryCacheService.keySegment(value);
+        return EmptyValues.isBlank(value) ? "all" : ConsoleQueryCacheService.keySegment(value);
     }
 
     private ConsoleKafkaConsumerLagResponse queryGroupLag(AdminClient admin, String groupId)
@@ -163,7 +163,7 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
         }
 
         List<ConsoleKafkaConsumerLagResponse.PartitionLag> responsePartitionLags =
-                EmptyChecks.isEmpty(partitionLags) ? null : partitionLags;
+                EmptyValues.isEmpty(partitionLags) ? null : partitionLags;
         return new ConsoleKafkaConsumerLagResponse(
                 groupId, totalLag, committedOffsets.size(), responsePartitionLags, null);
     }
@@ -174,7 +174,7 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
     }
 
     private static ConsoleKafkaConsumerLagResponse sanitizeError(ConsoleKafkaConsumerLagResponse response) {
-        if (EmptyChecks.isNull(response.error())) {
+        if (response.error() == null) {
             return response;
         }
         String safeError = SwallowedExceptionLogger.safeMessage(response.error());

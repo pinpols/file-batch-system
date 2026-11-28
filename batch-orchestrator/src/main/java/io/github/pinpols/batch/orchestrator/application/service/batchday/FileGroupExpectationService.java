@@ -2,8 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.batchday;
 
 import io.github.pinpols.batch.common.jdbc.JdbcExceptionSupport;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
@@ -111,7 +110,7 @@ public class FileGroupExpectationService {
             String tenantId, String calendarCode, Long workflowDefinitionId, String fileGroupCode) {
         if (!valid(tenantId, TENANT_ID_MAX_LENGTH)
                 || !valid(calendarCode, CALENDAR_CODE_MAX_LENGTH)
-                || EmptyChecks.isNull(workflowDefinitionId)
+                || workflowDefinitionId == null
                 || workflowDefinitionId <= 0
                 || !valid(fileGroupCode, FILE_GROUP_CODE_MAX_LENGTH)) {
             throw new IllegalArgumentException("tenant, calendar, workflow and file group are required");
@@ -146,7 +145,7 @@ public class FileGroupExpectationService {
             occurrenceMapper.setTenantContext(request.tenantId());
             WorkflowDefinitionView workflow = workflowDefinitionMapper.selectByTenantAndIdAndEnabled(
                     request.tenantId(), request.workflowDefinitionId(), true);
-            if (EmptyChecks.isNull(workflow) || !request.calendarCode().equals(workflow.calendarCode())) {
+            if (workflow == null || !request.calendarCode().equals(workflow.calendarCode())) {
                 throw new OperationFailure(
                         Kind.INVALID_CONFIGURATION, "File-group expectation calendar must match the workflow calendar");
             }
@@ -169,7 +168,7 @@ public class FileGroupExpectationService {
             String tenantId, String calendarCode, Long workflowDefinitionId, String fileGroupCode) {
         boolean fileGroupDefinitionIdentityIsInvalid = !valid(tenantId, TENANT_ID_MAX_LENGTH)
                 || !valid(calendarCode, CALENDAR_CODE_MAX_LENGTH)
-                || EmptyChecks.isNull(workflowDefinitionId)
+                || workflowDefinitionId == null
                 || workflowDefinitionId <= 0
                 || !valid(fileGroupCode, FILE_GROUP_CODE_MAX_LENGTH);
         if (fileGroupDefinitionIdentityIsInvalid) {
@@ -200,7 +199,7 @@ public class FileGroupExpectationService {
         batchDayInstanceMapper.acquireSettlementFenceShared(tenantId, calendarCode, bizDate);
         BatchDayInstanceEntity batchDay =
                 batchDayInstanceMapper.selectByTenantCalendarBizDate(tenantId, calendarCode, bizDate);
-        if (EmptyChecks.isNotNull(batchDay) && isTerminal(batchDay.dayStatus())) {
+        if (batchDay != null && isTerminal(batchDay.dayStatus())) {
             throw new OperationFailure(
                     Kind.CONFLICT, "Cannot materialize a file-group expectation for a terminal batch day");
         }
@@ -209,9 +208,8 @@ public class FileGroupExpectationService {
         for (FileGroupExpectationDefinition definition :
                 definitionMapper.selectEnabledByCalendar(tenantId, calendarCode)) {
             Instant expectedAt = resolve(bizDate, definition.expectedLocalTime(), zone);
-            Instant dueAt = EmptyChecks.isNull(definition.dueLocalTime())
-                    ? null
-                    : resolve(bizDate, definition.dueLocalTime(), zone);
+            Instant dueAt =
+                    definition.dueLocalTime() == null ? null : resolve(bizDate, definition.dueLocalTime(), zone);
             ExpectedWorkOccurrenceInsertIfAbsentParam expectedWorkOccurrenceInsertIfAbsentParam =
                     ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
                             .tenantId(tenantId)
@@ -242,15 +240,15 @@ public class FileGroupExpectationService {
     }
 
     private static void validate(DefinitionRequest request) {
-        boolean requiredFieldsAreValid = EmptyChecks.isNotNull(request)
+        boolean requiredFieldsAreValid = request != null
                 && valid(request.tenantId(), TENANT_ID_MAX_LENGTH)
                 && valid(request.calendarCode(), CALENDAR_CODE_MAX_LENGTH)
-                && EmptyChecks.isNotNull(request.workflowDefinitionId())
+                && request.workflowDefinitionId() != null
                 && request.workflowDefinitionId() > 0
                 && valid(request.fileGroupCode(), FILE_GROUP_CODE_MAX_LENGTH)
-                && EmptyChecks.isNotNull(request.expectedLocalTime());
+                && request.expectedLocalTime() != null;
         boolean dueLocalTimeIsValidWhenRequiredFieldsAreValid = !requiredFieldsAreValid
-                || EmptyChecks.isNull(request.dueLocalTime())
+                || request.dueLocalTime() == null
                 || request.dueLocalTime().isAfter(request.expectedLocalTime());
         boolean definitionIsValid = requiredFieldsAreValid && dueLocalTimeIsValidWhenRequiredFieldsAreValid;
         if (!definitionIsValid) {
@@ -260,7 +258,7 @@ public class FileGroupExpectationService {
     }
 
     private static boolean valid(String value, int maxLength) {
-        return Texts.hasText(value) && value.trim().length() <= maxLength;
+        return EmptyValues.hasText(value) && value.trim().length() <= maxLength;
     }
 
     public record DefinitionRequest(

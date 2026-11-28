@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.trigger.infrastructure.readiness;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.application.UpstreamReadinessPort;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -56,12 +55,12 @@ public class UpstreamReadinessChecker implements UpstreamReadinessPort {
                             .build())
                     .retrieve()
                     .body(ReadinessResponse.class);
-            if (EmptyChecks.isNull(response) || !response.ready()) {
+            if (response == null || !response.ready()) {
                 return Optional.empty();
             }
             // 与旧 Orchestrator 混合部署时响应可能没有 readyAt；以本次通过门禁的时刻作为兼容基准。
             Instant responseReadyAt = response.readyAt();
-            if (EmptyChecks.isNull(responseReadyAt)) {
+            if (responseReadyAt == null) {
                 return Optional.of(Instant.now());
             }
             return Optional.of(responseReadyAt);

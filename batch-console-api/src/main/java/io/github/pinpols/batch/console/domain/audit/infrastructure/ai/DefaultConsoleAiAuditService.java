@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
 import io.github.pinpols.batch.common.enums.AiPromptCategory;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.audit.command.AiAuditCommand;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAuditLogEntity;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAuditLogMapper;
@@ -44,7 +45,7 @@ public class DefaultConsoleAiAuditService implements ConsoleAiAuditService {
     }
 
     private String resolvePromptCategory(String promptCategory) {
-        if (promptCategory == null || promptCategory.isBlank()) {
+        if (EmptyValues.isBlank(promptCategory)) {
             return AiPromptCategory.OUT_OF_SCOPE.code();
         }
         return promptCategory;

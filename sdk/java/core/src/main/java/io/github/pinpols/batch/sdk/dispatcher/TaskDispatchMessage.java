@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.github.pinpols.batch.sdk.internal.SdkEmptyValues;
 import io.github.pinpols.batch.sdk.task.SdkSchedulingContext;
 import java.util.Map;
 import java.util.Set;
@@ -107,9 +108,9 @@ public record TaskDispatchMessage(
     /** 校验消息必备字段;不合规抛 {@link IllegalArgumentException},dispatcher 跳过该消息 + 上报 WARN。 */
     public void validate() {
         if (taskId == null) throw new IllegalArgumentException("taskId required");
-        if (tenantId == null || tenantId.isBlank()) throw new IllegalArgumentException("tenantId required");
-        if (jobCode == null || jobCode.isBlank()) throw new IllegalArgumentException("jobCode required");
-        if (taskType == null || taskType.isBlank()) throw new IllegalArgumentException("taskType required");
+        if (SdkEmptyValues.isBlank(tenantId)) throw new IllegalArgumentException("tenantId required");
+        if (SdkEmptyValues.isBlank(jobCode)) throw new IllegalArgumentException("jobCode required");
+        if (SdkEmptyValues.isBlank(taskType)) throw new IllegalArgumentException("taskType required");
     }
 
     /**
@@ -124,7 +125,7 @@ public record TaskDispatchMessage(
      * offset)。
      */
     public String resolvedMajor() {
-        if (schemaVersion == null || schemaVersion.isBlank()) {
+        if (SdkEmptyValues.isBlank(schemaVersion)) {
             return DEFAULT_SCHEMA_VERSION;
         }
         // 截断到首个非字母数字字符前(支持 "v2-rc" / "v2.1" / "v2_x" 等后缀格式)

@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.dryrun;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.service.dryrun.DryRunFinding;
 import io.github.pinpols.batch.orchestrator.application.service.dryrun.DryRunSqlProbe;
 import java.util.List;
@@ -30,7 +29,7 @@ public final class JdbcDryRunSqlProbe implements DryRunSqlProbe {
         int probed = 0;
         for (String key : SQL_PARAM_KEYS) {
             Object raw = params.get(key);
-            if (!(raw instanceof String sql) || !Texts.hasText(sql)) {
+            if (!(raw instanceof String sql) || !EmptyValues.hasText(sql)) {
                 continue;
             }
             probed++;
@@ -92,8 +91,7 @@ public final class JdbcDryRunSqlProbe implements DryRunSqlProbe {
             return SingleSelectCheck.UNPARSEABLE;
         }
         List<Statement> list = statements;
-        boolean containsExactlyOneSelect =
-                EmptyChecks.isNotNull(list) && list.size() == 1 && list.get(0) instanceof Select;
+        boolean containsExactlyOneSelect = list != null && list.size() == 1 && list.get(0) instanceof Select;
         if (containsExactlyOneSelect) {
             return SingleSelectCheck.SINGLE_SELECT;
         }

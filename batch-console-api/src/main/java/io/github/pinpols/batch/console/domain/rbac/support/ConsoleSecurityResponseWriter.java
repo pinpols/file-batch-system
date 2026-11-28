@@ -9,7 +9,6 @@ import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.CorrelationIds;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import jakarta.servlet.http.HttpServletResponse;
@@ -52,7 +51,7 @@ public class ConsoleSecurityResponseWriter {
     private static String resolveCorrelationId(
             HttpServletResponse response, String headerName, String mdcKey, String fallback) {
         String responseValue = CorrelationIds.normalize(response.getHeader(headerName));
-        if (EmptyChecks.isNotNull(responseValue)) {
+        if (responseValue != null) {
             return responseValue;
         }
         return CorrelationIds.normalize(BatchMdc.get(mdcKey), fallback);

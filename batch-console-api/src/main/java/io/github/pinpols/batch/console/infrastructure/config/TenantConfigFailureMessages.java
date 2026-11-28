@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.support.persistence.PostgresConstraintViolation;
 import java.sql.SQLException;
 import org.springframework.dao.DataAccessException;
@@ -19,7 +18,7 @@ final class TenantConfigFailureMessages {
             return "error.common.invalid_argument";
         }
         // 事务或业务包装会改变最外层异常类型；不能因此把底层 SQL 诊断重新返回给调用方。
-        for (Throwable cause = failure; EmptyChecks.isNotNull(cause); cause = cause.getCause()) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
             if (cause instanceof DataAccessException || cause instanceof SQLException) {
                 return "error.common.system_error";
             }

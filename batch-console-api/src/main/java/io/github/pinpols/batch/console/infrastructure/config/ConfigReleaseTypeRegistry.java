@@ -2,9 +2,8 @@ package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.AlertRoutingSpec;
@@ -114,7 +113,7 @@ class ConfigReleaseTypeRegistry {
     }
 
     String canonicalType(String raw) {
-        if (!Texts.hasText(raw)) {
+        if (!EmptyValues.hasText(raw)) {
             throw invalid("configType is required");
         }
         String trimmedRaw = raw.trim();
@@ -125,7 +124,7 @@ class ConfigReleaseTypeRegistry {
     void applyToRequest(String configType, String configKey, String payload, TenantConfigBatchInitRequest request) {
         String type = canonicalType(configType);
         ConfigReleaseTypeHandler handler = handlersByCanonicalType.get(type);
-        if (EmptyChecks.isNull(handler)) {
+        if (handler == null) {
             throw invalid("unsupported configType: " + configType);
         }
         try {
@@ -167,7 +166,7 @@ class ConfigReleaseTypeRegistry {
     }
 
     private void requireKey(String expected, String actual, String type) {
-        if (!Texts.hasText(actual) || !expected.equals(actual)) {
+        if (!EmptyValues.hasText(actual) || !expected.equals(actual)) {
             throw invalid(type + " payload identity must equal configKey: " + expected);
         }
     }

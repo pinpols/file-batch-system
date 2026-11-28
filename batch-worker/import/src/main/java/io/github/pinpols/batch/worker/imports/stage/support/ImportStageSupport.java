@@ -8,9 +8,8 @@ import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.service.DryRunGuard;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
-import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
@@ -67,7 +66,7 @@ public final class ImportStageSupport {
             return null;
         }
         String text = String.valueOf(value);
-        return Texts.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
+        return EmptyValues.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
     }
 
     /**
@@ -75,8 +74,8 @@ public final class ImportStageSupport {
      * 且不超过 {@link ImportWorkerConfiguration#maxChunkSize()}。
      */
     public static int resolveChunkSize(ImportJobContext context, ImportWorkerConfiguration config) {
-        int fallback = EmptyChecks.isNull(config) ? FALLBACK_CHUNK_SIZE : config.chunkSize();
-        int max = EmptyChecks.isNull(config) ? FALLBACK_MAX_CHUNK_SIZE : Math.max(1, config.maxChunkSize());
+        int fallback = config == null ? FALLBACK_CHUNK_SIZE : config.chunkSize();
+        int max = config == null ? FALLBACK_MAX_CHUNK_SIZE : Math.max(1, config.maxChunkSize());
         int chunkSize = fallback;
         Object templateConfigObject =
                 context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
@@ -84,7 +83,7 @@ public final class ImportStageSupport {
             Object value = templateConfig.get("chunk_size");
             if (value instanceof Number number) {
                 chunkSize = number.intValue();
-            } else if (value != null && Texts.hasText(String.valueOf(value))) {
+            } else if (value != null && EmptyValues.hasText(String.valueOf(value))) {
                 String text = String.valueOf(value);
                 chunkSize = Integer.parseInt(text);
             }
@@ -128,8 +127,8 @@ public final class ImportStageSupport {
     }
 
     private static Path createStagingFile(ImportJobContext context, String prefix, String suffix) throws IOException {
-        ImportStagingFiles stagingFiles = EmptyChecks.isNull(context) ? null : context.getStagingFiles();
-        return EmptyChecks.isNull(stagingFiles)
+        ImportStagingFiles stagingFiles = context == null ? null : context.getStagingFiles();
+        return stagingFiles == null
                 ? PrivateTempFiles.createTempFile(prefix, suffix)
                 : stagingFiles.createTempFile(prefix, suffix);
     }

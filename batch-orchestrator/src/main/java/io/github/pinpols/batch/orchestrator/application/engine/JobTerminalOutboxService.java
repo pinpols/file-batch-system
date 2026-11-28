@@ -4,7 +4,6 @@ import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
@@ -26,12 +25,10 @@ public class JobTerminalOutboxService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void writeTerminalEvent(String tenant, Long jobInstanceId) {
         JobInstanceEntity job = jobs.selectById(tenant, jobInstanceId);
-        if (EmptyChecks.isNull(job))
-            throw new IllegalStateException("terminal Job disappeared before outbox persistence");
+        if (job == null) throw new IllegalStateException("terminal Job disappeared before outbox persistence");
         if (!JobInstanceStatus.terminalCodes().contains(job.getInstanceStatus())) return;
-        boolean terminalJobSnapshotIsIncomplete = EmptyChecks.isNull(job.getFinishedAt())
-                || EmptyChecks.isNull(job.getBizDate())
-                || EmptyChecks.isNull(job.getVersion());
+        boolean terminalJobSnapshotIsIncomplete =
+                job.getFinishedAt() == null || job.getBizDate() == null || job.getVersion() == null;
         if (terminalJobSnapshotIsIncomplete) {
             throw new IllegalStateException("terminal Job snapshot is incomplete");
         }
@@ -51,7 +48,7 @@ public class JobTerminalOutboxService {
         payload.put("dryRun", Boolean.TRUE.equals(job.getDryRun()));
         payload.put("bizDate", job.getBizDate().toString());
         payload.put("finishedAt", job.getFinishedAt().toString());
-        payload.put("workflowRunId", EmptyChecks.isNull(owner) ? null : owner.getId());
+        payload.put("workflowRunId", owner == null ? null : owner.getId());
         payload.put("traceId", job.getTraceId());
         DomainEvent.Builder eventBuilder = DomainEvent.builder(tenant);
         eventBuilder.aggregate("JOB_INSTANCE", jobInstanceId);

@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.ops.web;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleApprovalApplicationService;
 import io.github.pinpols.batch.console.domain.ops.application.contract.request.ApprovalActionRequest;
 import io.github.pinpols.batch.console.domain.ops.application.contract.request.BatchApprovalActionRequest;
@@ -118,7 +117,7 @@ public class ConsoleApprovalController {
      */
     private void auditApprovalAction(String action, String tenantId, String target, String operatorId, String reason) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        String actor = EmptyChecks.isNull(auth) ? "anonymous" : authenticatedUsername(auth);
+        String actor = auth == null ? "anonymous" : authenticatedUsername(auth);
         int reasonLen = reason == null ? 0 : reason.length();
         AUDIT.info(
                 "action={} actor={} tenant={} target={} operatorId={} reasonLength={}",
@@ -136,7 +135,7 @@ public class ConsoleApprovalController {
     }
 
     private static String authenticatedUsername(Authentication authentication) {
-        if (EmptyChecks.isNull(authentication)) {
+        if (authentication == null) {
             return "anonymous";
         }
         if (authentication.getPrincipal() instanceof ConsolePrincipal principal) {

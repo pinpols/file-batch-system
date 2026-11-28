@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.domain.TriggerStatusInfo;
 import io.github.pinpols.batch.trigger.domain.TriggerStatusQueryService;
@@ -38,14 +38,14 @@ public class TriggerStatusQueryFacade implements TriggerStatusQueryService {
             List<TriggerStatusInfo> result = new ArrayList<>();
             for (JobKey jobKey : scheduler.getJobKeys(GroupMatcher.jobGroupEquals(TriggerSchedulerFacade.JOB_GROUP))) {
                 WorkflowIdentity identity = parseWorkflowIdentity(jobKey);
-                if (EmptyChecks.isNull(identity)) {
+                if (identity == null) {
                     continue;
                 }
-                if (EmptyChecks.isNotNull(tenantId) && !tenantId.equals(identity.tenantId())) {
+                if (tenantId != null && !tenantId.equals(identity.tenantId())) {
                     continue;
                 }
                 JobDetail detail = scheduler.getJobDetail(jobKey);
-                if (EmptyChecks.isNotNull(detail)) {
+                if (detail != null) {
                     result.add(toTriggerStatusInfo(jobKey, identity, detail));
                 }
             }
@@ -129,9 +129,9 @@ public class TriggerStatusQueryFacade implements TriggerStatusQueryService {
     private static WorkflowIdentity parseWorkflowIdentity(JobKey jobKey) {
         String[] parts = jobKey.getName().split(":", 3);
         boolean partsDoNotDescribeWorkflowIdentity = parts.length != 3
-                || EmptyChecks.isBlank(parts[0])
+                || EmptyValues.isBlank(parts[0])
                 || !"WF".equals(parts[1])
-                || EmptyChecks.isBlank(parts[2]);
+                || EmptyValues.isBlank(parts[2]);
         if (partsDoNotDescribeWorkflowIdentity) {
             return null;
         }
@@ -140,7 +140,7 @@ public class TriggerStatusQueryFacade implements TriggerStatusQueryService {
 
     private TriggerFireState firstTriggerFireState(JobKey jobKey) throws SchedulerException {
         List<? extends Trigger> triggers = scheduler.getTriggersOfJob(jobKey);
-        if (EmptyChecks.isEmpty(triggers)) {
+        if (EmptyValues.isEmpty(triggers)) {
             return TriggerFireState.unknown();
         }
         Trigger trigger = triggers.get(0);
@@ -151,7 +151,7 @@ public class TriggerStatusQueryFacade implements TriggerStatusQueryService {
     }
 
     private static Instant toInstant(Date fireTime) {
-        return EmptyChecks.isNull(fireTime) ? null : fireTime.toInstant();
+        return fireTime == null ? null : fireTime.toInstant();
     }
 
     private record WorkflowIdentity(String tenantId, String workflowCode) {}

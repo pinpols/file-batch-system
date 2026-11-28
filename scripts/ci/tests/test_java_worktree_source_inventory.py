@@ -168,11 +168,19 @@ class JavaWorktreeSourceInventoryTest(unittest.TestCase):
 
     def test_empty_cli_rejects_untracked_violation_and_accepts_valid_source(self):
         with temporary_repository() as root:
-            write_source(root, PRODUCTION, "class Probe { boolean missing(Object v) { return v == null; } }\n")
+            write_source(
+                root,
+                PRODUCTION,
+                "class Probe { boolean missing(java.util.List<String> v) { return v.isEmpty(); } }\n",
+            )
             with patch.object(sys, "argv", ["check-empty-checks.py"]):
                 with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                     self.assertEqual(EMPTY.main(), 1)
-                write_source(root, PRODUCTION, "class Probe { boolean missing(Object v) { return EmptyChecks.isNull(v); } }\n")
+                write_source(
+                    root,
+                    PRODUCTION,
+                    "class Probe { boolean missing(java.util.List<String> v) { return EmptyValues.isEmpty(v); } }\n",
+                )
                 with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                     self.assertEqual(EMPTY.main(), 0)
 
@@ -183,12 +191,12 @@ class JavaWorktreeSourceInventoryTest(unittest.TestCase):
 
             self.assertEqual(READABILITY.tracked_main_sources(), [production])
 
-    def test_existing_helper_on_same_line_does_not_hide_native_predicates(self):
+    def test_existing_helper_on_same_line_does_not_hide_native_empty_checks(self):
         with temporary_repository() as root:
             with patch.object(sys, "argv", ["check-empty-checks.py"]):
                 for source in (
-                    "class Probe { boolean missing(Object a, Object b) { return EmptyChecks.isNull(a) || b == null; } }\n",
-                    "class Probe { boolean missing(Object a, Object b) { return Objects.requireNonNull(a) == b && b == null; } }\n",
+                    "class Probe { boolean missing(java.util.List<String> a, java.util.List<String> b) { return EmptyValues.isEmpty(a) || b.isEmpty(); } }\n",
+                    "class Probe { boolean missing(java.util.List<String> a, Object b) { return Objects.requireNonNull(a).isEmpty() && b != null; } }\n",
                 ):
                     with self.subTest(source=source):
                         write_source(root, PRODUCTION, source)

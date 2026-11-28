@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.common.kafka;
 
+import io.github.pinpols.batch.common.utils.EmptyValues;
+
 public final class BatchTopics {
 
     public static final String TASK_DISPATCH_IMPORT = "batch.task.dispatch.import";
@@ -33,7 +35,7 @@ public final class BatchTopics {
     private BatchTopics() {}
 
     public static String directDispatchTopic(String baseTopic, String workerId) {
-        if (baseTopic == null || workerId == null || workerId.isBlank()) {
+        if (baseTopic == null || EmptyValues.isBlank(workerId)) {
             return baseTopic;
         }
         return baseTopic + ".node." + sanitizeTopicSegment(workerId);

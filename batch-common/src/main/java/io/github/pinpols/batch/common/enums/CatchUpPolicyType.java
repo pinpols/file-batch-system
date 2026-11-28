@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.enums;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
@@ -18,7 +19,7 @@ public enum CatchUpPolicyType implements DictEnum {
 
     /** 空白回落到 NONE；未知 code 抛异常，避免配置错误被静默捕获并抑制（M-10）。 */
     public static CatchUpPolicyType fromCode(String code) {
-        if (code == null || code.isBlank()) {
+        if (EmptyValues.isBlank(code)) {
             return NONE;
         }
         CatchUpPolicyType match = DictEnum.fromCode(CatchUpPolicyType.class, code);

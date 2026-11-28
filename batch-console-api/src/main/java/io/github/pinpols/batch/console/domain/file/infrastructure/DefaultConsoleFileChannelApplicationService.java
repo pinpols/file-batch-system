@@ -6,10 +6,10 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Nullables;
+import io.github.pinpols.batch.common.utils.Preconditions;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileChannelApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.contract.query.FileChannelQueryRequest;
@@ -66,7 +66,7 @@ public class DefaultConsoleFileChannelApplicationService implements ConsoleFileC
     public ConsoleFileChannelResponse get(Long id, String tenantId) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         FileChannelConfigQueryView row = mapper.selectById(resolved, id);
-        FileChannelConfigQueryView foundRow = Guard.requireFound(row, "file channel not found: " + id);
+        FileChannelConfigQueryView foundRow = Preconditions.requireFound(row, "file channel not found: " + id);
         return ConsoleFileProjectionMapper.channelView(foundRow);
     }
 
@@ -96,9 +96,7 @@ public class DefaultConsoleFileChannelApplicationService implements ConsoleFileC
         param.setConfigJson(normalizedConfigJson);
         param.setReceiptPolicy(request.getReceiptPolicy() != null ? request.getReceiptPolicy() : "NONE");
         param.setTimeoutSeconds(
-                EmptyChecks.isNotNull(request.getTimeoutSeconds())
-                        ? request.getTimeoutSeconds()
-                        : DEFAULT_TIMEOUT_SECONDS);
+                request.getTimeoutSeconds() != null ? request.getTimeoutSeconds() : DEFAULT_TIMEOUT_SECONDS);
         param.setEnabled(request.getEnabled() == null || request.getEnabled());
         param.setCreatedBy(operator);
         param.setUpdatedBy(operator);
@@ -114,19 +112,19 @@ public class DefaultConsoleFileChannelApplicationService implements ConsoleFileC
     public ConsoleFileChannelResponse update(Long id, FileChannelUpdateRequest request) {
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
         FileChannelConfigQueryView existing =
-                Guard.requireFound(mapper.selectById(tenantId, id), "file channel not found: " + id);
+                Preconditions.requireFound(mapper.selectById(tenantId, id), "file channel not found: " + id);
         String operator = requestMetadataResolver.current().operatorId();
         FileChannelConfigUpdateParam param = new FileChannelConfigUpdateParam();
         param.setTenantId(tenantId);
         param.setId(id);
         param.setChannelName(Nullables.coalesce(request.getChannelName(), existing.channelName()));
-        String updatedChannelType = EmptyChecks.isNotNull(request.getChannelType())
+        String updatedChannelType = request.getChannelType() != null
                 ? normalizeChannelType(request.getChannelType())
                 : existing.channelType();
         param.setChannelType(updatedChannelType);
         String requestedTargetEndpoint = request.getTargetEndpoint();
         String targetEndpoint;
-        if (EmptyChecks.isNotNull(requestedTargetEndpoint)) {
+        if (requestedTargetEndpoint != null) {
             targetEndpoint = SecretMasking.preserveMaskedEndpoint(requestedTargetEndpoint, existing.targetEndpoint());
         } else {
             targetEndpoint = existing.targetEndpoint();
@@ -135,12 +133,11 @@ public class DefaultConsoleFileChannelApplicationService implements ConsoleFileC
         param.setAuthType(Nullables.coalesce(request.getAuthType(), existing.authType()));
         String requestedConfigJson = request.getConfigJson();
         String configJson;
-        if (EmptyChecks.isNotNull(requestedConfigJson)) {
+        if (requestedConfigJson != null) {
             configJson = preserveMaskedConfig(requestedConfigJson, existing.configJson());
         } else {
-            configJson = EmptyChecks.isNull(existing.configJson())
-                    ? null
-                    : existing.configJson().toString();
+            configJson =
+                    existing.configJson() == null ? null : existing.configJson().toString();
         }
         param.setConfigJson(configJson);
         param.setReceiptPolicy(Nullables.coalesce(request.getReceiptPolicy(), existing.receiptPolicy()));
@@ -166,12 +163,12 @@ public class DefaultConsoleFileChannelApplicationService implements ConsoleFileC
 
     private static String preserveMaskedConfig(String submitted, Object storedValue) {
         String normalized = normalizeConfigJson(submitted);
-        String stored = EmptyChecks.isNull(storedValue) ? null : storedValue.toString();
+        String stored = storedValue == null ? null : storedValue.toString();
         return SecretMasking.preserveMaskedJson(normalized, stored);
     }
 
     private static String normalizeConfigJson(String configJson) {
-        if (EmptyChecks.isBlank(configJson)) {
+        if (EmptyValues.isBlank(configJson)) {
             return "{}";
         }
         try {

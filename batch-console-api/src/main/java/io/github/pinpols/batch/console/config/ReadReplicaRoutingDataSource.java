@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.config;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -146,7 +145,7 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
 
     @SuppressWarnings("unchecked")
     private <T> T proxyJdbcObject(T target, Class<?> requiredInterface) {
-        if (EmptyChecks.isNull(target) || !requiredInterface.isInterface()) {
+        if (target == null || !requiredInterface.isInterface()) {
             return target;
         }
         LinkedHashSet<Class<?>> interfaceSet = new LinkedHashSet<>();
@@ -194,10 +193,10 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
 
     private static boolean isConnectionFailure(SQLException exception) {
         SQLException current = exception;
-        while (EmptyChecks.isNotNull(current)) {
+        while (current != null) {
             String state = current.getSQLState();
             boolean isConnectionAvailabilitySqlState =
-                    EmptyChecks.isNotNull(state) && (state.startsWith("08") || state.startsWith("57"));
+                    state != null && (state.startsWith("08") || state.startsWith("57"));
             if (isConnectionAvailabilitySqlState) {
                 return true;
             }
@@ -209,7 +208,7 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
 
     private void incrementCounter(String name, String tagKey, String tagValue) {
         MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-        if (EmptyChecks.isNull(registry)) {
+        if (registry == null) {
             return;
         }
         Counter.builder(name).tags(Tags.of(tagKey, tagValue)).register(registry).increment();
@@ -217,7 +216,7 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
 
     private static String classify(SQLException ex) {
         String state = ex.getSQLState();
-        if (EmptyChecks.isNull(state)) {
+        if (state == null) {
             return "unknown";
         }
         if (state.startsWith("08")) {

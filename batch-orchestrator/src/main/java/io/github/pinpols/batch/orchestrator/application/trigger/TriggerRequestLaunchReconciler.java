@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.trigger;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.domain.query.TriggerRequestLaunchReconcileRow;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.infrastructure.trigger.TriggerLaunchConsumer;
@@ -81,7 +81,7 @@ public class TriggerRequestLaunchReconciler {
                     SwallowedExceptionLogger.summary(ex));
             return;
         }
-        if (EmptyChecks.isEmpty(rows)) {
+        if (EmptyValues.isEmpty(rows)) {
             return;
         }
         int reconciled = 0;

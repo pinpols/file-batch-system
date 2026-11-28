@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # 用途：集中式空值检查。
 # 用法：在仓库根目录执行 python3 scripts/ci/check-empty-checks.py；参数与前置环境见下方说明及所属 README。
-"""阻止生产 Java 新增零散的 null / empty / blank 判断。
+"""阻止生产 Java 新增零散的字符串 / 集合 / 数组空判断。
 
-统一判断入口是 ``EmptyChecks``。本检查只拦本次 diff 新增的生产代码，避免把历史
-遗留一次性大改，也避免把有明确语义的 ``Objects.equals``、``Optional`` 等误判为
-空值判断。历史代码由业务迁移逐步收口；从本检查接入后不得继续新增同类写法。
+对象引用判空按编码规约 §1.8 使用原生 ``x == null`` / ``x != null``，不再纳入本门禁；
+字符串空白与集合/Map/数组空判断仍然统一到 ``EmptyValues``，避免调用方各自组合
+``null || isEmpty()``。本检查只拦本次 diff 新增的生产代码，历史代码由专项迁移
+逐步收口，也避免把有明确语义的 ``Objects.equals``、``Optional`` 等误判为空值判断。
 
 用法：
   python3 scripts/ci/check-empty-checks.py
@@ -24,10 +25,6 @@ import tempfile
 
 
 CHECK_PATTERNS = (
-    (
-        "null 判断",
-        re.compile(r"(?:(?<![=!])(?:==|!=)\s*null\b|\bnull\s*(?:==|!=)(?![=]))"),
-    ),
     ("字符串 / 集合空判断", re.compile(r"(?:\.isEmpty\s*\(\)|\.isBlank\s*\(\))")),
     (
         "集合大小判断",
@@ -48,7 +45,7 @@ CHECK_PATTERNS = (
 
 ALLOW_MARKER = re.compile(r"empty-check:\s*allow(?:\s*-\s*(?P<reason>\S.*))?")
 GATE_CODE = "EMPTY_CHECKS"
-GATE_NAME = "空值判断统一入口"
+GATE_NAME = "空值判断写法"
 
 
 def is_production_java(path: str) -> bool:
@@ -263,7 +260,7 @@ def main() -> int:
     violations = []
     bad_allows = []
     for path, line_no, source in added_lines(args.base):
-        if path.endswith("/EmptyChecks.java"):
+        if path.endswith(("/EmptyValues.java", "/SdkEmptyValues.java")):
             continue
         stripped = source.strip()
         if not stripped or stripped.startswith(("//", "/*", "*")):
@@ -289,7 +286,7 @@ def main() -> int:
 
     if violations:
         print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1", file=sys.stderr)
-        print("发现新增零散空值判断，请改用 EmptyChecks：", file=sys.stderr)
+        print("发现新增零散字符串/集合空判断，请改用 EmptyValues：", file=sys.stderr)
         for path, line_no, label, source in violations:
             print(f"  {path}:{line_no}: [{label}] {source}", file=sys.stderr)
         print("确需保留原生判断时，在同一行追加：// empty-check: allow - 原因", file=sys.stderr)

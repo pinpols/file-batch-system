@@ -15,7 +15,7 @@ batch-common/src/main/java/io/github/pinpols/batch/common/utils/CodeNormalizer.j
 batch-common/src/main/java/io/github/pinpols/batch/common/utils/ConsoleTextSanitizer.java	java:S2583	1
 batch-common/src/main/java/io/github/pinpols/batch/common/utils/ContentMaskingUtils.java	java:S2583	1
 batch-common/src/main/java/io/github/pinpols/batch/common/utils/EncodingUtils.java	java:S2583	1
-batch-common/src/main/java/io/github/pinpols/batch/common/utils/Guard.java	java:S2583	1
+batch-common/src/main/java/io/github/pinpols/batch/common/utils/Preconditions.java	java:S2583	1
 batch-common/src/main/java/io/github/pinpols/batch/common/utils/JsonUtils.java	java:S2583	1
 batch-common/src/main/java/io/github/pinpols/batch/common/utils/JsonUtils.java	unchecked	1
 batch-common/src/main/java/io/github/pinpols/batch/common/utils/Nullables.java	java:S2583	1
@@ -24,7 +24,7 @@ batch-common/src/main/java/io/github/pinpols/batch/common/utils/PostgresqlJsonbT
 batch-common/src/main/java/io/github/pinpols/batch/common/utils/PrivateTempFiles.java	java:S2093	1
 batch-common/src/main/java/io/github/pinpols/batch/common/utils/S3BucketSupport.java	java:S2583	1
 batch-common/src/main/java/io/github/pinpols/batch/common/utils/SecretMasking.java	java:S2583	1
-batch-common/src/main/java/io/github/pinpols/batch/common/utils/Texts.java	java:S2583	1
+batch-common/src/main/java/io/github/pinpols/batch/common/utils/EmptyValues.java	java:S2583	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/application/observability/SseTicketService.java	java:S2259	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/application/rbac/ConsoleMetaQueryService.java	unchecked	6
 batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleSecurityConfiguration.java	java:S3330	1

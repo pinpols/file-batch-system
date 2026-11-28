@@ -3,7 +3,7 @@ package io.github.pinpols.batch.trigger.config;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.security.SecretComparator;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.web.ServletRequestPaths;
 import io.github.pinpols.batch.trigger.auth.TriggerApiKeyPrincipal;
 import io.github.pinpols.batch.trigger.auth.TriggerApiKeyVerifier;
@@ -86,7 +86,7 @@ public class TriggerSecurityConfiguration {
         @Override
         public boolean matches(HttpServletRequest request) {
             return isApiKeyAllowedUri(request)
-                    && EmptyChecks.isNotBlank(request.getHeader(CommonConstants.BATCH_API_KEY_HEADER));
+                    && EmptyValues.isNotBlank(request.getHeader(CommonConstants.BATCH_API_KEY_HEADER));
         }
     }
 
@@ -128,7 +128,7 @@ public class TriggerSecurityConfiguration {
             }
 
             String apiKey = request.getHeader(CommonConstants.BATCH_API_KEY_HEADER);
-            if (EmptyChecks.isNotBlank(apiKey)) {
+            if (EmptyValues.isNotBlank(apiKey)) {
                 String tenantId = request.getHeader(CommonConstants.BATCH_TENANT_ID_HEADER);
                 if (isApiKeyAllowedUri(request)) {
                     Optional<TriggerApiKeyPrincipal> principal = apiKeyVerifier.authenticate(apiKey, tenantId);
@@ -143,8 +143,7 @@ public class TriggerSecurityConfiguration {
             }
 
             String header = request.getHeader(HEADER_NAME);
-            if (EmptyChecks.isNotNull(header)
-                    && SecretComparator.constantTimeEquals(securityProperties.getInternalSecret(), header)) {
+            if (header != null && SecretComparator.constantTimeEquals(securityProperties.getInternalSecret(), header)) {
                 setAuthenticated();
                 chain.doFilter(request, response);
             } else {

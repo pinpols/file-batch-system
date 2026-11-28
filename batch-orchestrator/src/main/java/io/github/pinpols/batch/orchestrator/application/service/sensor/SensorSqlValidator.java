@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.sensor;
 
 import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
 import io.github.pinpols.batch.common.sql.SelectSqlAstValidator.SchemaViolation;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import java.util.List;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
@@ -55,7 +55,7 @@ public final class SensorSqlValidator {
      * @param forbiddenFunctions 禁用函数黑名单（大小写不敏感，AST 遍历比对函数节点名）
      */
     public static String validate(String raw, List<String> allowedSchemas, List<String> forbiddenFunctions) {
-        if (!Texts.hasText(raw)) {
+        if (!EmptyValues.hasText(raw)) {
             throw new IllegalArgumentException("sensor SQL is blank");
         }
         String sql = raw.trim();
@@ -70,10 +70,10 @@ public final class SensorSqlValidator {
                     + statement.getClass().getSimpleName());
         }
         checkNoSelectStar(select);
-        if (forbiddenFunctions != null && !forbiddenFunctions.isEmpty()) {
+        if (EmptyValues.isNotEmpty(forbiddenFunctions)) {
             checkNoForbiddenFunctions(statement, forbiddenFunctions);
         }
-        if (allowedSchemas != null && !allowedSchemas.isEmpty()) {
+        if (EmptyValues.isNotEmpty(allowedSchemas)) {
             checkAllowedSchemas(statement, allowedSchemas);
         }
         return sql;

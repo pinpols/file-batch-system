@@ -77,13 +77,13 @@ System.getProperty("batch.xxx")
 
 | 优先级 | 文件 | key | 处理建议 | 状态 |
 |---|---|---|---|---|
-| P1 | `batch-worker/atomic/.../AtomicExecutorProductionGuard.java` | `batch.worker.executors.guard.enforce-profiles` | 新增或扩展 executor guard properties | ✅ `AtomicExecutorGuardProperties` |
+| P1 | `batch-worker/atomic/.../AtomicExecutorProductionPreconditions.java` | `batch.worker.executors.guard.enforce-profiles` | 新增或扩展 executor guard properties | ✅ `AtomicExecutorGuardProperties` |
 | P1 | `batch-console-api/.../ConsoleRealtimeInstanceIdProvider.java` | `batch.console.instance-id` | 收敛到 Console realtime / observability properties | ✅ `ConsoleInstanceIdProperties`（保留原 key） |
 | P1 | `batch-console-api/.../ConsolePipelineProgressDirtyPublisher.java` | `batch.console.pipeline-progress-dirty.*` | 5 个同前缀 `@Value` 提取为 properties 类 | ✅ `ConsolePipelineProgressDirtyProperties` |
 | P1 | `batch-console-api/.../ReplicaLagMonitor.java` | `batch.console.replica.*` | 2 个同功能 `@Value` 提取为 properties 类 | ✅ `ReplicaLagMonitorProperties` |
-| P1 | `batch-common/.../ProductionRuntimeConfigurationGuard.java` | `batch.storage.backend` | 注入 storage backend properties | ✅ `StorageBackendProperties` |
-| P1 | `batch-common/.../ProductionRuntimeConfigurationGuard.java` | `batch.console.read-replica.enabled` | 注入 read-replica properties 或专用只读配置对象 | ✅ `ConsoleReadReplicaProperties` |
-| P1 | `batch-common/.../ProductionRuntimeConfigurationGuard.java` | `batch.kafka.namespace` | 注入部署实际使用的命名空间配置，生产仍拒绝空值 | ✅ `KafkaNamespaceProperties` |
+| P1 | `batch-common/.../ProductionRuntimeConfigurationPreconditions.java` | `batch.storage.backend` | 注入 storage backend properties | ✅ `StorageBackendProperties` |
+| P1 | `batch-common/.../ProductionRuntimeConfigurationPreconditions.java` | `batch.console.read-replica.enabled` | 注入 read-replica properties 或专用只读配置对象 | ✅ `ConsoleReadReplicaProperties` |
+| P1 | `batch-common/.../ProductionRuntimeConfigurationPreconditions.java` | `batch.kafka.namespace` | 注入部署实际使用的命名空间配置，生产仍拒绝空值 | ✅ `KafkaNamespaceProperties` |
 | P1 | `batch-common/.../BatchSecurityProperties.java` | `batch.console.read-replica.primary.password` / `replica.password` | 通过 read-replica secret/properties 统一读取 | ✅ `ReadReplicaCredentialGuard` + `ConsoleReadReplicaProperties` |
 | P2 | `batch-orchestrator/.../StaleCompensationCommandReconciler.java` | `batch.compensation.stale-running-reconciler.*` | 2 个同前缀 `@Value` 提取为 properties 类 | ✅ `StaleCompensationReconcilerProperties` |
 | P2 | `batch-orchestrator/.../StaleCreatedLaunchRecoveryScheduler.java` | `batch.trigger.launch.created-recovery.*` | 2 个同前缀 `@Value` 提取为 properties 类 | ✅ `StaleCreatedLaunchRecoveryProperties` |
@@ -221,8 +221,8 @@ batch-trigger 集中一份，`local.server.port` 只在 batch-console-api 集中
 常量、行内容变了，就被当成新增行。dispatch 侧 `AckDispatchStep` / `CompensateDispatchStep` /
 `CompleteDispatchStep` / `DeliverDispatchStep` 的 `context == null ? null : ...`、`DispatchManifestSupport` 的
 `command.payload() == null ? ...`、`DefaultTaskExecutionWrapper` 的 `task.getJobCode() == null ? ...`、
-`CompleteDispatchStep` 的 `attrs.get(RECEIPT_CODE) != null` 共 7 处，统一改用 `EmptyChecks.isNull` /
-`isNotNull`（守护指定的统一入口，零行为变更）；`ReadReplicaCredentialGuard`（非本批文件）同因被扫出 2 处，一并收敛。
+`CompleteDispatchStep` 的 `attrs.get(RECEIPT_CODE) != null` 共 7 处，统一改用旧 `EmptyChecks.isNull` /
+`isNotNull`（当时守护指定的统一入口，零行为变更；2026-11-27 起该类更名 `EmptyValues`，且 `isNull/isNotNull` 已移除，按 §1.8 使用原生比较）；`ReadReplicaCredentialGuard`（非本批文件）同因被扫出 2 处，一并收敛。
 这里**不能**用 `// empty-check: allow` 豁免——GJF 会把超长行折行，豁免标记落到另一行即失效。
 
 **批次 F：缺归属类补齐（2026-10-06，已收敛）**：
@@ -262,7 +262,7 @@ batch-trigger 集中一份，`local.server.port` 只在 batch-console-api 集中
 **批次 F 同样触发 diff 增量守护**：改既有行后，`AbstractPipelineStepExecutionAdapter#extractFromPayloadJson`、
 `DefaultStepExecutionAdapter#extractParameters`、`GenerateStep#execute` 的 `context == null ? null : ...` 共 3 处，
 `RegisterStep` 的 `attrs.get(EXPORT_LINE_SEPARATOR) != null` / `EXPORT_WITH_BOM != null` 共 2 处，统一改用
-`EmptyChecks.isNull` / `isNotNull`（零行为变更）。
+旧 `EmptyChecks.isNull` / `isNotNull`（零行为变更；2026-11-27 起该类更名 `EmptyValues`，且 `isNull/isNotNull` 已移除，按 §1.8 使用原生比较）。
 
 **批次 F 后仍缺归属类（登记待评估，本轮不动）**——`file_record.metadata` 键族：
 

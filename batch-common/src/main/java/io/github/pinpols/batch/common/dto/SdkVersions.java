@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.common.dto;
 
+import io.github.pinpols.batch.common.utils.EmptyValues;
+
 /**
  * SDK 库版本(worker 上报的 {@code sdkVersion},如 {@code "1.1.0"} / {@code "2.0.0-rc"} / {@code
  * "v1.3"})的整数主版本解析共享工具。
@@ -18,7 +20,7 @@ public final class SdkVersions {
      * 取首段连续数字;空 / 空白 / 无前导数字 → {@code null}(交由调用方判定 UNKNOWN / legacy 放行)。
      */
     public static Integer parseMajor(String sdkVersion) {
-        if (sdkVersion == null || sdkVersion.isBlank()) {
+        if (EmptyValues.isBlank(sdkVersion)) {
             return null;
         }
         String trimmed = sdkVersion.strip();

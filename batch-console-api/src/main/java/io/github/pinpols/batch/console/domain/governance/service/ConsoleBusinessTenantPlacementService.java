@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.config.BusinessRoutingProperties;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.BusinessTenantPlacementEntity;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.governance.command.BusinessTenantPlacementUpsertCommand;
 import io.github.pinpols.batch.console.domain.governance.mapper.ConsoleBusinessShardCatalogMapper;
 import io.github.pinpols.batch.console.domain.governance.mapper.ConsoleBusinessTenantPlacementMapper;
@@ -41,7 +41,7 @@ public class ConsoleBusinessTenantPlacementService {
     @Transactional
     public void upsert(BusinessTenantPlacementUpsertCommand command) {
         Set<String> configuredKeys = configuredShardKeys();
-        if (EmptyChecks.isNotEmpty(configuredKeys) && !configuredKeys.contains(command.placementKey())) {
+        if (EmptyValues.isNotEmpty(configuredKeys) && !configuredKeys.contains(command.placementKey())) {
             throw BizException.of(
                     ResultCode.VALIDATION_ERROR,
                     "error.tenant_placement.unknown_key",

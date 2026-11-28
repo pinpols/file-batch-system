@@ -4,7 +4,6 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.dto.ScheduledOccurrenceCatchUpResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.auth.TriggerApiKeyPrincipal;
 import io.github.pinpols.batch.trigger.domain.ExternalEventLaunchResponse;
 import io.github.pinpols.batch.trigger.domain.ExternalEventLaunchStatus;
@@ -102,8 +101,7 @@ public class TriggerController {
 
     private static TriggerApiKeyPrincipal externalEventSourcePrincipal() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (EmptyChecks.isNotNull(authentication)
-                && authentication.getPrincipal() instanceof TriggerApiKeyPrincipal principal) {
+        if (authentication != null && authentication.getPrincipal() instanceof TriggerApiKeyPrincipal principal) {
             return principal;
         }
         return null;

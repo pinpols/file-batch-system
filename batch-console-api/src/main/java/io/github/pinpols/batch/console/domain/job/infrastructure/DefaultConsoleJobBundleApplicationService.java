@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.application.config.ConfigBatchOperationContext;
 import io.github.pinpols.batch.console.application.config.ConfigBatchOperationRequest;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigBatchOperationService;
@@ -105,11 +105,11 @@ public class DefaultConsoleJobBundleApplicationService implements ConsoleJobBund
             String operator,
             BatchOperationIdentity identity,
             ConsoleJobBundleSummaryResponse summary) {
-        if (EmptyChecks.isNull(identity.requestHash()) || request.isDryRun()) {
+        if (identity.requestHash() == null || request.isDryRun()) {
             return initApplicationService.batchInit(request, operator, identity.operationId());
         }
         List<String> targets = request.getTargetTenantIds();
-        if (EmptyChecks.isEmpty(targets) || targets.stream().anyMatch(EmptyChecks::isBlank)) {
+        if (EmptyValues.isEmpty(targets) || targets.stream().anyMatch(EmptyValues::isBlank)) {
             throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
         }
         ObjectNode responseMetadata = objectMapper.createObjectNode();
@@ -147,6 +147,6 @@ public class DefaultConsoleJobBundleApplicationService implements ConsoleJobBund
 
     private String operator() {
         String operator = metadataResolver.current().operatorId();
-        return operator == null || operator.isBlank() ? "system" : operator;
+        return EmptyValues.isBlank(operator) ? "system" : operator;
     }
 }

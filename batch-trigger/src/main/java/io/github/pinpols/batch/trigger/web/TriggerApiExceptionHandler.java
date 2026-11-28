@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.i18n.BizMessageResolver;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.web.AbstractApiExceptionHandler;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerSchedulerBusyException;
 import jakarta.validation.ConstraintViolationException;
@@ -45,7 +45,7 @@ public class TriggerApiExceptionHandler extends AbstractApiExceptionHandler {
         String message = exception.getBindingResult().getFieldErrors().stream()
                 .map(FieldError::getDefaultMessage)
                 .collect(Collectors.joining("; "));
-        if (EmptyChecks.isBlank(message)) {
+        if (EmptyValues.isBlank(message)) {
             message = resolveCommonCode(ResultCode.VALIDATION_ERROR, ResultCode.VALIDATION_ERROR.label());
         }
         CommonResponse<Void> failureBody = CommonResponse.failure(ResultCode.VALIDATION_ERROR, message);
@@ -56,7 +56,7 @@ public class TriggerApiExceptionHandler extends AbstractApiExceptionHandler {
     public ResponseEntity<CommonResponse<Void>> handleConstraintViolationException(
             ConstraintViolationException exception) {
         String message = exception.getMessage();
-        if (EmptyChecks.isBlank(message)) {
+        if (EmptyValues.isBlank(message)) {
             message = resolveCommonCode(ResultCode.VALIDATION_ERROR, ResultCode.VALIDATION_ERROR.label());
         }
         CommonResponse<Void> failureBody = CommonResponse.failure(ResultCode.VALIDATION_ERROR, message);

@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.notification.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookSubscriptionMapper;
@@ -36,10 +36,10 @@ public class WorkflowTerminalNotificationService {
     @Transactional(transactionManager = "transactionManager")
     public void accept(String eventKey, String payload) {
         Map<String, Object> data = JsonUtils.fromJson(payload, EVENT_DATA_TYPE);
-        if (EmptyChecks.isNull(data) || !"v2".equals(data.get("schemaVersion"))) {
+        if (data == null || !"v2".equals(data.get("schemaVersion"))) {
             throw new IllegalArgumentException("invalid Workflow terminal identity or schema");
         }
-        if (!(data.get("tenantId") instanceof String tenant) || EmptyChecks.isBlank(tenant)) {
+        if (!(data.get("tenantId") instanceof String tenant) || EmptyValues.isBlank(tenant)) {
             throw new IllegalArgumentException("invalid Workflow terminal identity or schema");
         }
         if (!(data.get("workflowRunId") instanceof Number id) || id.longValue() <= 0) {
@@ -63,13 +63,13 @@ public class WorkflowTerminalNotificationService {
     @Transactional(transactionManager = "transactionManager")
     public void acceptJob(String eventKey, String payload) {
         Map<String, Object> data = JsonUtils.fromJson(payload, EVENT_DATA_TYPE);
-        boolean notificationPayloadIsNotJobInstanceV1 = EmptyChecks.isNull(data)
+        boolean notificationPayloadIsNotJobInstanceV1 = data == null
                 || !"v1".equals(data.get("schemaVersion"))
                 || !"JOB_INSTANCE".equals(data.get("entityType"));
         if (notificationPayloadIsNotJobInstanceV1) {
             throw new IllegalArgumentException(INVALID_JOB_TERMINAL_IDENTITY);
         }
-        if (!(data.get("tenantId") instanceof String tenant) || EmptyChecks.isBlank(tenant)) {
+        if (!(data.get("tenantId") instanceof String tenant) || EmptyValues.isBlank(tenant)) {
             throw new IllegalArgumentException(INVALID_JOB_TERMINAL_IDENTITY);
         }
         if (!(data.get("jobInstanceId") instanceof Number id) || id.longValue() <= 0) {
@@ -85,7 +85,7 @@ public class WorkflowTerminalNotificationService {
         if (!(data.get("dryRun") instanceof Boolean dryRun)) {
             throw new IllegalArgumentException(INVALID_JOB_TERMINAL_IDENTITY);
         }
-        if (!(data.get("jobCode") instanceof String code) || EmptyChecks.isBlank(code)) {
+        if (!(data.get("jobCode") instanceof String code) || EmptyValues.isBlank(code)) {
             throw new IllegalArgumentException(INVALID_JOB_TERMINAL_IDENTITY);
         }
         if (!(tenant + ":job:" + id.longValue() + ":terminal:" + status).equals(eventKey)) {
@@ -123,7 +123,7 @@ public class WorkflowTerminalNotificationService {
             return;
         }
         if ("job-instances".equals(stream)) push.accept(tenant, eventKey, data);
-        if (EmptyChecks.isNull(eventType)) return;
+        if (eventType == null) return;
         String notification =
                 JsonUtils.toJson(new WebhookEventPayload(tenant, eventType, stream, eventKey, finished, data));
         for (WebhookSubscriptionEntity subscription : subscriptions.findEnabledByTenant(tenant)) {

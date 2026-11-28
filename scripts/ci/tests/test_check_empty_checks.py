@@ -12,7 +12,7 @@ CI_DIR = Path(__file__).resolve().parents[1]
 SOURCE = "module/src/main/java/example/Sample.java"
 
 
-class EmptyChecksDiffTest(unittest.TestCase):
+class EmptyValuesDiffTest(unittest.TestCase):
     def run_guard(self, before: str, after: str) -> subprocess.CompletedProcess[str]:
         with tempfile.TemporaryDirectory(prefix="empty-checks-test-") as workdir:
             root = Path(workdir)
@@ -74,7 +74,7 @@ class EmptyChecksDiffTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_blocks_real_new_null_check(self) -> None:
+    def test_allows_native_null_check(self) -> None:
         before = (
             "package example;\n"
             "class Sample {\n"
@@ -95,8 +95,54 @@ class EmptyChecksDiffTest(unittest.TestCase):
 
         result = self.run_guard(before, after)
 
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_blocks_real_new_empty_check(self) -> None:
+        before = (
+            "package example;\n"
+            "class Sample {\n"
+            "  void f(java.util.List<String> values) {\n"
+            "  }\n"
+            "}\n"
+        )
+        after = (
+            "package example;\n"
+            "class Sample {\n"
+            "    void f(java.util.List<String> values) {\n"
+            "        if (values.isEmpty()) {\n"
+            "            return;\n"
+            "        }\n"
+            "    }\n"
+            "}\n"
+        )
+
+        result = self.run_guard(before, after)
+
         self.assertEqual(result.returncode, 1, result.stdout)
-        self.assertIn("null 判断", result.stderr)
+        self.assertIn("字符串 / 集合空判断", result.stderr)
+
+    def test_allows_central_empty_check(self) -> None:
+        before = (
+            "package example;\n"
+            "class Sample {\n"
+            "  void f(java.util.List<String> values) {\n"
+            "  }\n"
+            "}\n"
+        )
+        after = (
+            "package example;\n"
+            "class Sample {\n"
+            "    void f(java.util.List<String> values) {\n"
+            "        if (EmptyValues.isEmpty(values)) {\n"
+            "            return;\n"
+            "        }\n"
+            "    }\n"
+            "}\n"
+        )
+
+        result = self.run_guard(before, after)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == "__main__":

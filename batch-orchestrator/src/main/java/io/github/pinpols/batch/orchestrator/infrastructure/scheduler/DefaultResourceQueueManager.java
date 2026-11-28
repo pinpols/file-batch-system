@@ -2,8 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceQueueManager;
 import io.github.pinpols.batch.orchestrator.config.OrchestratorConfigCacheProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
@@ -72,14 +71,14 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
 
     @Override
     public ResourceQueueEntity resolveQueue(ResourceSchedulingRequest request) {
-        if (request == null || !Texts.hasText(request.getTenantId())) {
+        if (request == null || !EmptyValues.hasText(request.getTenantId())) {
             return null;
         }
         List<ResourceQueueEntity> queues = enabledQueuesByTenant.get(request.getTenantId(), this::loadEnabledQueues);
-        if (EmptyChecks.isEmpty(queues)) {
+        if (EmptyValues.isEmpty(queues)) {
             return null;
         }
-        if (Texts.hasText(request.getQueueCode())) {
+        if (EmptyValues.hasText(request.getQueueCode())) {
             return queues.stream()
                     .filter(queue -> request.getQueueCode().equalsIgnoreCase(queue.queueCode()))
                     .findFirst()
@@ -100,14 +99,14 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
 
     private List<ResourceQueueEntity> loadEnabledQueues(String tenantId) {
         List<ResourceQueueEntity> loaded = resourceQueueMapper.selectByTenantAndEnabled(tenantId, true);
-        return EmptyChecks.isEmpty(loaded) ? List.of() : List.copyOf(loaded);
+        return EmptyValues.isEmpty(loaded) ? List.of() : List.copyOf(loaded);
     }
 
     private boolean matchesQueueType(ResourceQueueEntity queue, String workerType) {
         if (queue == null) {
             return false;
         }
-        if (!Texts.hasText(workerType)) {
+        if (!EmptyValues.hasText(workerType)) {
             return true;
         }
         return workerType.equalsIgnoreCase(queue.queueType()) || "MIXED".equalsIgnoreCase(queue.queueType());

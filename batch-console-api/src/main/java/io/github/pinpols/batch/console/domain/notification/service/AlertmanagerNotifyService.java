@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.AlertFingerprints;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerAlert;
@@ -112,7 +112,7 @@ public class AlertmanagerNotifyService {
 
         int batchSize = Math.max(1, properties.getMaxAlerts());
         List<AlertmanagerAlert> alerts = payload.safeAlerts();
-        if (EmptyChecks.isEmpty(alerts)) {
+        if (EmptyValues.isEmpty(alerts)) {
             return deliverBatch(tenantId, receiver, channel, payload);
         }
         for (int offset = 0; offset < alerts.size(); ) {
@@ -205,7 +205,7 @@ public class AlertmanagerNotifyService {
         List<String> identities = new ArrayList<>();
         for (AlertmanagerAlert alert : payload.safeAlerts()) {
             String fingerprint = alert.label("fingerprint");
-            if (EmptyChecks.isBlank(fingerprint)) {
+            if (EmptyValues.isBlank(fingerprint)) {
                 fingerprint = alert.fingerprint();
             }
             NotificationIdentity identity = new NotificationIdentity(fingerprint, alert.status(), alert.startsAt());
@@ -244,7 +244,7 @@ public class AlertmanagerNotifyService {
     }
 
     private static boolean hasText(String value) {
-        return value != null && !value.isBlank();
+        return EmptyValues.isNotBlank(value);
     }
 
     private WebhookDeliveryResult deliver(
@@ -296,7 +296,7 @@ public class AlertmanagerNotifyService {
     }
 
     private static String safeFailureText(String value) {
-        if (EmptyChecks.isNull(value)) {
+        if (value == null) {
             return null;
         }
         String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(value));

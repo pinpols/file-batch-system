@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.audit.application.ai;
 
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Objects;
@@ -31,12 +30,12 @@ public interface ConsoleAiAttachmentUseCase {
 
     record ImageContent(byte[] bytes, String mediaType) {
         public ImageContent {
-            bytes = EmptyChecks.isNull(bytes) ? null : bytes.clone();
+            bytes = bytes == null ? null : bytes.clone();
         }
 
         @Override
         public byte[] bytes() {
-            return EmptyChecks.isNull(bytes) ? null : bytes.clone();
+            return bytes == null ? null : bytes.clone();
         }
 
         @Override
@@ -56,7 +55,7 @@ public interface ConsoleAiAttachmentUseCase {
 
         @Override
         public String toString() {
-            return "ImageContent[byteCount=" + (EmptyChecks.isNull(bytes) ? "null" : bytes.length)
+            return "ImageContent[byteCount=" + (bytes == null ? "null" : bytes.length)
                     + ", mediaType="
                     + mediaType + "]";
         }

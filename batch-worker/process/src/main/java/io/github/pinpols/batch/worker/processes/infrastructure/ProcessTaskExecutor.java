@@ -6,7 +6,6 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
@@ -71,10 +70,10 @@ public class ProcessTaskExecutor implements BatchTaskExecutor {
                 ctx.tenantId(), ctx.jobCode(), taskType(), ctx.workerId(), ctx.runtimeAttributes());
         StepExecutionResponse resp = delegate.execute(req);
         if (resp.success()) {
-            String successMessage = EmptyChecks.isNull(resp.message()) ? "ok" : resp.message();
+            String successMessage = resp.message() == null ? "ok" : resp.message();
             return TaskResult.ok(successMessage);
         }
-        String failureMessage = EmptyChecks.isNull(resp.message()) ? resp.code() : resp.message();
+        String failureMessage = resp.message() == null ? resp.code() : resp.message();
         return TaskResult.fail(failureMessage);
     }
 }

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerAlert;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerWebhookPayload;
 import java.util.ArrayList;
@@ -108,7 +109,7 @@ public class AlertmanagerAlertRenderer {
     }
 
     private static boolean hasText(String value) {
-        return value != null && !value.isBlank();
+        return EmptyValues.isNotBlank(value);
     }
 
     private static String upper(String value) {

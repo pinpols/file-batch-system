@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutorRegistry;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.EmptyValues;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
@@ -104,7 +104,7 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
         }
         try {
             TaskResult result = executor.execute(ctx);
-            if (result.success() && !EmptyChecks.isEmpty(result.output())) {
+            if (result.success() && !EmptyValues.isEmpty(result.output())) {
                 request.context().put(PipelineRuntimeKeys.NODE_OUTPUTS, result.output());
             }
             return toResponse(result);
@@ -119,16 +119,13 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
     }
 
     private boolean markNonIdempotentStart(StepExecutionRequest request) {
-        if (EmptyChecks.isNull(taskExecutionClient)) {
+        if (taskExecutionClient == null) {
             return false;
         }
         Map<String, Object> context = request.context();
-        Long taskId = asLong(EmptyChecks.isNull(context) ? null : context.get(PipelineRuntimeKeys.TASK_ID));
-        Object invocationValue =
-                EmptyChecks.isNull(context) ? null : context.get(PipelineRuntimeKeys.PARTITION_INVOCATION_ID);
-        if (EmptyChecks.isNull(taskId)
-                || !(invocationValue instanceof String invocationId)
-                || EmptyChecks.isBlank(invocationId)) {
+        Long taskId = asLong(context == null ? null : context.get(PipelineRuntimeKeys.TASK_ID));
+        Object invocationValue = context == null ? null : context.get(PipelineRuntimeKeys.PARTITION_INVOCATION_ID);
+        if (taskId == null || !(invocationValue instanceof String invocationId) || EmptyValues.isBlank(invocationId)) {
             log.error("non-idempotent task execution rejected because its persisted lease identity is absent");
             return false;
         }
@@ -160,7 +157,7 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
     /** 解析 payload(default_params / launch 参数 JSON)为参数 Map;缺失或非法 JSON 对象时返回空 Map。 */
     private static Map<String, Object> extractParameters(StepExecutionRequest request) {
         Map<String, Object> context = request.context();
-        Object payload = EmptyChecks.isNull(context) ? null : context.get(PipelineRuntimeKeys.PAYLOAD);
+        Object payload = context == null ? null : context.get(PipelineRuntimeKeys.PAYLOAD);
         if (!(payload instanceof String payloadJson) || payloadJson.isBlank()) {
             return Map.of();
         }
@@ -198,7 +195,7 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
         if (reportedCode instanceof String text && !text.isBlank()) {
             code = text.trim();
         }
-        String message = EmptyChecks.isNull(result.error())
+        String message = result.error() == null
                 ? SwallowedExceptionLogger.safeMessage(result.message())
                 : SwallowedExceptionLogger.summary(result.error());
         return new StepExecutionResponse(false, code, message);
