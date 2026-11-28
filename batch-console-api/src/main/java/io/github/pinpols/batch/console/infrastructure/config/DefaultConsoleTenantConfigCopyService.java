@@ -83,7 +83,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 /**
  * 跨租户配置复制服务。
@@ -867,7 +866,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
         }
         for (Object item : items) {
             String key = configKey(type, item);
-            if (StringUtils.hasText(key)) {
+            if (EmptyValues.hasText(key)) {
                 byKey.put(key, item);
             }
         }

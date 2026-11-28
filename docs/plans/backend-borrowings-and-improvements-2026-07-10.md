@@ -304,7 +304,7 @@ fbs 是**批量运行控制面 + 文件/任务交付闭环**,不是通用工作�
 | 时间源 | `BatchDateTimeSupport` 之外 10+ 生产类直接 `Instant.now()` / `System.currentTimeMillis()` | 暂缓（单独批次） |
 | 跨模块 POJO/Mapper | 58 个同名文件（6 个 `package-info`），集中为 `JobInstanceEntity`、`ApprovalCommandEntity`、`RetryScheduleEntity` 等 | 另立项 |
 
-`EmptyChecks` 的调用量决定了整体替换的收益为负：改动 5 000 余处、行为零变化，且回退面覆盖全部模块。只把 [TenantConfigReferenceResolver](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigReferenceResolver.java) 第 128 行、[DefaultConsoleTenantConfigCopyService](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java) 第 872 行的 3 处 `StringUtils.hasText` 改为 `Texts.hasText`，同时修正 `Texts` 注释中「全仓仅用到 hasText」的过期描述。SDK 的 `EmptyChecks` 保持独立，SDK 不依赖 Spring。
+`EmptyChecks` 的调用量决定了整体替换的收益为负：改动 5 000 余处、行为零变化，且回退面覆盖全部模块。只把 [TenantConfigReferenceResolver](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigReferenceResolver.java) 第 128、166 行与 [DefaultConsoleTenantConfigCopyService](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java) 第 870 行的 3 处 `StringUtils.hasText` 改为项目内 `EmptyValues.hasText`（`#1474` 已把原 `Texts` 合并进 `EmptyValues`）。SDK 的 `EmptyChecks`/`SdkEmptyValues` 保持独立，SDK 不依赖 Spring。
 
 ### 8.2 批次 1：哈希收敛（抽取，零语义变化）
 
@@ -329,6 +329,11 @@ fbs 是**批量运行控制面 + 文件/任务交付闭环**,不是通用工作�
 3. 验收：`RedisRateLimitCircuitBreakerTest`、`ConsoleRateLimitFilterTest`、`ConsoleOidcAuthorizationRateLimitFilterTest`；补充「阈值前放行、达到阈值后短路、冷却期仅一个探针、成功后清零」用例，并核对指标名未变。
 
 > **2026-11-27 实施**：状态机改为 Resilience4j（共享 `CircuitBreakerRegistry`，实例名 `consoleRateLimitRedis`）；调用侧保留 `allowRedisCall` / `recordSuccess` / `recordFailure` / `isOpen` 四个方法，进程内不再维护计数与冷却时间。`RedisRateLimitCircuitBreakerTest` 扩为 6 个用例（阈值前放行、达到阈值、半开单探针、探测成功关闭、探测失败重开、指标名），与 `ConsoleRateLimitFilterTest`、`ConsoleOidcAuthorizationRateLimitFilterTest` 合计 24/24。
+
+已知风险（未在本批加防护）：
+
+- **共享 registry 同名优先**：`registry.circuitBreaker(name, config)` 在实例已存在时忽略传入配置。当前仓库没有 `consoleRateLimitRedis` 的 YAML 定义，但若将来在 `resilience4j.circuitbreaker.instances.*` 下定义同名实例，代码里的阈值会被静默覆盖。可按需加启动断言或改用专属 registry。
+- **指标双写**：R4J autoconfig 另发 `resilience4j.circuitbreaker.*`，原 `batch.console.rate_limit.redis.*` 继续保留；告警口径必须继续引用原指标。
 
 ### 8.5 暂缓项的触发条件
 
