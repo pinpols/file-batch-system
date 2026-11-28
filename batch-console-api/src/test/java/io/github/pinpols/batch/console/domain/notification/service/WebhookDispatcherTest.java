@@ -1,7 +1,10 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -9,6 +12,7 @@ import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogMarkRetryFailureParam;
 import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -24,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 @DisplayName("回调分发器: 事件类型匹配, 回调地址安全拦截与载荷签名")
 class WebhookDispatcherTest {
@@ -60,6 +65,83 @@ class WebhookDispatcherTest {
         // findEnabledSubscriptions 已返回空列表 → 同一 task 内立刻早返回，
         // 后续 deliveryLogRepository 调用必然不会发生
         verifyNoInteractions(deliveryLogRepository);
+    }
+
+    @Test
+    @DisplayName("持久化投递成功: 按实际尝试次数回写 markRetrySuccess")
+    void shouldMarkRetrySuccess_whenPersistedDeliverySucceeds() throws Exception {
+        var endpoint = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        endpoint.createContext("/ok", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            exchange.sendResponseHeaders(200, -1);
+            exchange.close();
+        });
+        String original = System.getProperty("batch.security.ssrf-guard.allow-private");
+        System.setProperty("batch.security.ssrf-guard.allow-private", "true");
+        endpoint.start();
+        try {
+            WebhookSubscriptionEntity subscription = new WebhookSubscriptionEntity();
+            subscription.setId(7L);
+            subscription.setTenantId("tenant-a");
+            subscription.setEventTypes("JOB_SUCCESS");
+            subscription.setCallbackUrl(
+                    "http://127.0.0.1:" + endpoint.getAddress().getPort() + "/ok");
+            when(webhookService.findEnabledSubscriptions("tenant-a")).thenReturn(List.of(subscription));
+            when(deliveryLogRepository.insertReturningId(any())).thenReturn(42L);
+
+            dispatcher.dispatchAsync("tenant-a", "JOB_SUCCESS", "stream-1", "cursor-1", "data", null);
+
+            verify(deliveryLogRepository, timeout(5000)).markRetrySuccess(42L, 1, null);
+        } finally {
+            dispatcher.shutdown();
+            endpoint.stop(0);
+            if (original == null) {
+                System.clearProperty("batch.security.ssrf-guard.allow-private");
+            } else {
+                System.setProperty("batch.security.ssrf-guard.allow-private", original);
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("持久化投递耗尽: 三次失败后回写最后一次状态与尝试次数")
+    void shouldMarkRetryFailure_whenPersistedDeliveryExhausted() throws Exception {
+        var endpoint = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        endpoint.createContext("/fail", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            exchange.sendResponseHeaders(503, -1);
+            exchange.close();
+        });
+        String original = System.getProperty("batch.security.ssrf-guard.allow-private");
+        System.setProperty("batch.security.ssrf-guard.allow-private", "true");
+        endpoint.start();
+        try {
+            WebhookSubscriptionEntity subscription = new WebhookSubscriptionEntity();
+            subscription.setId(8L);
+            subscription.setTenantId("tenant-a");
+            subscription.setEventTypes("JOB_SUCCESS");
+            subscription.setCallbackUrl(
+                    "http://127.0.0.1:" + endpoint.getAddress().getPort() + "/fail");
+            when(webhookService.findEnabledSubscriptions("tenant-a")).thenReturn(List.of(subscription));
+            when(deliveryLogRepository.insertReturningId(any())).thenReturn(43L);
+
+            dispatcher.dispatchAsync("tenant-a", "JOB_SUCCESS", "stream-1", "cursor-1", "data", null);
+
+            ArgumentCaptor<ConsoleWebhookDeliveryLogMarkRetryFailureParam> captor =
+                    ArgumentCaptor.forClass(ConsoleWebhookDeliveryLogMarkRetryFailureParam.class);
+            verify(deliveryLogRepository, timeout(10000)).markRetryFailure(captor.capture());
+            assertThat(captor.getValue().id()).isEqualTo(43L);
+            assertThat(captor.getValue().attempt()).isEqualTo(3);
+            assertThat(captor.getValue().httpStatus()).isEqualTo(503);
+        } finally {
+            dispatcher.shutdown();
+            endpoint.stop(0);
+            if (original == null) {
+                System.clearProperty("batch.security.ssrf-guard.allow-private");
+            } else {
+                System.setProperty("batch.security.ssrf-guard.allow-private", original);
+            }
+        }
     }
 
     @Test
