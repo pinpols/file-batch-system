@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 /** 根据显式 JSON 引用解析作业级配置依赖。 */
 @Component
@@ -125,7 +124,7 @@ public class TenantConfigReferenceResolver {
     }
 
     private void scanJson(String raw, Set<String> templateCodes, Set<String> channelCodes) {
-        if (!StringUtils.hasText(raw)) {
+        if (!EmptyValues.hasText(raw)) {
             return;
         }
         try {
@@ -163,7 +162,7 @@ public class TenantConfigReferenceResolver {
     }
 
     private static void addIfText(Set<String> values, String value) {
-        if (StringUtils.hasText(value)) {
+        if (EmptyValues.hasText(value)) {
             values.add(value.trim());
         }
     }
